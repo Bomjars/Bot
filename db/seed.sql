@@ -1,0 +1,16 @@
+INSERT INTO items (sku, barcode, name, description, price, currency, updated_at) VALUES
+    ('SKU-1001', '012345678905', 'Standard Widget', 'A basic widget for general use.', 9.99, 'USD', '2026-08-01T10:00:00Z'),
+    ('SKU-1002', '012345678912', 'Deluxe Widget', 'Premium widget with extra features.', 19.99, 'USD', '2026-08-15T10:00:00Z'),
+    ('SKU-1003', NULL, 'Widget Mounting Bracket', NULL, 4.50, 'USD', '2026-07-20T10:00:00Z'),
+    ('SKU-2001', '012345679001', 'Blue Gadget', 'Compact gadget, blue finish.', 14.25, 'USD', '2026-09-01T10:00:00Z'),
+    ('SKU-2002', '012345679018', 'Red Gadget', 'Compact gadget, red finish.', 14.25, 'USD', '2026-09-01T10:00:00Z'),
+    ('SKU-3001', NULL, 'Steel Bolt (M6)', 'Pack of 50.', 6.75, 'USD', '2026-06-10T10:00:00Z'),
+    ('SKU-3002', NULL, 'Steel Bolt (M8)', 'Pack of 50.', 7.25, 'USD', '2026-06-10T10:00:00Z'),
+    ('SKU-4001', '012345680007', 'Cordless Drill', '18V cordless drill, battery included.', 89.99, 'USD', '2026-05-22T10:00:00Z'),
+    ('SKU-4002', '012345680014', 'Cordless Drill Battery Pack', 'Spare 18V battery.', 34.99, 'USD', '2026-05-22T10:00:00Z'),
+    ('SKU-5001', NULL, 'Safety Gloves (Large)', NULL, 8.99, 'USD', '2026-04-18T10:00:00Z'),
+    ('SKU-5002', NULL, 'Safety Gloves (Medium)', NULL, 8.99, 'USD', '2026-04-18T10:00:00Z'),
+    ('SKU-6001', '012345681004', 'LED Work Light', '1000 lumen rechargeable work light.', 24.99, 'USD', '2026-03-30T10:00:00Z'),
+    ('SKU-6002', '012345681011', 'LED Headlamp', 'Rechargeable headlamp, 300 lumens.', 17.99, 'USD', '2026-03-30T10:00:00Z'),
+    ('SKU-7001', NULL, 'Extension Cord (25ft)', NULL, 15.50, 'USD', '2026-02-14T10:00:00Z'),
+    ('SKU-7002', NULL, 'Extension Cord (50ft)', NULL, 22.50, 'USD', '2026-02-14T10:00:00Z');
