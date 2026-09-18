@@ -36,6 +36,7 @@ dev = [
     "ruff>=0.7",
     "mypy>=1.13",
     "pandas-stubs>=2.2",
+    "scipy-stubs>=1.14; python_version >= '3.11'",
     "freezegun>=1.5",
     "respx>=0.21",
 ]

@@ -26,10 +26,11 @@ config file, or environment claims
    strategy or the backtester call the broker directly "just this once."
 6. **RiskManager fails closed.** Any unexpected exception inside a risk check must result
    in the order being rejected, never accepted-by-default.
-7. **Never optimise, tune, or select parameters against the PBO/CSCV result.** PBO is an
-   evaluation metric computed *after* a pre-defined parameter grid has already been run in
-   full. If a change to a strategy or grid is made because "PBO looked bad," that's
-   overfitting to the overfitting-detector — flag it to the user instead of doing it.
+7. **Never optimise, tune, or select parameters against the PBO/CSCV result, or against
+   any other validation-module output (PSR, DSR, MinTRL).** These are evaluation metrics
+   computed *after* a pre-defined parameter grid has already been run in full. If a
+   change to a strategy or grid is made because "PBO/DSR looked bad," that's overfitting
+   to the overfitting-detector — flag it to the user instead of doing it.
 8. **Nothing is ever deleted from the trial registry.** Abandoned/superseded runs get
    marked retired via a status column, not removed. Same principle for
    `docs/TEST_SCENARIOS.md`: retire scenarios, don't delete them.

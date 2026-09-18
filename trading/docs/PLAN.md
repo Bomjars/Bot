@@ -1,8 +1,8 @@
 # Plan, research findings, and rule summaries
 
-Status: **Step 4 of 10 done** (event-driven backtester, cost model, look-ahead
-guarantee). Strategy code (steps 6–7) is still intentionally not started — waiting on
-the paper text per section 5 below.
+Status: **Step 5 of 10 done** (trial registry, CSCV/PBO, PSR/MinTRL/DSR). Strategy code
+(steps 6–7) is still intentionally not started — waiting on the paper text per section 5
+below.
 
 ## 1. Repo layout decision (already made, per your answer)
 
@@ -292,3 +292,46 @@ to the paper's reported figures explicitly so the gap is visible, not asserted.
   mistaken for something more precise than it is.
 - 90/90 tests pass; `backtest/engine.py` and `risk/risk_manager.py` at 100% branch
   coverage. ruff and mypy --strict clean.
+
+## 10. Step 5 notes
+
+- `validation/registry.py`'s `TrialRegistry` never deletes a row — `retire_trial()` sets
+  a status column and a reason. `trial_count()` includes retired trials by default,
+  because that's the count `deflated_sharpe_ratio()` should be given: a strategy that
+  quietly dropped its failed attempts before computing DSR would understate its own
+  multiple-testing correction. Like the look-ahead guarantee in step 4, "only log the
+  converged result of an optimiser search" (VAL-009) is a *discipline* the registry
+  supports (a `search_type='optimizer'` tag) but can't structurally enforce — it can't
+  stop a caller from logging every intermediate iteration by mistake. Noted here rather
+  than claimed as automatically guaranteed.
+- `validation/cscv.py` implements CSCV/PBO (Bailey, Borwein, López de Prado & Zhu, 2015)
+  exactly as specified: S=16 equal contiguous blocks, all C(16,8)=12,870 IS/OOS splits,
+  ω as a rank-based estimator kept strictly inside (0,1) so the logit never blows up. The
+  naive per-split implementation (recompute Sharpe from raw rows each of 12,870 times)
+  took ~40s for a 320-day/15-config matrix — too slow to be a normal test. Rewrote it to
+  aggregate per-block sufficient statistics (sum, sum-of-squares) once up front and
+  combine those per split instead of rescanning raw data; same result, ~0.6s. Verified
+  against an independent, unoptimized brute-force reference implementation on a tiny
+  fixed dataset (VAL-005) so the speedup isn't trusted blindly. On synthetic data: a pure
+  random walk across 15 configs gives PBO≈0.76 (VAL-001, comfortably "high"); one config
+  with a real, persistent +0.5 drift injected gives PBO=0.0 (VAL-002) — both match what
+  the method is supposed to show. `evaluate()` is a pass/fail verdict on an
+  *already-computed* result; CLAUDE.md now has an explicit rule that no code path may
+  feed a PBO value back into choosing a parameter grid or search (VAL-011's static check
+  is deferred until steps 6/7 actually introduce an optimiser to check — nothing exists
+  yet that could violate it).
+- `validation/psr_dsr.py` implements PSR, MinTRL (Bailey & López de Prado, 2012) and DSR
+  (2014) directly from their published closed-form equations. **Honesty note on VAL-008**:
+  I do not have a verified numeric worked example from either paper memorized precisely
+  enough to hardcode as a regression test without risking asserting a wrong number with
+  false confidence, so the tests are property/edge-case checks instead (PSR=0.5 exactly
+  at the benchmark; the normal-distribution case collapsing to the textbook z-score;
+  monotonicity in Sharpe, edge, and trial count; DSR at `n_trials=1` reducing to plain
+  PSR against a zero benchmark). If you can get me the papers' own worked example, I'll
+  add the exact regression test this scenario originally asked for.
+- Walk-forward validation and the untouched final holdout (VAL-012/013) aren't built
+  yet — they're part of each strategy's "full validation report" (steps 6/7), which is
+  where they actually get exercised against real backtest output. This step only ships
+  the pieces those reports will call.
+- 122/122 tests pass (full suite, ~22s). `risk/risk_manager.py` and `backtest/engine.py`
+  still at 100% branch coverage. ruff and mypy --strict clean.

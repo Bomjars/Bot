@@ -25,6 +25,29 @@ CREATE TABLE IF NOT EXISTS rejections (
     signal_json TEXT NOT NULL
 );
 
+-- Trial registry: every parameter combination ever backtested, with its full daily P&L
+-- series. Nothing is ever deleted -- an abandoned run is marked retired, not removed
+-- (CLAUDE.md). For an optimiser search, only the search's converged result is logged
+-- here (search_type='optimizer'); a fixed grid logs every point (search_type='grid').
+CREATE TABLE IF NOT EXISTS trials (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    strategy TEXT NOT NULL,
+    params_json TEXT NOT NULL,
+    search_type TEXT NOT NULL DEFAULT 'grid',
+    status TEXT NOT NULL DEFAULT 'active',  -- 'active' or 'retired'
+    retired_reason TEXT,
+    created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_trials_strategy ON trials (strategy);
+
+CREATE TABLE IF NOT EXISTS trial_daily_pnl (
+    trial_id INTEGER NOT NULL REFERENCES trials (id),
+    date TEXT NOT NULL,
+    pnl REAL NOT NULL,
+    PRIMARY KEY (trial_id, date)
+);
+
 -- Single-row table (id always 1): RiskManager's halted state and today's/this week's
 -- counters, so a restart resumes halted rather than silently trading again (RISK-008/009).
 CREATE TABLE IF NOT EXISTS risk_state (
