@@ -16,6 +16,23 @@ CREATE TABLE IF NOT EXISTS bars (
 
 CREATE INDEX IF NOT EXISTS idx_bars_symbol_ts ON bars (symbol, ts);
 
+-- Mirrors rejections: every ACCEPTED entry, for the dashboard's activity feed and
+-- journal (Page 4). Fills/exits still live only at the broker for now -- see
+-- docs/PLAN.md step 9 notes on what's deliberately not persisted yet.
+CREATE TABLE IF NOT EXISTS orders (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts TEXT NOT NULL,
+    strategy TEXT NOT NULL,
+    symbol TEXT NOT NULL,
+    side TEXT NOT NULL,
+    qty REAL NOT NULL,
+    entry_price REAL NOT NULL,
+    stop_price REAL NOT NULL,
+    take_profit_price REAL,
+    client_order_id TEXT NOT NULL,
+    broker_order_id TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS rejections (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     ts TEXT NOT NULL,

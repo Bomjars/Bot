@@ -10,6 +10,7 @@ from intraday_trading.risk.risk_manager import RiskManager
 from intraday_trading.risk.signals import EntrySignal, HaltType
 from intraday_trading.session.calendar import EXCHANGE_TZ, ExchangeCalendar
 from intraday_trading.session.clock import SessionClock
+from intraday_trading.storage.order_log import OrderLog
 from intraday_trading.storage.position_record_store import PositionRecordStore
 from intraday_trading.storage.rejection_log import RejectionLog
 from intraday_trading.storage.risk_state_store import RiskStateStore
@@ -511,3 +512,73 @@ def test_EXEC_010_halt_for_clock_drift_does_not_flatten(tmp_path: Path) -> None:
     assert manager.is_halted() is True
     assert manager.halt_status().halt_type == HaltType.CLOCK_DRIFT
     assert broker.close_all_called == 0
+
+
+def test_order_logged_on_successful_entry(tmp_path: Path) -> None:
+    db = tmp_path / "risk.db"
+    broker = FakeBroker()
+    order_log = OrderLog(db)
+    manager = RiskManager(
+        broker=broker,
+        limits=RiskLimits(),
+        clock=_clock(),
+        state_store=RiskStateStore(db),
+        rejection_log=RejectionLog(db),
+        order_log=order_log,
+    )
+    manager.begin_session()
+
+    decision = manager.check_and_submit_entry(_signal())
+
+    assert decision.accepted is True
+    assert order_log.count() == 1
+
+
+def test_no_order_logged_when_entry_is_rejected(tmp_path: Path) -> None:
+    db = tmp_path / "risk.db"
+    order_log = OrderLog(db)
+    manager = RiskManager(
+        broker=FakeBroker(),
+        limits=RiskLimits(),
+        clock=_clock(),
+        state_store=RiskStateStore(db),
+        rejection_log=RejectionLog(db),
+        order_log=order_log,
+    )
+    manager.begin_session()
+
+    manager.check_and_submit_entry(_signal(stop_price=0))
+
+    assert order_log.count() == 0
+
+
+def test_flatten_one_closes_only_the_given_symbol(tmp_path: Path) -> None:
+    broker = FakeBroker(
+        positions=[
+            PositionInfo("AAPL", 10, Side.BUY, 100, 100, 0),
+            PositionInfo("MSFT", 5, Side.BUY, 200, 200, 0),
+        ]
+    )
+    manager, _ = _manager(tmp_path, broker=broker)
+
+    manager.flatten_one("AAPL")
+
+    assert [p.symbol for p in broker.positions] == ["MSFT"]
+    assert manager.is_halted() is False  # a single flatten is not an emergency
+
+
+def test_pause_entries_halts_without_flattening(tmp_path: Path) -> None:
+    broker = FakeBroker(positions=[PositionInfo("AAPL", 10, Side.BUY, 100, 100, 0)])
+    manager, _ = _manager(tmp_path, broker=broker)
+
+    manager.pause_entries("operator requested a pause")
+
+    assert manager.is_halted() is True
+    assert manager.halt_status().halt_type == HaltType.MANUAL_PAUSE
+    assert broker.close_all_called == 0
+
+    decision = manager.check_and_submit_entry(_signal())
+    assert decision.accepted is False
+
+    manager.re_enable()
+    assert manager.is_halted() is False

@@ -1,10 +1,11 @@
 # Plan, research findings, and rule summaries
 
-Status: **Step 8 of 10 done** (paper-trading loop, reconciliation, kill switch wiring,
-Telegram alerting). Steps 6–7 (the actual strategies) are still intentionally not
-started — waiting on the paper text per section 5 below; the paper-trading loop
-currently runs with an empty strategy list, so it does session/risk bookkeeping and
-reconciliation but proposes no trades yet.
+Status: **Step 9 of 10 done** (Streamlit dashboard, 4 pages). Steps 6–7 (the actual
+strategies) are still intentionally not started — waiting on the paper text per section
+5 below; the paper-trading loop currently runs with an empty strategy list, so it does
+session/risk bookkeeping and reconciliation but proposes no trades yet, and the
+dashboard is correspondingly mostly empty-state right now — that's the honest state of
+a system that has never placed a trade, not a bug.
 
 ## 1. Repo layout decision (already made, per your answer)
 
@@ -380,3 +381,56 @@ to the paper's reported figures explicitly so the gap is visible, not asserted.
   constructors just store credentials).
 - 172/172 tests pass. `risk/` and `execution/` are both at 100% branch coverage across
   every file in each package, as required. ruff and mypy --strict clean.
+
+## 12. Step 9 notes
+
+- **Built with `st.navigation`/`st.Page`** (not the older filename-convention multipage
+  API) so the sidebar chrome (PAPER/LIVE badge, feed/broker status, kill switch) can be
+  defined once in `dashboard/main.py` and persist across all four pages, with explicit
+  control over each page's title/icon rather than inferring them from filenames.
+- **Every write path still goes through RiskManager.** `dashboard/lib/actions.py` never
+  calls a broker's order-placement/cancel/close method directly — kill switch, pause
+  entries, and flatten-one all call the corresponding `RiskManager` method (two of
+  which, `pause_entries()` and `flatten_one()`, didn't exist before this step and were
+  added specifically for these controls, with their own tests, keeping `risk/` at 100%
+  branch coverage). This is enforced by a static test (DASH-001), the same grep-based
+  pattern as RISK-021's.
+- **Honest empty states, not fabricated data.** This system has never placed a trade, so
+  most of the "Paper vs Backtest" and "Journal & Go-Live" pages' real content doesn't
+  exist yet (no fills/exits are persisted — only accepted-order intent, via the new
+  `orders` table/`OrderLog`, mirroring `RejectionLog`). Rather than invent numbers, those
+  sections say plainly what's missing and why. The Validation Report page is the
+  exception: it computes CSCV/PBO, PSR, DSR, and MinTRL **live** from whatever's actually
+  in the trial registry — genuinely functional once steps 6-7 log real trials, verified
+  in tests against a populated registry (32 days × 3 configs, one with a real edge),
+  not just an empty-state smoke test.
+- **Password gate (DASH-003)**: if `DASHBOARD_PASSWORD` is set, the whole app requires
+  it before rendering anything (checked once in `main.py`, before the sidebar or any
+  page); if unset, no gate at all, matching "local only by default, password if
+  exposed" — Streamlit itself binds to localhost by default, so the meaningful case to
+  cover in code is "a password was configured," not detecting the bind address from
+  inside a page script (which isn't reliably possible).
+- **Data feed is polled** (`AlpacaPollingFeed`, step 8), and the dashboard's live
+  positions/equity data is polled too — every page load (and every 8s auto-refresh on
+  Live Monitor) calls `AlpacaBroker.paper()` fresh and queries the account directly; no
+  broker client is cached across reruns. This is simple and correct but means opening
+  the dashboard makes real Alpaca API calls on a cadence — acceptable for a paper
+  account, worth knowing before pointing it at anything with tighter rate limits.
+- **Tested with `streamlit.testing.v1.AppTest`**, not a browser — this is the only way
+  to verify Streamlit code without one, and it caught two real bugs during development
+  (two pages queried tables via raw SQL before `init_db()` had ever run against a fresh
+  database, since only the storage *classes* call `init_db()` in their own constructors
+  automatically, not the two ad-hoc queries against `orders`/`trials`; both moved into
+  `lib/data.py` proper and fixed). 22 dashboard tests total, including a real click-
+  through of the kill-switch confirmation flow and the password gate, both via
+  `AppTest`'s widget interaction API, monkeypatching `AlpacaBroker.paper` to a fake so
+  none of it touches the network.
+- **Not implemented, flagged rather than faked**: candlestick trade replay and R-multiple
+  (need exit/fill persistence, not built); parameter-heatmap chart (needs a 2-parameter
+  grid, and no strategy grid exists yet); SPY benchmark overlay on the equity chart
+  (needs a historical SPY bar fetch, not wired into the dashboard); a registered
+  2x-slippage rerun comparison and holdout validation (both genuine gaps in the
+  validation pipeline itself, not just the dashboard — noted for steps 6-7/10).
+- 193/193 tests pass (full suite). `risk/risk_manager.py` and every file under
+  `execution/` still at 100% branch coverage. ruff (incl. `ruff format`) and
+  mypy --strict clean on `src/`.

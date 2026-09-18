@@ -21,6 +21,7 @@ from intraday_trading.broker.base import (
 from intraday_trading.config import RiskLimits
 from intraday_trading.risk.signals import EntrySignal, HaltType, RiskDecision
 from intraday_trading.session.clock import SessionClock
+from intraday_trading.storage.order_log import OrderLog
 from intraday_trading.storage.position_record_store import PositionRecordStore
 from intraday_trading.storage.rejection_log import RejectionLog
 from intraday_trading.storage.risk_state_store import RiskState, RiskStateStore
@@ -40,6 +41,7 @@ class RiskManager:
         rejection_log: RejectionLog,
         leveraged_etf_symbols: frozenset[str] = frozenset(),
         position_records: PositionRecordStore | None = None,
+        order_log: OrderLog | None = None,
     ) -> None:
         self._broker = broker
         self._limits = limits
@@ -48,6 +50,7 @@ class RiskManager:
         self._rejection_log = rejection_log
         self._leveraged_etf_symbols = leveraged_etf_symbols
         self._position_records = position_records
+        self._order_log = order_log
         self._lock = threading.Lock()
 
     def is_halted(self) -> bool:
@@ -149,6 +152,8 @@ class RiskManager:
             take_profit_price=signal.take_profit_price,
         )
         order = self._broker.submit_bracket_order(request)
+        if self._order_log is not None:
+            self._order_log.log(signal, order)
         if self._position_records is not None:
             self._position_records.record_open(
                 symbol=signal.symbol,
@@ -168,6 +173,20 @@ class RiskManager:
         out from under it."""
         self._broker.cancel_all_orders()
         self._broker.close_all_positions()
+
+    def flatten_one(self, symbol: str) -> OrderInfo | None:
+        """Dashboard's per-position "Flatten" control -- still routed through
+        RiskManager (RISK-021), not a direct broker call from dashboard code
+        (CLAUDE.md). Does not halt; closing one position isn't an emergency."""
+        with self._lock:
+            return self._broker.close_position(symbol)
+
+    def pause_entries(self, reason: str) -> None:
+        """Dashboard's "Pause entries" control: blocks new entries like any other halt,
+        but -- unlike `trip_kill_switch` -- does not flatten anything. `re_enable()`
+        clears it, same as any other halt."""
+        with self._lock:
+            self._halt(HaltType.MANUAL_PAUSE, reason)
 
     def _halt(self, halt_type: HaltType, reason: str) -> None:
         state = self._state_store.load()

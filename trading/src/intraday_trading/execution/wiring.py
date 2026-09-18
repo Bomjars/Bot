@@ -19,6 +19,7 @@ from intraday_trading.risk.risk_manager import RiskManager
 from intraday_trading.session.calendar import ExchangeCalendar
 from intraday_trading.session.clock import SessionClock
 from intraday_trading.state.reconciler import Reconciler
+from intraday_trading.storage.order_log import OrderLog
 from intraday_trading.storage.position_record_store import PositionRecordStore
 from intraday_trading.storage.rejection_log import RejectionLog
 from intraday_trading.storage.risk_state_store import RiskStateStore
@@ -54,6 +55,7 @@ def build_paper_trading_components(
         state_store=RiskStateStore(settings.database_path),
         rejection_log=RejectionLog(settings.database_path),
         position_records=position_records,
+        order_log=OrderLog(settings.database_path),
     )
     alerter = TelegramAlerter(settings.telegram_bot_token, settings.telegram_chat_id)
     reconciler = Reconciler(broker, position_records, risk_manager, alerter)

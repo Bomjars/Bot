@@ -41,6 +41,7 @@ class HaltType(StrEnum):
     KILL_SWITCH = "kill_switch"
     RECONCILIATION_MISMATCH = "reconciliation_mismatch"
     CLOCK_DRIFT = "clock_drift"
+    MANUAL_PAUSE = "manual_pause"
 
 
 @dataclass(frozen=True)

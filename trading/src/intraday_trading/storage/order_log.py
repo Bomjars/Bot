@@ -1,0 +1,64 @@
+"""Mirrors RejectionLog: every ACCEPTED entry, for the dashboard's activity feed and
+journal (step 9, Page 4). Exits/fills still live only at the broker for now.
+"""
+
+from __future__ import annotations
+
+from datetime import UTC, datetime
+from pathlib import Path
+
+from intraday_trading.broker.base import OrderInfo
+from intraday_trading.risk.signals import EntrySignal
+from intraday_trading.storage.db import get_connection, init_db
+
+
+class OrderLog:
+    def __init__(self, database_path: Path) -> None:
+        self._database_path = database_path
+        init_db(database_path)
+
+    def log(self, signal: EntrySignal, order: OrderInfo) -> None:
+        conn = get_connection(self._database_path)
+        try:
+            conn.execute(
+                """
+                INSERT INTO orders (
+                    ts, strategy, symbol, side, qty, entry_price, stop_price,
+                    take_profit_price, client_order_id, broker_order_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    datetime.now(tz=UTC).isoformat(),
+                    signal.strategy,
+                    signal.symbol,
+                    signal.side.value,
+                    signal.qty,
+                    signal.entry_price,
+                    signal.stop_price,
+                    signal.take_profit_price,
+                    order.client_order_id,
+                    order.broker_order_id,
+                ),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def recent(self, limit: int = 100) -> list[dict[str, object]]:
+        conn = get_connection(self._database_path)
+        try:
+            rows = conn.execute(
+                "SELECT * FROM orders ORDER BY ts DESC LIMIT ?", (limit,)
+            ).fetchall()
+        finally:
+            conn.close()
+        return [dict(row) for row in rows]
+
+    def count(self) -> int:
+        conn = get_connection(self._database_path)
+        try:
+            row = conn.execute("SELECT COUNT(*) AS n FROM orders").fetchone()
+            return int(row["n"])
+        finally:
+            conn.close()
+

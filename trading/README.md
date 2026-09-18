@@ -16,13 +16,15 @@ for the current rule summaries and open questions — **read that before touchin
 
 ## Status
 
-Step 8 of 10 done (see `docs/PLAN.md`): broker interface + Alpaca paper adapter +
+Step 9 of 10 done (see `docs/PLAN.md`): broker interface + Alpaca paper adapter +
 historical data client + SQLite bar store + exchange calendar/clock + RiskManager
 (every hard risk limit, 100% branch coverage) + kill switch + event-driven backtester
 with a cost model and a structural no-look-ahead guarantee + validation module (trial
 registry, CSCV/PBO, PSR/MinTRL/DSR) + paper-trading loop with reconciliation and
-Telegram alerting. No strategy logic yet — waiting on the paper text, see
-`docs/PLAN.md` §5; `run-paper` currently runs with zero strategies attached.
+Telegram alerting + a 4-page Streamlit dashboard. No strategy logic yet — waiting on the
+paper text, see `docs/PLAN.md` §5; `run-paper` currently runs with zero strategies
+attached, so most of the dashboard is an honest empty state (this system has never
+placed a trade).
 
 ## Safety model, short version
 
@@ -72,6 +74,27 @@ yet (see CLAUDE.md). `run-paper` currently runs with an empty strategy list (ste
 aren't built), so it will do session/risk bookkeeping and reconciliation without ever
 proposing a trade.
 
+## Dashboard
+
+```powershell
+uv run streamlit run dashboard\main.py
+```
+
+Or double-click `start_dashboard.bat` once `uv sync --extra dev --extra dashboard` has
+been run. Opens at `http://localhost:8501`. To view it on your phone: same Wi-Fi, then
+`http://<this-PC's-LAN-IP>:8501` — no extra setup needed since Streamlit binds to all
+interfaces when you use `--server.address 0.0.0.0` (add that flag if you want LAN
+access; the default is localhost-only). Set `DASHBOARD_PASSWORD` in `.env` before doing
+that — the app requires it whenever it's set, and skips the check entirely when it
+isn't (see `docs/PLAN.md` §12).
+
+Read-only except three controls (kill switch, pause entries, flatten one position), all
+routed through `RiskManager` — the dashboard itself never calls the broker's
+order-placement methods (enforced by a static test, `DASH-001`). Since this build has
+never placed a trade yet, most of the Paper vs Backtest and Journal pages are an honest
+empty state rather than placeholder numbers; the Validation Report page computes
+CSCV/PBO/PSR/DSR live from whatever's actually in the trial registry.
+
 ## Repo layout
 
 ```
@@ -92,7 +115,7 @@ trading/
 │   ├── state/                              Restart-safe state + reconciler   (step 8)
 │   ├── alerting/                             Telegram                        (step 8)
 │   └── killswitch/                             Kill switch                    (step 3)
-├── dashboard/            Streamlit app, 4 pages                              (step 9)
+├── dashboard/            Streamlit app, 4 pages: main.py + pages/ + lib/     (step 9)
 ├── docs/                 PLAN.md (this build's design doc + paper summaries),
 │                          GO_LIVE_CHECKLIST.md (step 10)
 └── tests/{unit,integration}/
