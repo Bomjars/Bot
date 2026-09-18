@@ -10,6 +10,7 @@ from intraday_trading.risk.risk_manager import RiskManager
 from intraday_trading.risk.signals import EntrySignal, HaltType
 from intraday_trading.session.calendar import EXCHANGE_TZ, ExchangeCalendar
 from intraday_trading.session.clock import SessionClock
+from intraday_trading.storage.position_record_store import PositionRecordStore
 from intraday_trading.storage.rejection_log import RejectionLog
 from intraday_trading.storage.risk_state_store import RiskStateStore
 from tests.unit.fakes import FakeBroker
@@ -439,3 +440,74 @@ def test_begin_session_does_not_auto_clear_weekly_loss_halt(tmp_path: Path) -> N
     )
     manager2.begin_session()
     assert manager2.is_halted() is True
+
+
+def test_position_recorded_locally_on_successful_entry(tmp_path: Path) -> None:
+    db = tmp_path / "risk.db"
+    broker = FakeBroker()
+    records = PositionRecordStore(db)
+    manager = RiskManager(
+        broker=broker,
+        limits=RiskLimits(),
+        clock=_clock(),
+        state_store=RiskStateStore(db),
+        rejection_log=RejectionLog(db),
+        position_records=records,
+    )
+    manager.begin_session()
+
+    decision = manager.check_and_submit_entry(_signal())
+
+    assert decision.accepted is True
+    record = records.get("AAPL")
+    assert record is not None
+    assert record.stop_price == 99.0
+
+
+def test_no_position_recorded_when_entry_is_rejected(tmp_path: Path) -> None:
+    db = tmp_path / "risk.db"
+    records = PositionRecordStore(db)
+    manager = RiskManager(
+        broker=FakeBroker(),
+        limits=RiskLimits(),
+        clock=_clock(),
+        state_store=RiskStateStore(db),
+        rejection_log=RejectionLog(db),
+        position_records=records,
+    )
+    manager.begin_session()
+
+    manager.check_and_submit_entry(_signal(stop_price=0))
+
+    assert records.get("AAPL") is None
+
+
+def test_EXEC_007_restore_missing_stop_places_a_stop_only_order(tmp_path: Path) -> None:
+    manager, broker = _manager(tmp_path)
+
+    order = manager.restore_missing_stop(
+        "AAPL", Side.BUY, qty=10, stop_price=95.0, take_profit_price=None
+    )
+
+    assert order.status == "filled" or order.status == "accepted"
+    assert broker.submitted_orders[-1].stop_loss_price == 95.0
+
+
+def test_EXEC_008_halt_for_unrecognized_position_does_not_flatten(tmp_path: Path) -> None:
+    manager, broker = _manager(tmp_path)
+
+    manager.halt_for_unrecognized_position("found AAPL at broker with no local record")
+
+    assert manager.is_halted() is True
+    assert manager.halt_status().halt_type == HaltType.RECONCILIATION_MISMATCH
+    assert broker.close_all_called == 0
+
+
+def test_EXEC_010_halt_for_clock_drift_does_not_flatten(tmp_path: Path) -> None:
+    manager, broker = _manager(tmp_path)
+
+    manager.halt_for_clock_drift("local clock is 42s ahead of the broker's")
+
+    assert manager.is_halted() is True
+    assert manager.halt_status().halt_type == HaltType.CLOCK_DRIFT
+    assert broker.close_all_called == 0

@@ -9,12 +9,19 @@ from __future__ import annotations
 
 import threading
 from dataclasses import replace
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
-from intraday_trading.broker.base import BracketOrderRequest, Broker, make_client_order_id
+from intraday_trading.broker.base import (
+    BracketOrderRequest,
+    Broker,
+    OrderInfo,
+    Side,
+    make_client_order_id,
+)
 from intraday_trading.config import RiskLimits
 from intraday_trading.risk.signals import EntrySignal, HaltType, RiskDecision
 from intraday_trading.session.clock import SessionClock
+from intraday_trading.storage.position_record_store import PositionRecordStore
 from intraday_trading.storage.rejection_log import RejectionLog
 from intraday_trading.storage.risk_state_store import RiskState, RiskStateStore
 
@@ -32,6 +39,7 @@ class RiskManager:
         state_store: RiskStateStore,
         rejection_log: RejectionLog,
         leveraged_etf_symbols: frozenset[str] = frozenset(),
+        position_records: PositionRecordStore | None = None,
     ) -> None:
         self._broker = broker
         self._limits = limits
@@ -39,6 +47,7 @@ class RiskManager:
         self._state_store = state_store
         self._rejection_log = rejection_log
         self._leveraged_etf_symbols = leveraged_etf_symbols
+        self._position_records = position_records
         self._lock = threading.Lock()
 
     def is_halted(self) -> bool:
@@ -140,6 +149,14 @@ class RiskManager:
             take_profit_price=signal.take_profit_price,
         )
         order = self._broker.submit_bracket_order(request)
+        if self._position_records is not None:
+            self._position_records.record_open(
+                symbol=signal.symbol,
+                stop_price=signal.stop_price,
+                take_profit_price=signal.take_profit_price,
+                client_order_id=client_order_id,
+                opened_at=self._clock.now(),
+            )
 
         state.trades_today += 1
         self._state_store.save(state)
@@ -158,13 +175,15 @@ class RiskManager:
         self._state_store.save(state)
 
     def trip_kill_switch(self, reason: str) -> None:
-        self.flatten_all()
-        self._halt(HaltType.KILL_SWITCH, reason)
+        with self._lock:
+            self.flatten_all()
+            self._halt(HaltType.KILL_SWITCH, reason)
 
     def re_enable(self) -> None:
-        state = self._state_store.load()
-        state = replace(state, halted=False, halt_type=HaltType.NONE, halt_reason=None)
-        self._state_store.save(state)
+        with self._lock:
+            state = self._state_store.load()
+            state = replace(state, halted=False, halt_type=HaltType.NONE, halt_reason=None)
+            self._state_store.save(state)
 
     def check_loss_limits(self) -> RiskState:
         """Call periodically from the event loop (step 8). Flattens and halts on the
@@ -203,6 +222,42 @@ class RiskManager:
                     return self._state_store.load()
 
             return state
+
+    def restore_missing_stop(
+        self,
+        symbol: str,
+        side: Side,
+        qty: float,
+        stop_price: float,
+        take_profit_price: float | None,
+    ) -> OrderInfo:
+        """EXEC-007: the reconciler's only way to re-place a stop -- still goes through
+        RiskManager (RISK-021: the only code path allowed to call
+        `Broker.submit_bracket_order`), it just skips the entry checks because this
+        isn't a new position, it's restoring protection on one that already exists."""
+        request = BracketOrderRequest(
+            client_order_id=make_client_order_id("reconcile", symbol, datetime.now().isoformat()),
+            symbol=symbol,
+            side=side,
+            qty=qty,
+            stop_loss_price=stop_price,
+            take_profit_price=take_profit_price,
+        )
+        return self._broker.submit_bracket_order(request)
+
+    def halt_for_unrecognized_position(self, reason: str) -> None:
+        """EXEC-008: an open broker position with no matching local record is an alert
+        and a halt on new entries, not a guess -- deliberately does NOT flatten,
+        unlike `trip_kill_switch`, since we don't know enough about this position to
+        safely close it ourselves."""
+        with self._lock:
+            self._halt(HaltType.RECONCILIATION_MISMATCH, reason)
+
+    def halt_for_clock_drift(self, reason: str) -> None:
+        """EXEC-010: trading on a skewed clock is dangerous in ways a simple halt
+        can't fix by flattening -- same shape as the reconciliation halt, no flatten."""
+        with self._lock:
+            self._halt(HaltType.CLOCK_DRIFT, reason)
 
     def check_session_flatten(self) -> bool:
         """RISK-014/015: flatten (no halt) once inside the flatten-before-close window,

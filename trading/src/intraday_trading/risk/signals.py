@@ -39,6 +39,8 @@ class HaltType(StrEnum):
     WEEKLY_LOSS = "weekly_loss"
     DRAWDOWN = "drawdown"
     KILL_SWITCH = "kill_switch"
+    RECONCILIATION_MISMATCH = "reconciliation_mismatch"
+    CLOCK_DRIFT = "clock_drift"
 
 
 @dataclass(frozen=True)

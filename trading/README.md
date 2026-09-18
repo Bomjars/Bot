@@ -16,12 +16,13 @@ for the current rule summaries and open questions — **read that before touchin
 
 ## Status
 
-Step 5 of 10 done (see `docs/PLAN.md`): broker interface + Alpaca paper adapter +
+Step 8 of 10 done (see `docs/PLAN.md`): broker interface + Alpaca paper adapter +
 historical data client + SQLite bar store + exchange calendar/clock + RiskManager
 (every hard risk limit, 100% branch coverage) + kill switch + event-driven backtester
 with a cost model and a structural no-look-ahead guarantee + validation module (trial
-registry, CSCV/PBO, PSR/MinTRL/DSR). No strategy logic yet — waiting on the paper text,
-see `docs/PLAN.md` §5.
+registry, CSCV/PBO, PSR/MinTRL/DSR) + paper-trading loop with reconciliation and
+Telegram alerting. No strategy logic yet — waiting on the paper text, see
+`docs/PLAN.md` §5; `run-paper` currently runs with zero strategies attached.
 
 ## Safety model, short version
 
@@ -61,8 +62,15 @@ uv run ruff check .
 uv run mypy src
 ```
 
-`run-paper` and `kill` exist as CLI stubs today and will do something real starting step 3
-(kill switch) and step 8 (paper-trading loop).
+```powershell
+uv run intraday-trading run-paper --symbols SPY,AAPL   # starts the paper-trading loop
+uv run intraday-trading kill                            # trips the kill switch now
+```
+
+Both talk to Alpaca's **paper** endpoint only — there is no live path in this codebase
+yet (see CLAUDE.md). `run-paper` currently runs with an empty strategy list (steps 6–7
+aren't built), so it will do session/risk bookkeeping and reconciliation without ever
+proposing a trade.
 
 ## Repo layout
 

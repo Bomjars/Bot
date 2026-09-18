@@ -48,6 +48,18 @@ CREATE TABLE IF NOT EXISTS trial_daily_pnl (
     PRIMARY KEY (trial_id, date)
 );
 
+-- What RiskManager believes it just opened, kept independently of the broker so a
+-- reconciliation pass (state/reconciler.py) has something to re-place a stop FROM if the
+-- broker's own resting stop order goes missing (EXEC-007). A position with no row here
+-- at reconciliation time is treated as unrecognised (EXEC-008), not guessed at.
+CREATE TABLE IF NOT EXISTS open_position_records (
+    symbol TEXT PRIMARY KEY,
+    stop_price REAL NOT NULL,
+    take_profit_price REAL,
+    client_order_id TEXT NOT NULL,
+    opened_at TEXT NOT NULL
+);
+
 -- Single-row table (id always 1): RiskManager's halted state and today's/this week's
 -- counters, so a restart resumes halted rather than silently trading again (RISK-008/009).
 CREATE TABLE IF NOT EXISTS risk_state (

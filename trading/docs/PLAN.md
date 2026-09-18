@@ -1,8 +1,10 @@
 # Plan, research findings, and rule summaries
 
-Status: **Step 5 of 10 done** (trial registry, CSCV/PBO, PSR/MinTRL/DSR). Strategy code
-(steps 6–7) is still intentionally not started — waiting on the paper text per section 5
-below.
+Status: **Step 8 of 10 done** (paper-trading loop, reconciliation, kill switch wiring,
+Telegram alerting). Steps 6–7 (the actual strategies) are still intentionally not
+started — waiting on the paper text per section 5 below; the paper-trading loop
+currently runs with an empty strategy list, so it does session/risk bookkeeping and
+reconciliation but proposes no trades yet.
 
 ## 1. Repo layout decision (already made, per your answer)
 
@@ -335,3 +337,46 @@ to the paper's reported figures explicitly so the gap is visible, not asserted.
   the pieces those reports will call.
 - 122/122 tests pass (full suite, ~22s). `risk/risk_manager.py` and `backtest/engine.py`
   still at 100% branch coverage. ruff and mypy --strict clean.
+
+## 11. Step 8 notes
+
+- **Data feed is polled, not streamed.** `execution/alpaca_feed.py`'s `AlpacaPollingFeed`
+  calls Alpaca's REST minute-bar endpoint each loop iteration and returns only bars it
+  hasn't returned before. For 1-minute-bar intraday strategies this is materially
+  simpler than a websocket (`StockDataStream`) and just as timely; true streaming is a
+  plausible future enhancement, not something this system needs to meet its own
+  requirements. `execution/reconnect.py`'s `retry_with_backoff` wraps every poll
+  (EXEC-005 reconnect-with-backoff, EXEC-009 rate-limit backoff) — a fully exhausted
+  retry surfaces as a specific "feed disconnected" Telegram alert (ALERT-003).
+- **EXEC-009 is scoped to the data feed, not order submission.** A 429 while
+  `RiskManager` is placing an order already fails safe today (RISK-020: it becomes a
+  rejected order this cycle, not a retry loop) — correct, but not optimal. Adding retry
+  *inside* order submission is a real future improvement, deliberately not done here to
+  avoid the much harder problem of retrying a call that might have actually succeeded at
+  the broker before the error was seen (double-submission risk) without also reworking
+  idempotency handling beyond what EXEC-002 already covers.
+- **Reconciliation's "missing stop" detection is a coarse proxy.** `state/reconciler.py`
+  treats "the broker has zero open orders for this symbol" as "the stop is missing" and
+  re-places one from `open_position_records` (a new local table RiskManager writes to on
+  every accepted entry, specifically so this recovery is possible). It does not parse
+  Alpaca's actual bracket-order leg structure (`Order.legs`) to distinguish a genuinely
+  missing stop from some other order state — a refinement worth making once this is
+  exercised against Alpaca's real paper API rather than fakes. An open position with *no
+  local record at all* is never guessed at: it halts entries and alerts (EXEC-008) and
+  is left for a human to resolve.
+- **STATE-001** ("rebuild state entirely from the broker on restart") ended up mostly
+  free: `RiskManager` never caches positions in memory, it queries `broker.get_positions()`
+  fresh on every call, so there's no separate position cache to rebuild. The only local
+  state that can go stale is `open_position_records`, which is exactly what the
+  reconciler checks on `startup()`.
+- **Daily summary "once per day" is in-memory only**, not persisted — a restart in the
+  last moments of a trading day could in theory resend it. Low-value edge case relative
+  to the effort of persisting it; flagged rather than silently ignored.
+- `cli.py`'s `run-paper` and `kill` are real now (via `execution/wiring.py`, the one
+  place that constructs a real `AlpacaBroker.paper()`), but neither has been executed in
+  this sandbox — both would immediately call Alpaca's paper API during reconciliation,
+  and this sandbox has no real Alpaca keys. `execution/wiring.py` itself is tested
+  directly (construction alone never touches the network — alpaca-py's client
+  constructors just store credentials).
+- 172/172 tests pass. `risk/` and `execution/` are both at 100% branch coverage across
+  every file in each package, as required. ruff and mypy --strict clean.
