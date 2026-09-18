@@ -1,7 +1,8 @@
 # Plan, research findings, and rule summaries
 
-Status: **Step 1 of 10.** Strategy code (steps 6–7) is intentionally not started. This
-document is what you asked to confirm or correct before it is.
+Status: **Step 2 of 10 done** (broker interface, Alpaca paper adapter, historical data
+client, SQLite bar store, exchange calendar/clock). Strategy code (steps 6–7) is still
+intentionally not started — waiting on the paper text per section 5 below.
 
 ## 1. Repo layout decision (already made, per your answer)
 
@@ -192,3 +193,31 @@ return decay of roughly 50% (McLean & Pontiff), and (2) both papers' own reporte
 use leverage and (possibly) a profit-target assumption we are deliberately not replicating,
 per your 1x cap. The validation report (step 5+) will show our backtest's Sharpe/CAGR next
 to the paper's reported figures explicitly so the gap is visible, not asserted.
+
+## 7. Step 2 notes
+
+- `broker/base.py` defines the vendor-neutral `Broker` Protocol (plain dataclasses/enums
+  only) so an IBKR adapter can implement it later without touching `risk/` or any
+  strategy. `broker/alpaca_broker.py` is the first (and, per CLAUDE.md, only) real
+  implementation — constructed exclusively via `AlpacaBroker.paper(settings)`, which
+  hardcodes `paper=True` to `alpaca-py`'s `TradingClient`. There is no `.live(...)`
+  classmethod yet; that's added deliberately with the go-live gate in step 10, not before.
+- **Discovered while wiring bracket orders**: Alpaca's SDK validates that
+  `OrderClass.BRACKET` must carry *both* a stop-loss and a take-profit leg. Since neither
+  strategy has a profit target (per your prompt and my proposed default in section 5), a
+  stop-only exit uses `OrderClass.OTO` (one-triggers-other) with just the stop-loss leg
+  instead. RISK-010 (every entry carries a stop) still holds either way — this is a
+  mechanical detail of which Alpaca order class carries that stop, not a change to any
+  risk rule.
+- `data/client.py` fetches historical minute bars only; live streaming is deferred to
+  step 8 where it needs the event loop's reconnect/backoff logic anyway.
+- `storage/bar_store.py` enforces DATA-002 (no bar after `as_of` is ever returned) at the
+  query layer, and tags every bar with its feed (DATA-001) so a IEX/SIP mix can never
+  happen silently.
+- `session/calendar.py` + `session/clock.py` give `can_enter()`/`should_flatten()`
+  entirely in exchange time, already correct on half days and holidays (tested against
+  the real 2024 Thanksgiving/day-after dates via `pandas_market_calendars`). RiskManager
+  (step 3) will call these rather than re-deriving session logic itself.
+- 36/36 tests pass, ruff and mypy (strict) clean. Alpaca API calls are exercised only
+  against fakes/injected clients — nothing here has touched the network or needs real
+  keys to test.

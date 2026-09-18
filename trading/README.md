@@ -16,7 +16,9 @@ for the current rule summaries and open questions — **read that before touchin
 
 ## Status
 
-Step 1 of 10 (see `docs/PLAN.md`). Skeleton only — no strategy, broker, or risk logic yet.
+Step 2 of 10 done (see `docs/PLAN.md`): broker interface + Alpaca paper adapter +
+historical data client + SQLite bar store + exchange calendar/clock. No risk manager,
+backtester, or strategy logic yet.
 
 ## Safety model, short version
 
