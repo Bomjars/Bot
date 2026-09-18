@@ -1,0 +1,67 @@
+[project]
+name = "intraday-trading"
+version = "0.1.0"
+description = "Research-grounded, risk-gated intraday trading system (Alpaca paper/live)."
+readme = "README.md"
+authors = [
+    { name = "Bomjars", email = "bominlang@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "alpaca-py>=0.33",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+    "pandas>=2.2",
+    "numpy>=2.1",
+    "scipy>=1.14",
+    "pandas-market-calendars>=4.4",
+    "python-dateutil>=2.9",
+    "tzdata>=2024.2",
+    "structlog>=24.4",
+    "httpx>=0.27",
+    "tenacity>=9.0",
+    "typer>=0.13",
+]
+
+[project.optional-dependencies]
+dashboard = [
+    "streamlit>=1.39",
+    "plotly>=5.24",
+]
+dev = [
+    "pytest>=8.3",
+    "pytest-cov>=6.0",
+    "pytest-asyncio>=0.24",
+    "hypothesis>=6.115",
+    "ruff>=0.7",
+    "mypy>=1.13",
+    "freezegun>=1.5",
+    "respx>=0.21",
+]
+
+[project.scripts]
+intraday-trading = "intraday_trading.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.8.17,<0.9.0"]
+build-backend = "uv_build"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+disallow_untyped_defs = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--cov=intraday_trading --cov-report=term-missing"
+
+[tool.coverage.report]
+fail_under = 0
+exclude_lines = ["pragma: no cover", "if TYPE_CHECKING:"]
