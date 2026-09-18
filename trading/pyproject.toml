@@ -67,6 +67,9 @@ ignore_missing_imports = true
 testpaths = ["tests"]
 addopts = "--cov=intraday_trading --cov-report=term-missing"
 
+[tool.coverage.run]
+branch = true
+
 [tool.coverage.report]
 fail_under = 0
 exclude_lines = ["pragma: no cover", "if TYPE_CHECKING:"]

@@ -15,3 +15,27 @@ CREATE TABLE IF NOT EXISTS bars (
 );
 
 CREATE INDEX IF NOT EXISTS idx_bars_symbol_ts ON bars (symbol, ts);
+
+CREATE TABLE IF NOT EXISTS rejections (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts TEXT NOT NULL,
+    strategy TEXT NOT NULL,
+    symbol TEXT NOT NULL,
+    reason TEXT NOT NULL,
+    signal_json TEXT NOT NULL
+);
+
+-- Single-row table (id always 1): RiskManager's halted state and today's/this week's
+-- counters, so a restart resumes halted rather than silently trading again (RISK-008/009).
+CREATE TABLE IF NOT EXISTS risk_state (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    trading_day TEXT,
+    daily_starting_equity REAL,
+    week_start TEXT,
+    weekly_starting_equity REAL,
+    peak_equity REAL,
+    trades_today INTEGER NOT NULL DEFAULT 0,
+    halted INTEGER NOT NULL DEFAULT 0,
+    halt_type TEXT,
+    halt_reason TEXT
+);

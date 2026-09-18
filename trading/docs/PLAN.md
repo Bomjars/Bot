@@ -1,8 +1,8 @@
 # Plan, research findings, and rule summaries
 
-Status: **Step 2 of 10 done** (broker interface, Alpaca paper adapter, historical data
-client, SQLite bar store, exchange calendar/clock). Strategy code (steps 6–7) is still
-intentionally not started — waiting on the paper text per section 5 below.
+Status: **Step 3 of 10 done** (RiskManager, position sizer, kill switch, all hard risk
+limits). Strategy code (steps 6–7) is still intentionally not started — waiting on the
+paper text per section 5 below.
 
 ## 1. Repo layout decision (already made, per your answer)
 
@@ -221,3 +221,37 @@ to the paper's reported figures explicitly so the gap is visible, not asserted.
 - 36/36 tests pass, ruff and mypy (strict) clean. Alpaca API calls are exercised only
   against fakes/injected clients — nothing here has touched the network or needs real
   keys to test.
+
+## 8. Step 3 notes
+
+- `sizing/position_sizer.py` is a pure function (`compute_target_size`) proposing a whole-
+  share quantity for a given risk-per-trade %. It's deliberately independent of
+  `RiskManager`: strategies (steps 6-7) will call it to *propose* a size, but
+  `RiskManager` re-derives and checks the risk % itself from whatever qty it's handed —
+  it never trusts a caller's size, per "the hard limits are checked before every order,"
+  not "sized to comply and therefore never checked."
+- `risk/risk_manager.py` is the single gateway to `Broker.submit_bracket_order`
+  (RISK-021, enforced by a static grep-based test — no other file under `src/` may call
+  it) and checks every hard limit from `RiskLimits` in one pass, rejecting and persisting
+  the rejection (RISK-022) on the first one that fails. Any unexpected exception anywhere
+  in that pass is caught and rejects the order (RISK-020, fail closed) rather than
+  propagating.
+- Loss-limit halts persist in SQLite (`storage/risk_state_store.py`) across a fresh
+  `RiskManager` instance pointed at the same DB file — tested directly as a stand-in for
+  "survives a restart." Full broker-position reconciliation on restart (rebuilding
+  in-memory state entirely from the broker, re-placing a missing stop) is still step 8;
+  this step only covers RiskManager's own halted/counters bookkeeping.
+- Daily-loss halts auto-clear at the next `begin_session()` call (RISK-007: "halt for the
+  day"); weekly-loss and drawdown halts do not — they need `re_enable()` (RISK-008/009),
+  matching your prompt's wording literally rather than guessing a symmetric behaviour.
+- `killswitch/kill_switch.py` is intentionally thin: `trip()`, a file-flag check, and a
+  typed-confirmation wrapper for the dashboard, all funnelling into
+  `RiskManager.trip_kill_switch` (KILL-006: one underlying path, three entry points). The
+  CLI's `kill` command is still a stub — wiring it to a real, running broker session is
+  step 8's job, not something worth faking here.
+- Deferred to step 8, not step 3: KILL-002's actual event-loop polling of the kill-switch
+  file (the helper it'll call, `is_kill_file_present`, is built and tested now), and
+  RISK-025 (partial-fill-aware sizing on an already-open position) — a real edge case,
+  but a P1 (before live, not before paper) one.
+- 75/75 tests pass. `risk/` (and `execution/`, still empty) are at 100% branch coverage,
+  as required. ruff and mypy --strict clean.
