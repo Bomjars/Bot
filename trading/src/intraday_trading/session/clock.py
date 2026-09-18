@@ -23,6 +23,18 @@ def _real_now() -> datetime:
     return datetime.now(tz=EXCHANGE_TZ)
 
 
+class TimeBox:
+    """A settable, callable "now" for `SessionClock`. Used by anything that drives
+    simulated time forward externally rather than reading the real clock -- today, the
+    backtester (`backtest/engine.py`), which advances it bar by bar."""
+
+    def __init__(self, initial: datetime) -> None:
+        self.value = initial
+
+    def __call__(self) -> datetime:
+        return self.value
+
+
 class SessionClock:
     def __init__(
         self,

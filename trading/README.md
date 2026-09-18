@@ -16,10 +16,11 @@ for the current rule summaries and open questions — **read that before touchin
 
 ## Status
 
-Step 3 of 10 done (see `docs/PLAN.md`): broker interface + Alpaca paper adapter +
+Step 4 of 10 done (see `docs/PLAN.md`): broker interface + Alpaca paper adapter +
 historical data client + SQLite bar store + exchange calendar/clock + RiskManager
-(every hard risk limit, 100% branch coverage) + kill switch. No backtester or strategy
-logic yet.
+(every hard risk limit, 100% branch coverage) + kill switch + event-driven backtester
+with a cost model and a structural no-look-ahead guarantee. No validation engine or
+strategy logic yet.
 
 ## Safety model, short version
 

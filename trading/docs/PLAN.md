@@ -1,8 +1,8 @@
 # Plan, research findings, and rule summaries
 
-Status: **Step 3 of 10 done** (RiskManager, position sizer, kill switch, all hard risk
-limits). Strategy code (steps 6–7) is still intentionally not started — waiting on the
-paper text per section 5 below.
+Status: **Step 4 of 10 done** (event-driven backtester, cost model, look-ahead
+guarantee). Strategy code (steps 6–7) is still intentionally not started — waiting on
+the paper text per section 5 below.
 
 ## 1. Repo layout decision (already made, per your answer)
 
@@ -255,3 +255,40 @@ to the paper's reported figures explicitly so the gap is visible, not asserted.
   but a P1 (before live, not before paper) one.
 - 75/75 tests pass. `risk/` (and `execution/`, still empty) are at 100% branch coverage,
   as required. ruff and mypy --strict clean.
+
+## 9. Step 4 notes
+
+- `strategies/base.py` defines `Strategy`/`Bar`/`StrategyContext` — the same interface a
+  live/paper strategy and a backtested one both implement (BT-001). `StrategyContext` is
+  built *incrementally* by whichever engine drives it: at the moment a strategy is
+  called for a bar, the context's history literally cannot contain a later bar, because
+  the engine hasn't appended it yet. This makes look-ahead through the sanctioned data
+  path structurally impossible, not just checked after the fact — tested by a strategy
+  that asserts the guarantee on every single call across a full multi-symbol run
+  (BT-002/BT-005). The one thing this can't catch: a strategy that bypasses the context
+  entirely and captures its own reference to a full historical DataFrame — that's now a
+  documented code-review rule in CLAUDE.md, since no runtime harness can generically
+  detect arbitrary smuggled-in data access. I chose to be upfront about this limitation
+  rather than claim a check that doesn't actually exist.
+- `backtest/simulated_broker.py` implements `Broker` with immediate fills (no partial
+  fills or order-book queueing modeled) and treats stop-loss/take-profit levels as
+  attributes of the open position, checked against each bar's high/low in
+  `process_bar()` — if both would trigger in the same bar, the stop (worse outcome) is
+  assumed to fire first, a standard conservative backtesting convention.
+- `backtest/costs.py`: commission + a combined slippage/spread adverse-price estimate on
+  every fill, plus a one-off FX conversion cost applied to the GBP→USD starting capital
+  (not per trade, since every trade after funding happens entirely in USD).
+  `CostModel.at_multiplier(2.0)` reruns everything at 2x slippage+spread (BT-004);
+  logging that alongside the 1x run in the trial registry is step 5's job, not built yet.
+- `backtest/engine.py`'s `run_backtest()` drives the *actual* `RiskManager` and
+  `SimulatedBroker` instances bar-by-bar in strict chronological order (ties broken by
+  symbol name), calling `begin_session()` / `check_loss_limits()` / `check_session_flatten()`
+  every bar exactly as the live loop will (step 8) — so every hard limit applies inside a
+  backtest exactly as it would live (BT-007), and the run is fully deterministic given
+  the same inputs (BT-006).
+- Known simplification carried over from the papers-uncertainty in section 5: backtest
+  `EntrySignal.spread_pct` is a configured assumption (no historical bid/ask spread is
+  part of the minute-OHLCV bars), not a measured value — flagged here so it isn't
+  mistaken for something more precise than it is.
+- 90/90 tests pass; `backtest/engine.py` and `risk/risk_manager.py` at 100% branch
+  coverage. ruff and mypy --strict clean.

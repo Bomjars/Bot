@@ -33,7 +33,15 @@ config file, or environment claims
 8. **Nothing is ever deleted from the trial registry.** Abandoned/superseded runs get
    marked retired via a status column, not removed. Same principle for
    `docs/TEST_SCENARIOS.md`: retire scenarios, don't delete them.
-9. **The dashboard never places, modifies, or cancels an order.** It reads SQLite, and its
+9. **Strategy code only reads market data through the `StrategyContext`/`BarStore`
+   `as_of` path it's handed — never by capturing or importing a raw DataFrame, file
+   path, or database connection of its own.** The backtester's no-look-ahead guarantee
+   is structural (the context is built incrementally and never holds a future bar) but
+   it only holds for code that actually uses the sanctioned path; nothing can runtime-
+   detect a strategy that smuggles in its own reference to the full historical data.
+   This is a code-review rule, not (only) a test — treat any strategy PR that reads data
+   any other way as a look-ahead bug regardless of what its backtest result shows.
+10. **The dashboard never places, modifies, or cancels an order.** It reads SQLite, and its
    only write paths are: kill switch (with typed confirmation), pause entries, flatten one
    position — all of which route through RiskManager/the kill-switch path, never a direct
    broker call from dashboard code.
