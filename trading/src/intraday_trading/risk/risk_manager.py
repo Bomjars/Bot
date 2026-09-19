@@ -12,14 +12,16 @@ from dataclasses import replace
 from datetime import date, datetime, timedelta
 
 from intraday_trading.broker.base import (
+    AccountInfo,
     BracketOrderRequest,
     Broker,
     OrderInfo,
+    PositionInfo,
     Side,
     make_client_order_id,
 )
 from intraday_trading.config import RiskLimits
-from intraday_trading.risk.signals import EntrySignal, HaltType, RiskDecision
+from intraday_trading.risk.signals import EntrySignal, ExitSignal, HaltType, RiskDecision
 from intraday_trading.session.clock import SessionClock
 from intraday_trading.storage.order_log import OrderLog
 from intraday_trading.storage.position_record_store import PositionRecordStore
@@ -60,6 +62,21 @@ class RiskManager:
 
     def halt_status(self) -> RiskState:
         return self._state_store.load()
+
+    def get_account(self) -> AccountInfo:
+        """A read-only passthrough to the broker's account snapshot -- exists so a
+        strategy can see current equity (e.g. for volatility-targeted sizing, STRAT-001)
+        only through a sanctioned, RiskManager-mediated path, never by holding its own
+        broker reference (CLAUDE.md rule 9's data-access principle applied to account
+        state, not just market data)."""
+        return self._broker.get_account()
+
+    def get_positions(self) -> list[PositionInfo]:
+        """A read-only passthrough to the broker's real open positions -- so a strategy
+        can check what's actually open (STRAT-001) instead of maintaining its own belief
+        that could silently drift out of sync with a position `check_session_flatten()`
+        or a rejected signal already changed without the strategy ever being told."""
+        return self._broker.get_positions()
 
     @property
     def live_notional_cap_usd(self) -> float | None:
@@ -181,6 +198,25 @@ class RiskManager:
         state.trades_today += 1
         self._state_store.save(state)
         return RiskDecision(accepted=True, broker_order_id=order.broker_order_id)
+
+    def check_and_submit_exit(self, signal: ExitSignal) -> RiskDecision:
+        """A strategy-initiated close (a decision-time stop-out, or the first leg of a
+        reversal, STRAT-002) -- routed through RiskManager like every other write to the
+        broker (CLAUDE.md rule 5), but with no risk checks to fail: closing exposure only
+        ever reduces it, so the only possible outcomes are "closed" or "nothing was open
+        on that symbol." Still fails closed (RISK-020) on an unexpected error."""
+        with self._lock:
+            try:
+                order = self._broker.close_position(signal.symbol)
+            except Exception as exc:  # RISK-020: fail closed on any unexpected error
+                return RiskDecision(accepted=False, reason=f"internal_error: {exc}")
+
+            if order is None:
+                return RiskDecision(accepted=False, reason="no_open_position")
+
+            if self._position_records is not None:
+                self._position_records.remove(signal.symbol)
+            return RiskDecision(accepted=True, broker_order_id=order.broker_order_id)
 
     def flatten_all(self) -> None:
         """KILL-001: cancel every open order before closing positions, so a fill racing

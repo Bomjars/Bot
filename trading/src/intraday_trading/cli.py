@@ -11,20 +11,37 @@ from __future__ import annotations
 
 import sys
 import time
+from datetime import datetime
 
 import typer
 
+from intraday_trading.backtest.costs import CostModel
 from intraday_trading.config import load_settings
+from intraday_trading.data.client import AlpacaMarketDataClient
 from intraday_trading.execution.wiring import build_paper_trading_components
 from intraday_trading.golive.gate import evaluate_go_live_gate
 from intraday_trading.killswitch.kill_switch import trip
+from intraday_trading.session.calendar import EXCHANGE_TZ
+from intraday_trading.storage.bar_store import BarStore
 from intraday_trading.storage.go_live_checklist_store import GoLiveChecklistStore
+from intraday_trading.strategies.spy_grid import (
+    GridRunConfig,
+    bars_from_dataframe,
+    house_risk_grid,
+    paper_reference_config,
+    run_and_log_grid,
+)
+from intraday_trading.validation.registry import TrialRegistry
 
 app = typer.Typer(add_completion=False)
 golive_app = typer.Typer(
     add_completion=False, help="The go-live gate -- docs/GO_LIVE_CHECKLIST.md."
 )
 app.add_typer(golive_app, name="golive")
+backtest_app = typer.Typer(
+    add_completion=False, help="Run a strategy's parameter grid against real historical data."
+)
+app.add_typer(backtest_app, name="backtest")
 
 
 @app.command()
@@ -117,6 +134,79 @@ def golive_mark_reconciliation_tested() -> None:
     settings = load_settings()
     GoLiveChecklistStore(settings.database_path).mark_reconciliation_tested()
     typer.secho("Recorded: reconciliation tested.", fg=typer.colors.GREEN)
+
+
+@backtest_app.command("spy")
+def backtest_spy(
+    start: str = typer.Option(..., help="Start date, YYYY-MM-DD (ET, inclusive)"),
+    end: str = typer.Option(..., help="End date, YYYY-MM-DD (ET, exclusive)"),
+    starting_equity: float = typer.Option(
+        100_000.0, help="Starting equity (USD) for each backtest run in the grid"
+    ),
+) -> None:
+    """Fetch real SPY minute bars for [start, end) via Alpaca, run the full 192-config
+    house_risk grid (docs/STRATEGY_SPEC_SPY.md §8) plus the paper's own reference config,
+    and log every trial to the registry. Needs real Alpaca (paper) API keys and outbound
+    network access; tests exercise the full orchestration with only the underlying
+    network client swapped out (see test_cli.py's `test_backtest_spy_...` test)."""
+    settings = load_settings()
+    start_dt = datetime.fromisoformat(start).replace(tzinfo=EXCHANGE_TZ)
+    end_dt = datetime.fromisoformat(end).replace(tzinfo=EXCHANGE_TZ)
+
+    data_client = AlpacaMarketDataClient.from_settings(settings)
+    bar_store = BarStore(settings.database_path)
+
+    typer.echo(f"Fetching SPY minute bars {start} -> {end} ({settings.alpaca_data_feed.value})...")
+    fetched = data_client.get_minute_bars(["SPY"], start_dt, end_dt, settings.alpaca_data_feed)
+    bar_store.upsert_bars(fetched)
+    df = bar_store.get_bars("SPY", start_dt, end_dt, settings.alpaca_data_feed.value)
+    if df.empty:
+        typer.secho("No bars returned for that range -- nothing to run.", fg=typer.colors.RED)
+        raise typer.Exit(code=1)
+    bars = {"SPY": bars_from_dataframe(df)}
+    typer.echo(f"{len(bars['SPY'])} bars loaded.")
+
+    registry = TrialRegistry(settings.database_path)
+    # Spec §5's own cost assumptions: $0.0035/share commission, $0.001/share slippage,
+    # no separate bps-based spread (the paper's own reported figures already fold it in).
+    cost_model = CostModel(commission_per_share=0.0035, slippage_per_share=0.001)
+
+    house_risk_run_config = GridRunConfig(
+        starting_equity=starting_equity,
+        cost_model=cost_model,
+        risk_limits=settings.risk,
+        database_path=settings.database_path,
+    )
+    grid = house_risk_grid()
+    typer.echo(f"Running {len(grid)} house_risk configs (this is the go-live decision grid)...")
+    trial_ids = run_and_log_grid("SPY", "spy_momentum", grid, bars, house_risk_run_config, registry)
+    typer.echo(f"Logged {len(trial_ids)} trials under strategy=spy_momentum.")
+
+    paper_faithful_limits = settings.risk.model_copy(
+        update={"max_leverage": 4.0, "flatten_before_close_minutes": 0, "no_entry_last_minutes": 0}
+    )
+    paper_run_config = GridRunConfig(
+        starting_equity=starting_equity,
+        cost_model=cost_model,
+        risk_limits=paper_faithful_limits,
+        database_path=settings.database_path,
+    )
+    typer.echo(
+        "Running the paper's own reference config (paper_faithful, for Table 3 comparison)..."
+    )
+    paper_trial_ids = run_and_log_grid(
+        "SPY",
+        "spy_momentum_paper_faithful",
+        [paper_reference_config()],
+        bars,
+        paper_run_config,
+        registry,
+    )
+    typer.echo(f"Logged {len(paper_trial_ids)} paper_faithful reference trial(s).")
+    typer.echo(
+        "Run `intraday-trading golive status --strategies spy_momentum` for the "
+        "CSCV/PBO verdict, or open the dashboard's Validation Report page."
+    )
 
 
 def main() -> None:

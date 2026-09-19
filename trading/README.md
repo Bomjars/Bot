@@ -10,25 +10,36 @@ text allows, with every assumption flagged: see [`docs/PLAN.md`](docs/PLAN.md) s
 for the current rule summaries and open questions — **read that before touching
 `strategies/`**.
 
-1. Opening Range Breakout on "Stocks in Play" (Zarattini, Barbon & Aziz, 2024).
+1. Opening Range Breakout on "Stocks in Play" (Zarattini, Barbon & Aziz, 2024). **Not
+   started** — waiting on its own `docs/STRATEGY_SPEC_SPY.md`-equivalent spec file.
 2. SPY intraday momentum / "noise area" (Zarattini, Aziz & Barbon, 2024, building on Gao,
-   Han, Li & Zhou, 2018, JFE).
+   Han, Li & Zhou, 2018, JFE). **Built** — `strategies/spy_momentum.py`, from
+   [`docs/STRATEGY_SPEC_SPY.md`](docs/STRATEGY_SPEC_SPY.md).
 
 ## Status
 
-Step 10 of 10 done (see `docs/PLAN.md`): broker interface + Alpaca paper adapter +
-historical data client + SQLite bar store + exchange calendar/clock + RiskManager
-(every hard risk limit, 100% branch coverage) + kill switch + event-driven backtester
-with a cost model and a structural no-look-ahead guarantee + validation module (trial
-registry, CSCV/PBO, PSR/MinTRL/DSR) + paper-trading loop with reconciliation and
-Telegram alerting + a 4-page Streamlit dashboard + the go-live checklist
-(`docs/GO_LIVE_CHECKLIST.md`), enforced in code by `golive/gate.py` and surfaced via both
-the CLI (`golive status`) and the dashboard's Journal & Go-Live page. No strategy logic
-yet — waiting on the paper text, see `docs/PLAN.md` §5; `run-paper` currently runs with
-zero strategies attached, so most of the dashboard is an honest empty state, and two of
-the six go-live checks can never fully pass yet either (holdout validation and the
-expected-band/slippage comparison aren't implemented — see `docs/PLAN.md` §13) — this is
-the correct state for a system that has never placed a trade.
+Steps 1–6 and 8–10 of 10 done (see `docs/PLAN.md`); step 7 (ORB) still waiting on its
+paper spec. Broker interface + Alpaca paper adapter + historical data client + SQLite bar
+store + exchange calendar/clock + RiskManager (every hard risk limit, 100% branch
+coverage) + kill switch + event-driven backtester with a cost model and a structural
+no-look-ahead guarantee + validation module (trial registry, CSCV/PBO, PSR/MinTRL/DSR) +
+the SPY intraday momentum strategy (`strategies/spy_momentum.py`, both a `house_risk` and
+a `paper_faithful`-for-replication-only mode, plus its 192-config parameter grid in
+`strategies/spy_grid.py`) + paper-trading loop with reconciliation and Telegram alerting
++ a 4-page Streamlit dashboard + the go-live checklist (`docs/GO_LIVE_CHECKLIST.md`),
+enforced in code by `golive/gate.py` and surfaced via both the CLI (`golive status`) and
+the dashboard's Journal & Go-Live page.
+
+`run-paper` still runs with zero strategies attached by default (nothing wires the SPY
+strategy into `execution/wiring.py` automatically — see `docs/PLAN.md` §14), so most of
+the dashboard is still an honest empty state, and two of the six go-live checks can never
+fully pass yet either (holdout validation and the expected-band/slippage comparison
+aren't implemented — see `docs/PLAN.md` §13). The SPY strategy itself has never been run
+against real historical data in this environment (no outbound network access here) —
+`uv run intraday-trading backtest spy --start ... --end ...` is built and tested (see
+`docs/PLAN.md` §14) but still needs to actually be run, with real Alpaca paper keys, and
+its printed CSCV/PBO verdict and paper-replication numbers checked against the paper's
+own Table 3, before this strategy is validated for paper trading.
 
 ## Safety model, short version
 
@@ -74,12 +85,20 @@ uv run intraday-trading kill                            # trips the kill switch 
 ```
 
 Both talk to Alpaca's **paper** endpoint only — there is no live path in this codebase
-yet (see CLAUDE.md). `run-paper` currently runs with an empty strategy list (steps 6–7
-aren't built), so it will do session/risk bookkeeping and reconciliation without ever
-proposing a trade.
+yet (see CLAUDE.md). `run-paper` currently runs with an empty strategy list by default
+(wiring the SPY strategy in is a deliberate separate step, not done automatically), so it
+will do session/risk bookkeeping and reconciliation without proposing a trade unless you
+wire one in yourself.
 
 ```powershell
-uv run intraday-trading golive status --strategies orb,spy_momentum   # every check + verdict
+# Fetches real SPY minute bars, runs the full 192-config house_risk grid plus the
+# paper's own paper_faithful reference config, logs every trial. Needs real Alpaca paper
+# keys and network access -- see docs/PLAN.md §14 for what to check in the output.
+uv run intraday-trading backtest spy --start 2015-01-01 --end 2024-05-01
+```
+
+```powershell
+uv run intraday-trading golive status --strategies spy_momentum       # every check + verdict
 uv run intraday-trading golive mark-kill-switch-tested                # after running the drill in paper
 uv run intraday-trading golive mark-reconciliation-tested             # after running the drill in paper
 ```
@@ -122,15 +141,18 @@ trading/
 │   ├── execution/              Order/fill/reconciliation engine          (step 2/3)
 │   ├── backtest/                 Event-driven backtester + cost model      (step 4)
 │   ├── validation/                 CSCV/PBO, PSR, MinTRL, DSR, trial registry (step 5)
-│   ├── universe/                     "Stocks in play" scanner              (step 7)
-│   ├── strategies/                     ORB + SPY momentum strategy classes  (step 6/7)
-│   ├── session/                          Exchange calendar/clock, timezones (step 2)
-│   ├── state/                              Restart-safe state + reconciler   (step 8)
-│   ├── alerting/                             Telegram                        (step 8)
-│   └── killswitch/                             Kill switch                    (step 3)
+│   ├── universe/                     "Stocks in play" scanner              (step 7, TBD)
+│   ├── strategies/                     spy_momentum.py + spy_grid.py (done, step 6);
+│   │                                    ORB strategy TBD (step 7)
+│   ├── golive/                            The go-live gate (step 10)
+│   ├── session/                            Exchange calendar/clock, timezones (step 2)
+│   ├── state/                                Restart-safe state + reconciler   (step 8)
+│   ├── alerting/                               Telegram                        (step 8)
+│   └── killswitch/                               Kill switch                    (step 3)
 ├── dashboard/            Streamlit app, 4 pages: main.py + pages/ + lib/     (step 9)
 ├── docs/                 PLAN.md (this build's design doc + paper summaries),
-│                          GO_LIVE_CHECKLIST.md (step 10)
+│                          GO_LIVE_CHECKLIST.md (step 10),
+│                          STRATEGY_SPEC_SPY.md (step 6)
 └── tests/{unit,integration}/
 ```
 

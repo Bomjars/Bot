@@ -7,7 +7,7 @@ from pathlib import Path
 from intraday_trading.broker.base import PositionInfo, Side
 from intraday_trading.config import RiskLimits
 from intraday_trading.risk.risk_manager import RiskManager
-from intraday_trading.risk.signals import EntrySignal, HaltType
+from intraday_trading.risk.signals import EntrySignal, ExitSignal, HaltType
 from intraday_trading.session.calendar import EXCHANGE_TZ, ExchangeCalendar
 from intraday_trading.session.clock import SessionClock
 from intraday_trading.storage.order_log import OrderLog
@@ -609,3 +609,79 @@ def test_pause_entries_halts_without_flattening(tmp_path: Path) -> None:
 
     manager.re_enable()
     assert manager.is_halted() is False
+
+
+def test_STRAT_002_check_and_submit_exit_closes_open_position(tmp_path: Path) -> None:
+    broker = FakeBroker(positions=[PositionInfo("AAPL", 10, Side.BUY, 100, 100, 0)])
+    manager, _ = _manager(tmp_path, broker=broker)
+
+    decision = manager.check_and_submit_exit(
+        ExitSignal(strategy="test", symbol="AAPL", reason="stop", signal_seq="exit-1")
+    )
+
+    assert decision.accepted is True
+    assert decision.broker_order_id is not None
+    assert broker.positions == []
+
+
+def test_check_and_submit_exit_is_a_no_op_when_nothing_is_open(tmp_path: Path) -> None:
+    manager, broker = _manager(tmp_path, broker=FakeBroker(positions=[]))
+
+    decision = manager.check_and_submit_exit(
+        ExitSignal(strategy="test", symbol="AAPL", reason="stop", signal_seq="exit-1")
+    )
+
+    assert decision.accepted is False
+    assert decision.reason == "no_open_position"
+
+
+def test_RISK_020_check_and_submit_exit_fails_closed_on_unexpected_error(tmp_path: Path) -> None:
+    broker = FakeBroker(raise_on_close=RuntimeError("broker unreachable"))
+    manager, _ = _manager(tmp_path, broker=broker)
+
+    decision = manager.check_and_submit_exit(
+        ExitSignal(strategy="test", symbol="AAPL", reason="stop", signal_seq="exit-1")
+    )
+
+    assert decision.accepted is False
+    assert decision.reason is not None
+    assert "broker unreachable" in decision.reason
+
+
+def test_check_and_submit_exit_removes_the_position_record(tmp_path: Path) -> None:
+    broker = FakeBroker(positions=[PositionInfo("AAPL", 10, Side.BUY, 100, 100, 0)])
+    db = tmp_path / "risk.db"
+    position_records = PositionRecordStore(db)
+    position_records.record_open(
+        symbol="AAPL",
+        stop_price=95.0,
+        take_profit_price=None,
+        client_order_id="c1",
+        opened_at=MID_SESSION,
+    )
+    manager = RiskManager(
+        broker=broker,
+        limits=RiskLimits(),
+        clock=_clock(),
+        state_store=RiskStateStore(db),
+        rejection_log=RejectionLog(db),
+        position_records=position_records,
+    )
+    manager.begin_session()
+
+    manager.check_and_submit_exit(
+        ExitSignal(strategy="test", symbol="AAPL", reason="stop", signal_seq="exit-1")
+    )
+
+    assert position_records.get("AAPL") is None
+
+
+def test_get_account_passes_through_to_the_broker(tmp_path: Path) -> None:
+    manager, broker = _manager(tmp_path, broker=FakeBroker(equity=42_000.0))
+    assert manager.get_account().equity == 42_000.0
+
+
+def test_get_positions_passes_through_to_the_broker(tmp_path: Path) -> None:
+    broker = FakeBroker(positions=[PositionInfo("AAPL", 10, Side.BUY, 100, 100, 0)])
+    manager, _ = _manager(tmp_path, broker=broker)
+    assert [p.symbol for p in manager.get_positions()] == ["AAPL"]

@@ -26,6 +26,7 @@ class FakeBroker:
     cancel_all_called: int = 0
     close_all_called: int = 0
     raise_on_submit: Exception | None = None
+    raise_on_close: Exception | None = None
     is_open: bool = True
 
     def get_account(self) -> AccountInfo:
@@ -62,8 +63,22 @@ class FakeBroker:
         self.cancel_all_called += 1
 
     def close_position(self, symbol: str) -> OrderInfo | None:
+        if self.raise_on_close is not None:
+            raise self.raise_on_close
+        matched = next((p for p in self.positions if p.symbol == symbol), None)
         self.positions = [p for p in self.positions if p.symbol != symbol]
-        return None
+        if matched is None:
+            return None
+        return OrderInfo(
+            broker_order_id="close-order-1",
+            client_order_id="close-client-1",
+            symbol=symbol,
+            side=matched.side,
+            qty=matched.qty,
+            status="filled",
+            filled_qty=matched.qty,
+            filled_avg_price=matched.current_price,
+        )
 
     def close_all_positions(self) -> None:
         self.close_all_called += 1

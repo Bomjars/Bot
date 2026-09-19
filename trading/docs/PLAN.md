@@ -1,13 +1,16 @@
 # Plan, research findings, and rule summaries
 
-Status: **Step 10 of 10 done** (go-live checklist, doc + enforced in code). Steps 6–7
-(the actual strategies) are still intentionally not started — waiting on the paper text
-per section 5 below; the paper-trading loop currently runs with an empty strategy list,
-so it does session/risk bookkeeping and reconciliation but proposes no trades yet, and
-the dashboard is correspondingly mostly empty-state right now — that's the honest state
-of a system that has never placed a trade, not a bug. The go-live gate itself is fully
-built and tested, but two of its six checks (validation/holdout, paper-days/expected-band)
-are structurally unable to fully pass yet, because the holdout-validation and
+Status: **Steps 1–6, 8–10 of 10 done; step 7 (ORB "stocks in play") still waiting on its
+own paper spec.** Step 6 (SPY intraday momentum) shipped once `docs/STRATEGY_SPEC_SPY.md`
+arrived — see section 14 below for what it needed from the shared plumbing and what's
+still only checkable by running it against real historical data outside this sandbox.
+The paper-trading loop still runs with an empty strategy list by default (nothing wires
+the new `SpyMomentumStrategy` into `execution/wiring.py` automatically yet — that's a
+deliberate, separate decision for whoever runs it, not an oversight), so the dashboard is
+still mostly empty-state — that's the honest state of a system that has never placed a
+trade, not a bug. The go-live gate itself is fully built and tested, but two of its six
+checks (validation/holdout, paper-days/expected-band) are structurally unable to fully
+pass yet, because the holdout-validation and
 expected-band/slippage comparisons they depend on aren't implemented — see section 13.
 
 ## 1. Repo layout decision (already made, per your answer)
@@ -487,3 +490,65 @@ to the paper's reported figures explicitly so the gap is visible, not asserted.
   `execution/` still at 100% branch coverage. All six `GOLIVE-*` scenario IDs from
   `docs/TEST_SCENARIOS.md` have a test whose name contains that ID (`CLAUDE.md` rule 4).
   ruff (incl. `ruff format`) and mypy --strict clean on `src/`.
+
+## 14. Step 6 notes
+
+- **Built once `docs/STRATEGY_SPEC_SPY.md` arrived**, per your explicit "wait for the
+  papers" choice from step 1 — implemented from that spec file's own ambiguity
+  resolutions (§6), not by re-reading the paper. `strategies/spy_momentum.py` is
+  `SpyMomentumStrategy`/`SpyMomentumConfig`; `strategies/spy_grid.py` builds and runs the
+  §8 parameter grid; `docs/TEST_SCENARIOS.md`'s new `SPY` section covers SPY-01..11.
+- **Two shared-plumbing gaps surfaced immediately and were fixed before any strategy
+  code, not worked around in it.** Steps 2/3's `Strategy`/`StrategyContext` design gave a
+  strategy market data and nothing else — no account equity (needed for vol-target
+  sizing), no real position state (needed for reversal/stop logic), and no way to signal
+  a close that isn't also a new entry (needed for a stop-out or the exit leg of a
+  reversal). Fixed by: adding `StrategyContext.equity` and `.open_positions` (both real
+  broker snapshots taken by the driving engine every bar, per the existing "context is a
+  sanctioned read" design — new `RiskManager.get_account()`/`get_positions()`
+  passthroughs supply them); adding `ExitSignal` alongside `EntrySignal` and
+  `RiskManager.check_and_submit_exit()` (STRAT-002), so `Strategy.on_bar` now returns
+  `list[EntrySignal | ExitSignal]`, still 100% RiskManager-mediated (CLAUDE.md rule 5).
+  These are shared plumbing, not SPY-specific — step 7's ORB strategy gets them for free.
+- **A real, deliberate architectural conflict, put to you rather than resolved silently:**
+  the paper's own `paper_faithful` sizing needs up to 4x leverage, but
+  `RiskLimits.max_leverage` was hard-locked to exactly 1.0 (`ge=1.0, le=1.0`) as a Step 3
+  safety decision. You chose "loosen the field bound, default stays 1.0" — so the bound
+  is now `le=4.0`, nothing's default changed, and the only way leverage above 1.0 is ever
+  reachable is an explicit, separate `RiskLimits(max_leverage=...)` construction for a
+  labeled `paper_faithful` replication run (never from `execution/wiring.py`, the only
+  place a real broker is ever constructed).
+- **RISK-010 (every entry needs a real stop) forced a second, smaller divergence from the
+  paper for *both* modes**: the paper's model has no stop at all between decision times.
+  Every entry here — `paper_faithful` included — carries a real broker-side stop set to
+  the *opposite band value at entry time*, one of the paper's own two named stop formulas
+  (`opposite_band`), not an invented safety add-on. The strategy's own decision-time
+  check (whichever `stop_variant` is actually configured) is always at least as tight and
+  controls in practice; the broker-side stop only matters for an extreme intrabar move.
+  Documented in the strategy module's own docstring, not just here.
+- **End-of-day flatten is entirely RiskManager's job, not the strategy's.** The strategy
+  never emits an EOD exit signal; `RiskManager.check_session_flatten()` (already built in
+  step 3, already wired into both the backtester and the paper loop) does it, at whatever
+  `flatten_before_close_minutes` the run's own `RiskLimits` specify (10 for `house_risk`,
+  0 for a literal-close `paper_faithful` replication run) — SPY-07 is an integration test
+  proving this pairing actually works, not just each half in isolation.
+- **Two modes, one validation report, never mixed.** `strategies/spy_grid.py`'s
+  `house_risk_grid()` builds all 192 `house_risk` configs (the CSCV/PBO go-live grid);
+  `paper_reference_config()` builds the paper's own single settings as a separate,
+  un-gridded `paper_faithful` comparison run. The CLI's `backtest spy` command logs them
+  under different trial-registry strategy names (`spy_momentum` vs
+  `spy_momentum_paper_faithful`) so a `golive status --strategies spy_momentum` run is
+  never accidentally scored against the leveraged replication numbers.
+- **SPY-11 (replicating the paper's own Table 3 numbers) is `skip`ped, not faked.** This
+  sandbox has no outbound network access to fetch real historical Alpaca bars, so nothing
+  here has actually been checked against real SPY data yet — `backtest spy` is built and
+  tested (with only its underlying network client faked, per test_cli.py) but has never
+  been run for real. Running it, on a machine with real Alpaca paper keys, against
+  2007-2024 SPY minute bars, and checking the printed CSCV/PBO verdict plus the
+  `paper_faithful` run's numbers against the spec's Table 3, is the next real step before
+  this strategy could ever be considered validated for paper trading — not optional
+  polish.
+- 249/249 tests pass, 1 skipped (SPY-11, for the reason above). `risk/risk_manager.py`
+  and every file under `execution/` still at 100% branch coverage. Every `SPY-*` and
+  `STRAT-*` scenario ID has a test whose name contains that ID. ruff (incl. `ruff
+  format`) and mypy --strict clean on `src/`.

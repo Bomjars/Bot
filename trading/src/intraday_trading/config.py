@@ -29,7 +29,13 @@ class RiskLimits(BaseModel):
     max_risk_per_trade_pct: float = Field(default=0.01, gt=0, le=0.05)
     max_open_positions: int = Field(default=3, ge=1)
     max_position_pct_of_equity: float = Field(default=0.20, gt=0, le=1.0)
-    max_leverage: float = Field(default=1.0, ge=1.0, le=1.0)
+    max_leverage: float = Field(default=1.0, ge=1.0, le=4.0)
+    """Locked at 1.0 by default and for every real (paper/live) trading config -- see
+    docs/PLAN.md §2. The upper bound only exists so a `paper_faithful` backtest/paper
+    RiskManager (docs/STRATEGY_SPEC_SPY.md §7, STRAT-004) can be explicitly constructed
+    with headroom up to the paper's own 4x, for replication purposes only; nothing in
+    `execution/wiring.py` (the only place a real broker gets wired up) ever sets this
+    above 1.0."""
     allow_leveraged_etfs: bool = False
 
     daily_loss_limit_pct: float = Field(default=0.02, gt=0, le=1.0)

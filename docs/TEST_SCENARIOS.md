@@ -177,6 +177,29 @@ section; never renumber.
 | DASH-002 | P0 | The kill-switch button requires the exact typed confirmation string; any other input leaves the system untouched. |
 | DASH-003 | P1 | When exposed outside localhost, the dashboard requires the configured password; with no password configured, it refuses to bind to a non-localhost interface. |
 
+## STRAT — shared strategy-protocol plumbing (ExitSignal, context.equity/open_positions)
+
+| ID | Priority | Scenario |
+|---|---|---|
+| STRAT-001 | P0 | `StrategyContext.equity` and `StrategyContext.open_positions` reflect the broker's real account/position state, refreshed once per bar by the driving engine (backtester and paper/live loop alike) -- never a value the strategy computed or cached itself. |
+| STRAT-002 | P0 | A strategy returning `[ExitSignal, EntrySignal]` in one `on_bar` call (a reversal) results in the position closed and the opposite-side position opened, in that order, via `RiskManager.check_and_submit_exit` then `check_and_submit_entry` -- never a direct broker call from strategy code. |
+
+## SPY — SPY intraday momentum ("Noise Area"), docs/STRATEGY_SPEC_SPY.md
+
+| ID | Priority | Scenario |
+|---|---|---|
+| SPY-01 | P0 | Given 14 days of known bars, sigma computed for 10:00 matches a hand calculation. |
+| SPY-02 | P0 | Given a previous close above today's open, boundaries are computed so the upper bound uses the previous close and the lower bound uses today's open (and vice versa when the open is higher). |
+| SPY-03 | P0 | Given price above the upper band at 10:17, no trade is triggered until the 10:30 decision time. |
+| SPY-04 | P0 | Given price above the band at 10:00, a long entry is emitted; a short is never emitted while price is above the band. |
+| SPY-05 | P0 | Given a long position open and price below the lower band at a decision time, the position is reversed to short: an `ExitSignal` followed by an opposite-side `EntrySignal`, both costed. |
+| SPY-06 | P0 | Given a long position open and price below max(current band, VWAP), the position is closed (stop), with no new entry. |
+| SPY-07 | P0 | Given an open position at the close, the position is flat with no overnight carry (house mode: already flat 10 minutes before the close, via RiskManager's existing session-flatten). |
+| SPY-08 | P0 | Given `sigma_SPY = 1%` daily and a 2% target, sizing implies 2x leverage in paper-faithful mode, capped at 1x in house-risk mode. |
+| SPY-09 | P0 | Given `sigma_SPY = 0.2%`, sizing is capped at 4x in paper-faithful mode and 1x in house-risk mode (never uncapped). |
+| SPY-10 | P0 | Given fewer than the configured `lookback_days` of prior history, no signals are emitted, and the gap is logged as insufficient history. |
+| SPY-11 | P1 | Given the paper's own settings, dates, and costs, backtest results land within a stated tolerance of the paper's Table 3; any gap is explained, not hidden (xfail/skip with a clear message if real historical data isn't available in this environment). |
+
 ## GOLIVE — go-live gate
 
 | ID | Priority | Scenario |

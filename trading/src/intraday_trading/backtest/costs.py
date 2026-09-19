@@ -18,13 +18,18 @@ class CostModel:
     slippage_bps: float = 5.0
     spread_bps: float = 2.0
     fx_conversion_cost_pct: float = 0.005
+    slippage_per_share: float = 0.0
+    """A flat, price-independent adverse move per share, added on top of the bps-based
+    estimate -- for replicating a paper that reports slippage in cents/share rather than
+    basis points (e.g. docs/STRATEGY_SPEC_SPY.md §5's $0.001/share). Zero by default so
+    existing bps-only callers are unaffected."""
 
     def fill_price(self, side: Side, quoted_price: float) -> float:
         """A buy fills slightly above the quoted price, a sell slightly below --
         slippage and half the spread both work against the trader in the same
         direction, so they're combined into a single adverse-move estimate."""
         adverse_bps = self.slippage_bps + self.spread_bps / 2
-        adverse = quoted_price * adverse_bps / 10_000
+        adverse = quoted_price * adverse_bps / 10_000 + self.slippage_per_share
         return quoted_price + adverse if side == Side.BUY else quoted_price - adverse
 
     def commission(self, qty: float) -> float:
@@ -43,4 +48,5 @@ class CostModel:
             slippage_bps=self.slippage_bps * multiplier,
             spread_bps=self.spread_bps * multiplier,
             fx_conversion_cost_pct=self.fx_conversion_cost_pct,
+            slippage_per_share=self.slippage_per_share * multiplier,
         )

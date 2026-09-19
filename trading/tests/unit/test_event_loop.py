@@ -8,7 +8,7 @@ from intraday_trading.broker.base import Side
 from intraday_trading.config import RiskLimits
 from intraday_trading.execution.event_loop import PaperTradingLoop
 from intraday_trading.risk.risk_manager import RiskManager
-from intraday_trading.risk.signals import EntrySignal
+from intraday_trading.risk.signals import EntrySignal, ExitSignal
 from intraday_trading.session.calendar import EXCHANGE_TZ, ExchangeCalendar
 from intraday_trading.session.clock import SessionClock, TimeBox
 from intraday_trading.state.reconciler import Reconciler
@@ -53,12 +53,15 @@ class FakeStrategy:
     name = "fake"
 
     def __init__(
-        self, signal_factory: Callable[[str, Bar], list[EntrySignal]] | None = None
+        self,
+        signal_factory: Callable[[str, Bar], list[EntrySignal | ExitSignal]] | None = None,
     ) -> None:
         self.calls: list[tuple[str, Bar]] = []
         self._signal_factory = signal_factory
 
-    def on_bar(self, symbol: str, bar: Bar, context: StrategyContext) -> list[EntrySignal]:
+    def on_bar(
+        self, symbol: str, bar: Bar, context: StrategyContext
+    ) -> list[EntrySignal | ExitSignal]:
         self.calls.append((symbol, bar))
         if self._signal_factory is None:
             return []
@@ -286,6 +289,24 @@ def test_bars_are_fed_to_every_strategy_and_signals_reach_risk_manager(tmp_path:
     assert strategy.calls == [("AAPL", bar)]
     assert len(broker.submitted_orders) == 1
     assert broker.submitted_orders[0].symbol == "AAPL"
+
+
+def test_STRAT_002_exit_signals_reach_risk_manager_via_the_loop(tmp_path: Path) -> None:
+    from intraday_trading.broker.base import PositionInfo
+
+    bar = _bar(T0)
+
+    def factory(symbol: str, b: Bar) -> list[EntrySignal | ExitSignal]:
+        return [ExitSignal(strategy="fake", symbol=symbol, reason="stop", signal_seq="e1")]
+
+    strategy = FakeStrategy(signal_factory=factory)
+    loop, broker, _, _, _ = _setup(tmp_path, strategies=[strategy], feed_responses=[{"AAPL": bar}])
+    broker.positions = [PositionInfo("AAPL", 1, Side.BUY, 100.0, 100.0, 0.0)]
+    loop.startup()
+
+    loop.run_once()
+
+    assert broker.positions == []
 
 
 def test_no_bars_means_no_strategy_calls(tmp_path: Path) -> None:

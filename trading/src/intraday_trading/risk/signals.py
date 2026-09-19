@@ -33,6 +33,19 @@ class EntrySignal:
     crash must produce the same id."""
 
 
+@dataclass(frozen=True)
+class ExitSignal:
+    """A strategy's request to close an existing open position -- e.g. a decision-time
+    stop-out or the first leg of a reversal (STRAT-002). Deliberately has no size/stop
+    fields: closing exposure only ever reduces risk, so unlike `EntrySignal` it is never
+    rejected for a risk reason, only a no-op if there is nothing open on `symbol`."""
+
+    strategy: str
+    symbol: str
+    reason: str
+    signal_seq: str
+
+
 class HaltType(StrEnum):
     NONE = "none"
     DAILY_LOSS = "daily_loss"

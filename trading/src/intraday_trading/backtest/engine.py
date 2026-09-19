@@ -12,6 +12,7 @@ from datetime import datetime
 
 from intraday_trading.backtest.simulated_broker import SimulatedBroker, TradeRecord
 from intraday_trading.risk.risk_manager import RiskManager
+from intraday_trading.risk.signals import EntrySignal
 from intraday_trading.session.clock import TimeBox
 from intraday_trading.strategies.base import Bar, Strategy, StrategyContext
 
@@ -52,9 +53,17 @@ def run_backtest(
         risk_manager.check_session_flatten()
 
         history[symbol].append(bar)
-        context = StrategyContext(current_time=ts, history_by_symbol=history)
+        context = StrategyContext(
+            current_time=ts,
+            history_by_symbol=history,
+            equity=broker.get_account().equity,
+            open_positions={p.symbol: p for p in broker.get_positions()},
+        )
         for signal in strategy.on_bar(symbol, bar, context):
-            risk_manager.check_and_submit_entry(signal)
+            if isinstance(signal, EntrySignal):
+                risk_manager.check_and_submit_entry(signal)
+            else:
+                risk_manager.check_and_submit_exit(signal)
 
         equity_curve.append((ts, broker.get_account().equity))
 

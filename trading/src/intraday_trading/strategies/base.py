@@ -12,7 +12,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
 
-from intraday_trading.risk.signals import EntrySignal
+from intraday_trading.broker.base import PositionInfo
+from intraday_trading.risk.signals import EntrySignal, ExitSignal
 
 
 @dataclass(frozen=True)
@@ -36,6 +37,16 @@ class StrategyContext:
 
     current_time: datetime
     history_by_symbol: dict[str, list[Bar]]
+    equity: float
+    """Current account equity (STRAT-001), read through this sanctioned path -- like
+    `history_by_symbol`, it's a snapshot the driving engine takes once per bar, never a
+    live reference a strategy could poll or hold onto between calls."""
+    open_positions: dict[str, PositionInfo]
+    """The broker's real open positions, keyed by symbol (STRAT-001) -- a snapshot taken
+    the same way as `equity`. Exists so a strategy checks ground truth instead of
+    tracking its own belief of what's open, which could silently drift after
+    `RiskManager.check_session_flatten()` closes a position with no callback to the
+    strategy, or after a proposed signal is rejected."""
 
     def bars_for(self, symbol: str) -> list[Bar]:
         return self.history_by_symbol.get(symbol, [])
@@ -44,8 +55,12 @@ class StrategyContext:
 class Strategy(Protocol):
     name: str
 
-    def on_bar(self, symbol: str, bar: Bar, context: StrategyContext) -> list[EntrySignal]:
+    def on_bar(
+        self, symbol: str, bar: Bar, context: StrategyContext
+    ) -> list[EntrySignal | ExitSignal]:
         """Called once per bar per symbol, in chronological order (ties broken by symbol
-        name for determinism, BT-006). Returns zero or more proposed entries; each still
-        passes through RiskManager, which may reject any of them."""
-        ...
+        name for determinism, BT-006). Returns zero or more proposed entries/exits, in
+        the order they should be applied (STRAT-002: a reversal is an `ExitSignal`
+        followed by an `EntrySignal` in the same call) -- each still passes through
+        RiskManager, which may reject any of them."""
+        ...  # pragma: no cover -- Protocol stub, never executed

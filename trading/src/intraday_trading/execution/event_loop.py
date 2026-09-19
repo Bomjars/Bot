@@ -31,6 +31,7 @@ from intraday_trading.execution.clock_drift import exceeds_threshold
 from intraday_trading.execution.reconnect import RetriesExhausted, retry_with_backoff
 from intraday_trading.killswitch.kill_switch import is_kill_file_present, trip
 from intraday_trading.risk.risk_manager import RiskManager
+from intraday_trading.risk.signals import EntrySignal
 from intraday_trading.state.reconciler import Reconciler, ReconciliationResult
 from intraday_trading.storage.error_log import ErrorLog
 from intraday_trading.strategies.base import Bar, Strategy, StrategyContext
@@ -133,10 +134,18 @@ class PaperTradingLoop:
 
         for symbol, bar in sorted(new_bars.items()):
             self._history[symbol].append(bar)
-            context = StrategyContext(current_time=bar.ts, history_by_symbol=self._history)
+            context = StrategyContext(
+                current_time=bar.ts,
+                history_by_symbol=self._history,
+                equity=self._risk_manager.get_account().equity,
+                open_positions={p.symbol: p for p in self._risk_manager.get_positions()},
+            )
             for strategy in self._strategies:
                 for signal in strategy.on_bar(symbol, bar, context):
-                    self._risk_manager.check_and_submit_entry(signal)
+                    if isinstance(signal, EntrySignal):
+                        self._risk_manager.check_and_submit_entry(signal)
+                    else:
+                        self._risk_manager.check_and_submit_exit(signal)
 
     def _maybe_send_daily_summary(self) -> None:
         today = self._now_provider().date()
