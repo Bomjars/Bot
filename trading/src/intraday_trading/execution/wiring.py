@@ -19,6 +19,7 @@ from intraday_trading.risk.risk_manager import RiskManager
 from intraday_trading.session.calendar import ExchangeCalendar
 from intraday_trading.session.clock import SessionClock
 from intraday_trading.state.reconciler import Reconciler
+from intraday_trading.storage.error_log import ErrorLog
 from intraday_trading.storage.order_log import OrderLog
 from intraday_trading.storage.position_record_store import PositionRecordStore
 from intraday_trading.storage.rejection_log import RejectionLog
@@ -48,6 +49,14 @@ def build_paper_trading_components(
         flatten_before_close_minutes=settings.risk.flatten_before_close_minutes,
     )
     position_records = PositionRecordStore(settings.database_path)
+    # GOLIVE-006: only ever set when live_trading is actually on (which itself needs
+    # the SAFE-002/003 confirmation string) -- always None in paper, so this can never
+    # accidentally cap a paper order.
+    live_notional_cap_usd = (
+        settings.live_equity_cap_gbp * settings.approx_gbp_usd_rate
+        if settings.live_trading
+        else None
+    )
     risk_manager = RiskManager(
         broker=broker,
         limits=settings.risk,
@@ -56,6 +65,7 @@ def build_paper_trading_components(
         rejection_log=RejectionLog(settings.database_path),
         position_records=position_records,
         order_log=OrderLog(settings.database_path),
+        live_notional_cap_usd=live_notional_cap_usd,
     )
     alerter = TelegramAlerter(settings.telegram_bot_token, settings.telegram_chat_id)
     reconciler = Reconciler(broker, position_records, risk_manager, alerter)
@@ -69,6 +79,7 @@ def build_paper_trading_components(
         kill_switch_file=settings.kill_switch_file,
         now_provider=lambda: datetime.now(tz=UTC),
         broker_clock_provider=lambda: broker.get_clock().timestamp,
+        error_log=ErrorLog(settings.database_path),
     )
     return PaperTradingComponents(
         broker=broker,

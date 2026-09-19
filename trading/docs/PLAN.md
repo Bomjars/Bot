@@ -1,11 +1,14 @@
 # Plan, research findings, and rule summaries
 
-Status: **Step 9 of 10 done** (Streamlit dashboard, 4 pages). Steps 6–7 (the actual
-strategies) are still intentionally not started — waiting on the paper text per section
-5 below; the paper-trading loop currently runs with an empty strategy list, so it does
-session/risk bookkeeping and reconciliation but proposes no trades yet, and the
-dashboard is correspondingly mostly empty-state right now — that's the honest state of
-a system that has never placed a trade, not a bug.
+Status: **Step 10 of 10 done** (go-live checklist, doc + enforced in code). Steps 6–7
+(the actual strategies) are still intentionally not started — waiting on the paper text
+per section 5 below; the paper-trading loop currently runs with an empty strategy list,
+so it does session/risk bookkeeping and reconciliation but proposes no trades yet, and
+the dashboard is correspondingly mostly empty-state right now — that's the honest state
+of a system that has never placed a trade, not a bug. The go-live gate itself is fully
+built and tested, but two of its six checks (validation/holdout, paper-days/expected-band)
+are structurally unable to fully pass yet, because the holdout-validation and
+expected-band/slippage comparisons they depend on aren't implemented — see section 13.
 
 ## 1. Repo layout decision (already made, per your answer)
 
@@ -434,3 +437,53 @@ to the paper's reported figures explicitly so the gap is visible, not asserted.
 - 193/193 tests pass (full suite). `risk/risk_manager.py` and every file under
   `execution/` still at 100% branch coverage. ruff (incl. `ruff format`) and
   mypy --strict clean on `src/`.
+
+## 13. Step 10 notes
+
+- **One implementation, three callers.** `golive/gate.py`'s `evaluate_go_live_gate()` is
+  the single source of truth for what "ready to go live" means — the CLI (`golive
+  status`) and the dashboard's Journal & Go-Live page both call it directly rather than
+  each having their own copy of the CSCV/checklist logic (the dashboard page originally
+  did have its own inline copy from before step 10 existed; it's now a thin renderer
+  over the same `GoLiveVerdict`).
+- **Two checks are structurally unable to fully pass today, on purpose.** "Validation and
+  holdout passed" computes real CSCV/PBO from the trial registry but is hardcoded `met=
+  False` regardless, because holdout validation (train/validate on disjoint date ranges)
+  isn't implemented; "paper-trading days" counts real distinct order-days but is likewise
+  hardcoded `met=False`, because the expected-band/slippage comparison against the
+  backtest isn't implemented. Both facts are stated plainly in each check's `detail`
+  string rather than the check silently reporting a number with no context. This isn't a
+  gap to paper over — it's the correct state for a go-live gate on a system that has
+  never placed a live trade, and it will only become fully checkable once those two
+  pieces of validation infrastructure exist.
+- **The other four checks are genuinely functional now.** "No unhandled errors" queries a
+  new `errors` table that `PaperTradingLoop.run_once()`'s exception handler writes to on
+  every caught exception (in addition to the existing Telegram alert — the alert isn't
+  queryable after the fact, so this is the durable record). "Kill switch tested" and
+  "Reconciliation tested" require an explicit, separate, human-triggered action (`golive
+  mark-kill-switch-tested` / `mark-reconciliation-tested`, CLI or dashboard button) —
+  nothing automated can satisfy either, by design, since the whole point is a human
+  vouching they actually ran the drill, not that the code merely appears able to. "Live
+  equity cap configured" is a pure config sanity check against `live_equity_cap_gbp`.
+- **A concrete enforcement point, not just a report.** `RiskManager` gained an optional
+  `live_notional_cap_usd` constructor parameter (GOLIVE-006): when set, any order whose
+  notional exceeds it is rejected before submission, same as every other hard limit.
+  `execution/wiring.py` computes this value from `live_equity_cap_gbp *
+  approx_gbp_usd_rate` and passes it through **only when `settings.live_trading` is
+  `True`** — so it's always `None` in paper (the only mode this codebase can actually
+  reach), and structurally can't accidentally cap a paper order.
+- **The go-live gate and the live-trading confirmation are deliberately independent
+  checks.** Passing every item in `evaluate_go_live_gate()` does not and cannot bypass
+  the existing SAFE-002/003 requirement that `LIVE_TRADING_CONFIRMATION` be set to the
+  exact string before `live_trading=True` is even accepted by `Settings` — there is no
+  code path connecting the two (GOLIVE-005), confirmed by a test that marks every
+  human-gated checklist item done and shows the confirmation is still required.
+- **`docs/GO_LIVE_CHECKLIST.md`** is the human-readable version of the same six checks,
+  written for the person running the drills, not for code — it explains *why* each check
+  exists and what's deliberately out of scope (broker reliability, "is the strategy good
+  enough," and the post-gate 3-month live-vs-paper comparison, which isn't a one-time
+  gate check at all).
+- 220/220 tests pass (full suite). `risk/risk_manager.py` and every file under
+  `execution/` still at 100% branch coverage. All six `GOLIVE-*` scenario IDs from
+  `docs/TEST_SCENARIOS.md` have a test whose name contains that ID (`CLAUDE.md` rule 4).
+  ruff (incl. `ruff format`) and mypy --strict clean on `src/`.

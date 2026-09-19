@@ -91,3 +91,23 @@ CREATE TABLE IF NOT EXISTS risk_state (
     halt_type TEXT,
     halt_reason TEXT
 );
+
+-- Every unhandled error the event loop caught, for the go-live gate's "no unhandled
+-- errors in the last N days" check (GOLIVE-003) -- structlog/Telegram alert on its own
+-- isn't queryable, so this is the durable record.
+CREATE TABLE IF NOT EXISTS errors (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts TEXT NOT NULL,
+    message TEXT NOT NULL
+);
+
+-- Single-row table (id always 1): a human operator's record of having deliberately
+-- exercised the kill switch and a restart/reconciliation in paper, once each -- the
+-- go-live gate's "kill switch and reconciliation tested" check (GOLIVE-004). Nothing
+-- here can be set by an automated process; only an explicit CLI/dashboard action writes
+-- to it, since the whole point is a human vouching that they did the drill.
+CREATE TABLE IF NOT EXISTS go_live_checklist (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    kill_switch_tested_at TEXT,
+    reconciliation_tested_at TEXT
+);

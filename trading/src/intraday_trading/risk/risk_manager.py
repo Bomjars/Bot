@@ -42,6 +42,7 @@ class RiskManager:
         leveraged_etf_symbols: frozenset[str] = frozenset(),
         position_records: PositionRecordStore | None = None,
         order_log: OrderLog | None = None,
+        live_notional_cap_usd: float | None = None,
     ) -> None:
         self._broker = broker
         self._limits = limits
@@ -51,6 +52,7 @@ class RiskManager:
         self._leveraged_etf_symbols = leveraged_etf_symbols
         self._position_records = position_records
         self._order_log = order_log
+        self._live_notional_cap_usd = live_notional_cap_usd
         self._lock = threading.Lock()
 
     def is_halted(self) -> bool:
@@ -58,6 +60,13 @@ class RiskManager:
 
     def halt_status(self) -> RiskState:
         return self._state_store.load()
+
+    @property
+    def live_notional_cap_usd(self) -> float | None:
+        """None in paper (the normal case); a positive USD figure only when wired up
+        for live trading (GOLIVE-006) -- exposed read-only for the dashboard/gate to
+        display, never settable after construction."""
+        return self._live_notional_cap_usd
 
     def begin_session(self) -> None:
         """Call once at/before the start of each trading day. Resets the daily trade
@@ -137,6 +146,12 @@ class RiskManager:
         notional = signal.qty * signal.entry_price
         if notional > equity * self._limits.max_position_pct_of_equity:
             return self._reject(signal, "position_pct_exceeded")
+
+        if self._live_notional_cap_usd is not None and notional > self._live_notional_cap_usd:
+            # GOLIVE-006: the "start live with <= a small cap" constraint, independent
+            # of account equity -- only ever set when settings.live_trading is True
+            # (see execution/wiring.py), never in paper.
+            return self._reject(signal, "live_notional_cap_exceeded")
 
         existing_notional = sum(p.qty * p.current_price for p in positions)
         if existing_notional + notional > equity * self._limits.max_leverage:

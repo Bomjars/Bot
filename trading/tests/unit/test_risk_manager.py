@@ -35,6 +35,7 @@ def _manager(
     limits: RiskLimits | None = None,
     now: datetime = MID_SESSION,
     leveraged_etfs: frozenset[str] = frozenset(),
+    live_notional_cap_usd: float | None = None,
 ) -> tuple[RiskManager, FakeBroker]:
     broker = broker or FakeBroker()
     db = tmp_path / "risk.db"
@@ -45,6 +46,7 @@ def _manager(
         state_store=RiskStateStore(db),
         rejection_log=RejectionLog(db),
         leveraged_etf_symbols=leveraged_etfs,
+        live_notional_cap_usd=live_notional_cap_usd,
     )
     manager.begin_session()
     return manager, broker
@@ -117,6 +119,35 @@ def test_RISK_005_reject_when_leverage_exceeded(tmp_path: Path) -> None:
     decision = manager.check_and_submit_entry(_signal(qty=10, entry_price=100.0, stop_price=99.5))
     assert decision.accepted is False
     assert decision.reason == "leverage_exceeded"
+
+
+def test_GOLIVE_006_reject_when_live_notional_cap_exceeded(tmp_path: Path) -> None:
+    manager, broker = _manager(tmp_path, live_notional_cap_usd=500.0)
+    # notional = 10 * 100.0 = 1000 > cap of 500, well within every other limit
+    decision = manager.check_and_submit_entry(_signal())
+    assert decision.accepted is False
+    assert decision.reason == "live_notional_cap_exceeded"
+    assert broker.submitted_orders == []
+
+
+def test_live_notional_cap_usd_property_reflects_construction(tmp_path: Path) -> None:
+    capped, _ = _manager(tmp_path, live_notional_cap_usd=500.0)
+    assert capped.live_notional_cap_usd == 500.0
+
+    uncapped, _ = _manager(tmp_path / "b", live_notional_cap_usd=None)
+    assert uncapped.live_notional_cap_usd is None
+
+
+def test_no_live_cap_rejection_when_cap_not_configured(tmp_path: Path) -> None:
+    manager, _ = _manager(tmp_path, live_notional_cap_usd=None)
+    decision = manager.check_and_submit_entry(_signal())
+    assert decision.accepted is True
+
+
+def test_accepted_when_within_live_notional_cap(tmp_path: Path) -> None:
+    manager, _ = _manager(tmp_path, live_notional_cap_usd=5_000.0)
+    decision = manager.check_and_submit_entry(_signal())
+    assert decision.accepted is True
 
 
 def test_RISK_006_reject_leveraged_etf(tmp_path: Path) -> None:
@@ -274,9 +305,7 @@ def test_check_loss_limits_is_idempotent_once_halted(tmp_path: Path) -> None:
     broker = FakeBroker(
         equity=100_000.0, positions=[PositionInfo("AAPL", 10, Side.BUY, 100, 100, 0)]
     )
-    manager, _ = _manager(
-        tmp_path, broker=broker, limits=RiskLimits(daily_loss_limit_pct=0.02)
-    )
+    manager, _ = _manager(tmp_path, broker=broker, limits=RiskLimits(daily_loss_limit_pct=0.02))
 
     broker.equity = 97_000.0
     first = manager.check_loss_limits()
@@ -311,9 +340,7 @@ def test_RISK_007_daily_loss_flattens_and_halts(tmp_path: Path) -> None:
     broker = FakeBroker(
         equity=100_000.0, positions=[PositionInfo("AAPL", 10, Side.BUY, 100, 100, 0)]
     )
-    manager, _ = _manager(
-        tmp_path, broker=broker, limits=RiskLimits(daily_loss_limit_pct=0.02)
-    )
+    manager, _ = _manager(tmp_path, broker=broker, limits=RiskLimits(daily_loss_limit_pct=0.02))
 
     broker.equity = 97_000.0  # -3%, past the 2% daily limit
     state = manager.check_loss_limits()

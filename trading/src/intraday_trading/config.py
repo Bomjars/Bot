@@ -97,6 +97,19 @@ class Settings(BaseSettings):
     # --- Kill switch ---
     kill_switch_file: Path = REPO_ROOT / "data" / "KILL_SWITCH"
 
+    # --- Go-live gate (docs/GO_LIVE_CHECKLIST.md, golive/gate.py) ---
+    live_equity_cap_gbp: float = Field(default=3_000.0, gt=0)
+    """Hard ceiling on notional per live order, independent of account equity
+    (GOLIVE-006). Deliberately not enforced in paper mode -- it's specifically the
+    "start small" constraint for the first live capital, not a general position-size
+    limit (that's `RiskLimits.max_position_pct_of_equity`)."""
+    approx_gbp_usd_rate: float = Field(default=1.27, gt=0)
+    """A manually-updated approximation, not a live FX feed -- used only to convert
+    `live_equity_cap_gbp` into a USD notional cap for RiskManager. Not precise enough
+    for accounting; update it periodically if GBP/USD moves a lot."""
+    go_live_min_paper_days: int = Field(default=30, ge=1)
+    go_live_max_errors_lookback_days: int = Field(default=14, ge=1)
+
     risk: RiskLimits = Field(default_factory=RiskLimits)
 
     @model_validator(mode="after")

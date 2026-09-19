@@ -16,15 +16,19 @@ for the current rule summaries and open questions — **read that before touchin
 
 ## Status
 
-Step 9 of 10 done (see `docs/PLAN.md`): broker interface + Alpaca paper adapter +
+Step 10 of 10 done (see `docs/PLAN.md`): broker interface + Alpaca paper adapter +
 historical data client + SQLite bar store + exchange calendar/clock + RiskManager
 (every hard risk limit, 100% branch coverage) + kill switch + event-driven backtester
 with a cost model and a structural no-look-ahead guarantee + validation module (trial
 registry, CSCV/PBO, PSR/MinTRL/DSR) + paper-trading loop with reconciliation and
-Telegram alerting + a 4-page Streamlit dashboard. No strategy logic yet — waiting on the
-paper text, see `docs/PLAN.md` §5; `run-paper` currently runs with zero strategies
-attached, so most of the dashboard is an honest empty state (this system has never
-placed a trade).
+Telegram alerting + a 4-page Streamlit dashboard + the go-live checklist
+(`docs/GO_LIVE_CHECKLIST.md`), enforced in code by `golive/gate.py` and surfaced via both
+the CLI (`golive status`) and the dashboard's Journal & Go-Live page. No strategy logic
+yet — waiting on the paper text, see `docs/PLAN.md` §5; `run-paper` currently runs with
+zero strategies attached, so most of the dashboard is an honest empty state, and two of
+the six go-live checks can never fully pass yet either (holdout validation and the
+expected-band/slippage comparison aren't implemented — see `docs/PLAN.md` §13) — this is
+the correct state for a system that has never placed a trade.
 
 ## Safety model, short version
 
@@ -73,6 +77,15 @@ Both talk to Alpaca's **paper** endpoint only — there is no live path in this 
 yet (see CLAUDE.md). `run-paper` currently runs with an empty strategy list (steps 6–7
 aren't built), so it will do session/risk bookkeeping and reconciliation without ever
 proposing a trade.
+
+```powershell
+uv run intraday-trading golive status --strategies orb,spy_momentum   # every check + verdict
+uv run intraday-trading golive mark-kill-switch-tested                # after running the drill in paper
+uv run intraday-trading golive mark-reconciliation-tested             # after running the drill in paper
+```
+
+See `docs/GO_LIVE_CHECKLIST.md` for what each check means and why two of them can never
+fully pass yet.
 
 ## Dashboard
 

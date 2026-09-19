@@ -16,6 +16,7 @@ from intraday_trading.killswitch.kill_switch import trip
 from intraday_trading.risk.risk_manager import RiskManager
 from intraday_trading.session.calendar import ExchangeCalendar
 from intraday_trading.session.clock import SessionClock
+from intraday_trading.storage.go_live_checklist_store import GoLiveChecklistStore
 from intraday_trading.storage.order_log import OrderLog
 from intraday_trading.storage.position_record_store import PositionRecordStore
 from intraday_trading.storage.rejection_log import RejectionLog
@@ -77,3 +78,16 @@ def flatten_one(settings: Settings, symbol: str) -> OrderInfo | None:
 
 def flatten_all(settings: Settings) -> None:
     build_risk_manager(settings).flatten_all()
+
+
+def mark_kill_switch_tested(settings: Settings) -> None:
+    """GOLIVE-004: a human's record of having deliberately tripped the kill switch in
+    paper and confirmed it worked. A checklist write, not an order -- CLAUDE.md's "no
+    direct broker call from dashboard code" doesn't apply here."""
+    GoLiveChecklistStore(settings.database_path).mark_kill_switch_tested()
+
+
+def mark_reconciliation_tested(settings: Settings) -> None:
+    """GOLIVE-004: a human's record of having deliberately restarted the paper loop and
+    confirmed reconciliation worked."""
+    GoLiveChecklistStore(settings.database_path).mark_reconciliation_tested()

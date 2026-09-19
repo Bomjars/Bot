@@ -16,9 +16,15 @@ import typer
 
 from intraday_trading.config import load_settings
 from intraday_trading.execution.wiring import build_paper_trading_components
+from intraday_trading.golive.gate import evaluate_go_live_gate
 from intraday_trading.killswitch.kill_switch import trip
+from intraday_trading.storage.go_live_checklist_store import GoLiveChecklistStore
 
 app = typer.Typer(add_completion=False)
+golive_app = typer.Typer(
+    add_completion=False, help="The go-live gate -- docs/GO_LIVE_CHECKLIST.md."
+)
+app.add_typer(golive_app, name="golive")
 
 
 @app.command()
@@ -66,6 +72,51 @@ def kill() -> None:
     components = build_paper_trading_components(settings, symbols=[])
     trip(components.risk_manager, reason="manual CLI kill switch")
     typer.secho("Kill switch tripped: orders cancelled, positions flattened.", fg=typer.colors.RED)
+
+
+@golive_app.command("status")
+def golive_status(
+    strategies: str = typer.Option(
+        "", help="Comma-separated strategy names to check, e.g. orb,spy_momentum"
+    ),
+) -> None:
+    """Print every go-live check and an overall verdict. See docs/GO_LIVE_CHECKLIST.md."""
+    settings = load_settings()
+    strategy_list = [s.strip() for s in strategies.split(",") if s.strip()]
+    verdict = evaluate_go_live_gate(
+        settings.database_path,
+        strategy_list,
+        live_equity_cap_gbp=settings.live_equity_cap_gbp,
+        min_paper_days=settings.go_live_min_paper_days,
+        max_errors_lookback_days=settings.go_live_max_errors_lookback_days,
+    )
+    for check in verdict.checks:
+        icon, color = ("PASS", typer.colors.GREEN) if check.met else ("FAIL", typer.colors.RED)
+        typer.secho(f"[{icon}] {check.name}", fg=color, bold=True)
+        typer.echo(f"       {check.detail}")
+    typer.echo()
+    if verdict.all_met:
+        typer.secho("GO-LIVE GATE: PASSED", fg=typer.colors.GREEN, bold=True)
+    else:
+        typer.secho("GO-LIVE GATE: NOT PASSED", fg=typer.colors.RED, bold=True)
+
+
+@golive_app.command("mark-kill-switch-tested")
+def golive_mark_kill_switch_tested() -> None:
+    """Record that a human deliberately tripped the kill switch in paper and confirmed
+    it worked. Only run this after you've actually done that -- nothing else checks."""
+    settings = load_settings()
+    GoLiveChecklistStore(settings.database_path).mark_kill_switch_tested()
+    typer.secho("Recorded: kill switch tested.", fg=typer.colors.GREEN)
+
+
+@golive_app.command("mark-reconciliation-tested")
+def golive_mark_reconciliation_tested() -> None:
+    """Record that a human deliberately restarted the paper loop and confirmed
+    reconciliation worked. Only run this after you've actually done that."""
+    settings = load_settings()
+    GoLiveChecklistStore(settings.database_path).mark_reconciliation_tested()
+    typer.secho("Recorded: reconciliation tested.", fg=typer.colors.GREEN)
 
 
 def main() -> None:

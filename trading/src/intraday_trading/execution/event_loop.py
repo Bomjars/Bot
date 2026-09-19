@@ -32,6 +32,7 @@ from intraday_trading.execution.reconnect import RetriesExhausted, retry_with_ba
 from intraday_trading.killswitch.kill_switch import is_kill_file_present, trip
 from intraday_trading.risk.risk_manager import RiskManager
 from intraday_trading.state.reconciler import Reconciler, ReconciliationResult
+from intraday_trading.storage.error_log import ErrorLog
 from intraday_trading.strategies.base import Bar, Strategy, StrategyContext
 
 logger = structlog.get_logger(__name__)
@@ -59,6 +60,7 @@ class PaperTradingLoop:
         max_poll_attempts: int = 5,
         poll_retry_base_delay_seconds: float = 1.0,
         sleep: Callable[[float], None] = lambda _seconds: None,
+        error_log: ErrorLog | None = None,
     ) -> None:
         self._strategies = strategies
         self._data_feed = data_feed
@@ -72,6 +74,7 @@ class PaperTradingLoop:
         self._max_poll_attempts = max_poll_attempts
         self._poll_retry_base_delay_seconds = poll_retry_base_delay_seconds
         self._sleep = sleep
+        self._error_log = error_log
         self._history: dict[str, list[Bar]] = defaultdict(list)
         self._last_summary_date: date | None = None
 
@@ -83,8 +86,10 @@ class PaperTradingLoop:
     def run_once(self) -> None:
         try:
             self._run_once_unsafe()
-        except Exception:
+        except Exception as exc:
             logger.exception("paper_trading_loop_iteration_failed")
+            if self._error_log is not None:
+                self._error_log.log(f"{type(exc).__name__}: {exc}")
             self._alerter.alert("Unhandled error in the paper-trading loop -- see logs.")
 
     def _run_once_unsafe(self) -> None:

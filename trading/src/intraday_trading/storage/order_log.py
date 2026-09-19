@@ -62,3 +62,14 @@ class OrderLog:
         finally:
             conn.close()
 
+    def count_distinct_days(self) -> int:
+        """Distinct calendar dates with at least one order logged -- the go-live gate's
+        "paper-trading days" count (GOLIVE-001)."""
+        conn = get_connection(self._database_path)
+        try:
+            row = conn.execute(
+                "SELECT COUNT(DISTINCT substr(ts, 1, 10)) AS n FROM orders"
+            ).fetchone()
+            return int(row["n"])
+        finally:
+            conn.close()

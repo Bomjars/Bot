@@ -12,6 +12,7 @@ from intraday_trading.risk.signals import EntrySignal
 from intraday_trading.session.calendar import EXCHANGE_TZ, ExchangeCalendar
 from intraday_trading.session.clock import SessionClock, TimeBox
 from intraday_trading.state.reconciler import Reconciler
+from intraday_trading.storage.error_log import ErrorLog
 from intraday_trading.storage.position_record_store import PositionRecordStore
 from intraday_trading.storage.rejection_log import RejectionLog
 from intraday_trading.storage.risk_state_store import RiskStateStore
@@ -76,6 +77,7 @@ def _setup(
     broker_clock_provider: Callable[[], datetime] | None = None,
     now_provider: Callable[[], datetime] | None = None,
     limits: RiskLimits | None = None,
+    error_log: ErrorLog | None = None,
 ):
     db = tmp_path / "loop.db"
     time_box = TimeBox(T0)
@@ -110,6 +112,7 @@ def _setup(
         now_provider=now_provider or (lambda: time_box.value),
         broker_clock_provider=broker_clock_provider,
         sleep=lambda _seconds: None,
+        error_log=error_log,
     )
     return loop, broker, risk_manager, alerter, time_box
 
@@ -304,10 +307,55 @@ def test_ALERT_002_unhandled_error_in_iteration_is_caught_and_alerted(tmp_path: 
 
     bar = _bar(T0)
     loop, _, _, alerter, _ = _setup(
-        tmp_path, strategies=[BrokenStrategy()], feed_responses=[{"AAPL": bar}]  # type: ignore[list-item]
+        tmp_path,
+        strategies=[BrokenStrategy()],
+        feed_responses=[{"AAPL": bar}],  # type: ignore[list-item]
     )
     loop.startup()
 
     loop.run_once()  # must not raise
 
     assert any("Unhandled error" in a for a in alerter.alerts)
+
+
+def test_unhandled_error_is_persisted_when_error_log_configured(tmp_path: Path) -> None:
+    class BrokenStrategy:
+        name = "broken"
+
+        def on_bar(self, symbol: str, bar: Bar, context: StrategyContext) -> list[EntrySignal]:
+            raise RuntimeError("strategy bug")
+
+    error_log = ErrorLog(tmp_path / "loop.db")
+    bar = _bar(T0)
+    loop, _, _, _, _ = _setup(
+        tmp_path,
+        strategies=[BrokenStrategy()],  # type: ignore[list-item]
+        feed_responses=[{"AAPL": bar}],
+        error_log=error_log,
+    )
+    loop.startup()
+
+    loop.run_once()
+
+    assert error_log.count_last_days(1) == 1
+
+
+def test_unhandled_error_not_persisted_when_no_error_log_configured(tmp_path: Path) -> None:
+    class BrokenStrategy:
+        name = "broken"
+
+        def on_bar(self, symbol: str, bar: Bar, context: StrategyContext) -> list[EntrySignal]:
+            raise RuntimeError("strategy bug")
+
+    bar = _bar(T0)
+    loop, _, _, alerter, _ = _setup(
+        tmp_path,
+        strategies=[BrokenStrategy()],  # type: ignore[list-item]
+        feed_responses=[{"AAPL": bar}],
+    )
+    loop.startup()
+
+    loop.run_once()  # must not raise even without an error_log configured
+
+    assert any("Unhandled error" in a for a in alerter.alerts)
+    assert ErrorLog(tmp_path / "loop.db").count_last_days(1) == 0

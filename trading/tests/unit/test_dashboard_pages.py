@@ -174,6 +174,30 @@ def test_journal_with_orders_and_trials(monkeypatch: pytest.MonkeyPatch, tmp_pat
     assert not at.exception
 
 
+def test_GOLIVE_004_mark_tested_buttons_persist(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from intraday_trading.storage.go_live_checklist_store import GoLiveChecklistStore
+
+    db_path = tmp_path / "populated.db"
+    _populate_db(db_path)
+    monkeypatch.setenv("DATABASE_PATH", str(db_path))
+
+    at = AppTest.from_file(str(DASHBOARD_DIR / "pages" / "journal_go_live.py"), default_timeout=30)
+    at.run()
+    assert not at.exception
+
+    next(b for b in at.button if "kill switch tested" in b.label).click()
+    at.run()
+    assert not at.exception
+    assert GoLiveChecklistStore(db_path).load().kill_switch_tested_at is not None
+
+    next(b for b in at.button if "reconciliation tested" in b.label).click()
+    at.run()
+    assert not at.exception
+    assert GoLiveChecklistStore(db_path).load().reconciliation_tested_at is not None
+
+
 def test_paper_vs_backtest_with_orders(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     db_path = tmp_path / "populated.db"
     _populate_db(db_path)

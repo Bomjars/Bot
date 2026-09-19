@@ -126,9 +126,7 @@ class TrialRegistry:
                     "SELECT date, pnl FROM trial_daily_pnl WHERE trial_id = ? ORDER BY date",
                     (trial.trial_id,),
                 ).fetchall()
-                series = pd.Series(
-                    {row["date"]: row["pnl"] for row in rows}, name=trial.trial_id
-                )
+                series = pd.Series({row["date"]: row["pnl"] for row in rows}, name=trial.trial_id)
                 frames.append(series)
         finally:
             conn.close()

@@ -95,9 +95,7 @@ class AlpacaBroker:
         return [_position_info_from_alpaca(p) for p in positions]
 
     def get_open_orders(self) -> list[OrderInfo]:
-        orders = self._client.get_orders(
-            filter=GetOrdersRequest(status=QueryOrderStatus.OPEN)
-        )
+        orders = self._client.get_orders(filter=GetOrdersRequest(status=QueryOrderStatus.OPEN))
         if isinstance(orders, dict):
             raise TypeError(f"unexpected raw dict response from Alpaca: {orders!r}")
         return [_order_info_from_alpaca(o) for o in orders]
