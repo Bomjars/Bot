@@ -14,6 +14,7 @@ from intraday_trading.execution.event_loop import PaperTradingLoop
 from intraday_trading.execution.wiring import build_paper_trading_components
 from intraday_trading.risk.risk_manager import RiskManager
 from intraday_trading.state.reconciler import Reconciler
+from intraday_trading.strategies.spy_momentum import SpyMomentumStrategy
 
 
 def test_build_paper_trading_components_wires_everything_without_network(tmp_path: Path) -> None:
@@ -76,3 +77,32 @@ def test_GOLIVE_006_live_notional_cap_set_when_live_trading_confirmed(tmp_path: 
     assert components.risk_manager.live_notional_cap_usd == 3_750.0
     # Still the paper broker -- there is no .live() constructor in this codebase yet.
     assert isinstance(components.broker, AlpacaBroker)
+
+
+def test_spy_strategy_attached_when_spy_is_requested(tmp_path: Path) -> None:
+    settings = Settings(
+        alpaca_api_key="fake-key",
+        alpaca_secret_key="fake-secret",
+        database_path=tmp_path / "wiring.db",
+        kill_switch_file=tmp_path / "KILL_SWITCH",
+    )
+
+    components = build_paper_trading_components(settings, symbols=["AAPL", "spy"])
+
+    strategies = components.loop._strategies  # type: ignore[attr-defined]
+    assert len(strategies) == 1
+    assert isinstance(strategies[0], SpyMomentumStrategy)
+    assert strategies[0].symbol == "SPY"
+
+
+def test_spy_strategy_not_attached_when_spy_not_requested(tmp_path: Path) -> None:
+    settings = Settings(
+        alpaca_api_key="fake-key",
+        alpaca_secret_key="fake-secret",
+        database_path=tmp_path / "wiring.db",
+        kill_switch_file=tmp_path / "KILL_SWITCH",
+    )
+
+    components = build_paper_trading_components(settings, symbols=["AAPL"])
+
+    assert components.loop._strategies == []  # type: ignore[attr-defined]

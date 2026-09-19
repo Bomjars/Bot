@@ -24,6 +24,8 @@ from intraday_trading.storage.order_log import OrderLog
 from intraday_trading.storage.position_record_store import PositionRecordStore
 from intraday_trading.storage.rejection_log import RejectionLog
 from intraday_trading.storage.risk_state_store import RiskStateStore
+from intraday_trading.strategies.base import Strategy
+from intraday_trading.strategies.spy_momentum import SpyMomentumConfig, SpyMomentumStrategy
 
 
 @dataclass
@@ -70,8 +72,15 @@ def build_paper_trading_components(
     alerter = TelegramAlerter(settings.telegram_bot_token, settings.telegram_chat_id)
     reconciler = Reconciler(broker, position_records, risk_manager, alerter)
 
+    # Only ever the default (house_risk) config -- paper_faithful is for backtest
+    # replication only (docs/STRATEGY_SPEC_SPY.md §7) and is never wired up here. Step 7's
+    # ORB strategy has no spec yet, so it isn't attached even when its symbols are polled.
+    strategies: list[Strategy] = []
+    if "SPY" in {s.upper() for s in symbols}:
+        strategies.append(SpyMomentumStrategy(symbol="SPY", config=SpyMomentumConfig()))
+
     loop = PaperTradingLoop(
-        strategies=[],  # populated once steps 6-7 ship real strategies
+        strategies=strategies,
         data_feed=feed,
         risk_manager=risk_manager,
         reconciler=reconciler,
