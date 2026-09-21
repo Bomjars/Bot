@@ -339,8 +339,21 @@ class SpyMomentumStrategy:
                 avg_dollar_volume=self._avg_dollar_volume(),
                 spread_pct=self._config.assumed_spread_pct,
                 signal_seq=f"{self.name}-{self.symbol}-{decision_time.isoformat()}-{self._seq}",
+                signal_strength=self._breakout_strength(side, price, upper, lower),
             )
         ]
+
+    @staticmethod
+    def _breakout_strength(side: Side, price: float, upper: float, lower: float) -> float | None:
+        """How far past the crossed band edge this entry's price is, normalized by the
+        band's own width -- e.g. 0.5 means the price cleared the edge by half the band's
+        width. Purely descriptive (see risk/signals.py's EntrySignal.signal_strength);
+        `None` only for the degenerate case of a zero-width band (upper == lower), which
+        would make "normalized by width" undefined."""
+        width = upper - lower
+        if width <= 0:
+            return None
+        return (price - upper) / width if side == Side.BUY else (lower - price) / width
 
     def _exit(self, decision_time: time, reason: str) -> ExitSignal:
         self._seq += 1
