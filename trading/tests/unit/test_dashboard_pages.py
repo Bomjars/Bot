@@ -148,6 +148,33 @@ def test_validation_report_with_populated_trials(
     assert any(t.label == "orb" for t in at.tabs)
 
 
+def test_validation_report_survives_degenerate_is_sharpe_spread(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Real-world crash (found by running `backtest spy` against a short date range,
+    which had only logged two configs with identical daily P&L so far): every split's
+    selected IS Sharpe was numerically identical, making the IS-vs-OOS scatter's trend
+    line a singular least-squares fit -- np.polyfit raised LinAlgError, taking the whole
+    page down. Two configs with the exact same series reproduces that zero-variance
+    case directly, rather than relying on being unlucky with random data."""
+    db_path = tmp_path / "degenerate.db"
+    n_days = 32
+    dates = pd.date_range(start=date(2024, 1, 2), periods=n_days, freq="B")
+    identical_series = pd.Series(np.zeros(n_days), index=dates)
+    registry = TrialRegistry(db_path)
+    registry.log_trial("spy_momentum", {"vm": 1.0}, identical_series)
+    registry.log_trial("spy_momentum", {"vm": 1.1}, identical_series)
+    monkeypatch.setenv("DATABASE_PATH", str(db_path))
+
+    at = AppTest.from_file(
+        str(DASHBOARD_DIR / "pages" / "validation_report.py"), default_timeout=30
+    )
+    at.run()
+
+    assert not at.exception
+    assert any(t.label == "spy_momentum" for t in at.tabs)
+
+
 def test_live_monitor_with_open_position(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     db_path = tmp_path / "populated.db"
     _populate_db(db_path)

@@ -138,12 +138,21 @@ for tab, strategy in zip(tabs, strategies, strict=True):
                     marker_color=theme.ACCENT,
                 )
             )
-            if len(result.is_sharpes) >= 2:
-                slope, intercept = np.polyfit(result.is_sharpes, result.oos_sharpes, 1)
-                xs = np.linspace(min(result.is_sharpes), max(result.is_sharpes), 20)
-                fig.add_trace(
-                    go.Scatter(x=xs, y=slope * xs + intercept, mode="lines", line_color=theme.RED)
-                )
+            if len(result.is_sharpes) >= 2 and np.std(result.is_sharpes) > 0:
+                try:
+                    slope, intercept = np.polyfit(result.is_sharpes, result.oos_sharpes, 1)
+                except np.linalg.LinAlgError:
+                    # Degenerate fit (e.g. too few trials logged so far to have any real
+                    # spread in IS Sharpe) -- the scatter still renders, just without a
+                    # trend line, rather than crashing the whole page.
+                    pass
+                else:
+                    xs = np.linspace(min(result.is_sharpes), max(result.is_sharpes), 20)
+                    fig.add_trace(
+                        go.Scatter(
+                            x=xs, y=slope * xs + intercept, mode="lines", line_color=theme.RED
+                        )
+                    )
             fig.update_layout(
                 title="IS vs OOS Sharpe",
                 xaxis_title="IS Sharpe",
