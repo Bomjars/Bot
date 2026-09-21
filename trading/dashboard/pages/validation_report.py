@@ -64,10 +64,11 @@ for tab, strategy in zip(tabs, strategies, strict=True):
             or len(registry_matrix) < MIN_DAYS_FOR_CSCV
             or registry_matrix.shape[1] < 2
         ):
-            st.warning(
-                f"Not enough data for CSCV yet: need >= {MIN_DAYS_FOR_CSCV} days across "
-                ">= 2 configurations on a shared date index."
-            )
+            with st.container(border=True):
+                st.warning(
+                    f"Not enough data for CSCV yet: need >= {MIN_DAYS_FOR_CSCV} days across "
+                    ">= 2 configurations on a shared date index."
+                )
             continue
 
         filled = registry_matrix.fillna(0.0)
@@ -91,38 +92,49 @@ for tab, strategy in zip(tabs, strategies, strict=True):
         else:
             st.error(f"FAIL — {verdict.reason}")
 
-        card_cols = st.columns(6)
-        card_cols[0].metric(
-            "PBO", f"{result.pbo:.1%}", help="Probability of Backtest Overfitting; reject above 5%."
-        )
-        try:
-            psr = probabilistic_sharpe_ratio(observed_sharpe, 0.0, n_obs, skewness, kurtosis)
-            card_cols[1].metric("PSR", f"{psr:.1%}")
-        except ValueError:
-            card_cols[1].metric("PSR", "n/a")
-        try:
-            dsr = deflated_sharpe_ratio(
-                observed_sharpe, max(n_trials_total, 1), sharpe_variance, n_obs, skewness, kurtosis
+        with st.container(border=True):
+            card_cols = st.columns(6)
+            card_cols[0].metric(
+                "PBO",
+                f"{result.pbo:.1%}",
+                help="Probability of Backtest Overfitting; reject above 5%.",
             )
-            card_cols[2].metric("DSR", f"{dsr:.1%}")
-        except ValueError:
-            card_cols[2].metric("DSR", "n/a")
-        mintrl = minimum_track_record_length(observed_sharpe, 0.0, skewness, kurtosis)
-        card_cols[3].metric("MinTRL", "∞" if mintrl == float("inf") else f"{mintrl:.0f}d")
-        card_cols[4].metric(
-            "2x-slippage SR", "not logged", help="No trial tagged as a 2x-slippage rerun was found."
-        )
-        card_cols[5].metric(
-            "Holdout", "not run", help="Final holdout validation isn't implemented yet."
-        )
+            try:
+                psr = probabilistic_sharpe_ratio(observed_sharpe, 0.0, n_obs, skewness, kurtosis)
+                card_cols[1].metric("PSR", f"{psr:.1%}")
+            except ValueError:
+                card_cols[1].metric("PSR", "n/a")
+            try:
+                dsr = deflated_sharpe_ratio(
+                    observed_sharpe,
+                    max(n_trials_total, 1),
+                    sharpe_variance,
+                    n_obs,
+                    skewness,
+                    kurtosis,
+                )
+                card_cols[2].metric("DSR", f"{dsr:.1%}")
+            except ValueError:
+                card_cols[2].metric("DSR", "n/a")
+            mintrl = minimum_track_record_length(observed_sharpe, 0.0, skewness, kurtosis)
+            card_cols[3].metric("MinTRL", "∞" if mintrl == float("inf") else f"{mintrl:.0f}d")
+            card_cols[4].metric(
+                "2x-slippage SR",
+                "not logged",
+                help="No trial tagged as a 2x-slippage rerun was found.",
+            )
+            card_cols[5].metric(
+                "Holdout", "not run", help="Final holdout validation isn't implemented yet."
+            )
 
-        st.caption(
-            "How to read this: PBO/PSR/DSR/MinTRL are computed from the best-Sharpe "
-            "trial in the registry; the last two cards need data this build doesn't "
-            "collect yet, so they say so rather than guessing."
-        )
+            st.caption(
+                "How to read this: PBO/PSR/DSR/MinTRL are computed from the best-Sharpe "
+                "trial in the registry; the last two cards need data this build doesn't "
+                "collect yet, so they say so rather than guessing."
+            )
 
-        chart_cols = st.columns(2)
+        chart_card1 = st.container(border=True)
+        chart_cols = chart_card1.columns(2)
         with chart_cols[0]:
             fig = go.Figure(go.Histogram(x=result.logits, marker_color=theme.ACCENT))
             fig.update_layout(title="Logit histogram", height=320)
@@ -164,7 +176,8 @@ for tab, strategy in zip(tabs, strategies, strict=True):
                 "How to read this: a flat or negative slope means in-sample skill isn't predictive."
             )
 
-        chart_cols2 = st.columns(2)
+        chart_card2 = st.container(border=True)
+        chart_cols2 = chart_card2.columns(2)
         with chart_cols2[0]:
             selected_sorted = np.sort(result.oos_sharpes)
             pooled_sorted = np.sort(result.oos_sharpes_pooled)
@@ -187,7 +200,8 @@ for tab, strategy in zip(tabs, strategies, strict=True):
             st.info("Parameter heatmap needs 2 varying grid params — not available for this grid.")
 
         equity_curve = best_series.cumsum()
-        chart_cols3 = st.columns(2)
+        chart_card3 = st.container(border=True)
+        chart_cols3 = chart_card3.columns(2)
         with chart_cols3[0]:
             fig = go.Figure(
                 go.Scatter(
@@ -210,7 +224,8 @@ for tab, strategy in zip(tabs, strategies, strict=True):
             st.plotly_chart(fig, width="stretch")
             st.caption("How to read this: depth and duration below zero is time spent in drawdown.")
 
-        chart_cols4 = st.columns(2)
+        chart_card4 = st.container(border=True)
+        chart_cols4 = chart_card4.columns(2)
         with chart_cols4[0]:
             rng = np.random.default_rng(0)
             daily = best_series.to_numpy()

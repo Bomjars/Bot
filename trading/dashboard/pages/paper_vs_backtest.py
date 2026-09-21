@@ -25,27 +25,31 @@ paper_days = data.count_paper_days(settings.database_path)
 orders = data.load_recent_orders(settings.database_path, limit=10_000)
 paper_pnl_note = "not available yet — needs fills/exits persisted, see docs/PLAN.md"
 
-kpi_cols = st.columns(4)
-kpi_cols[0].metric("Paper days", f"{paper_days}/30")
-kpi_cols[1].metric("Paper P&L", "n/a")
-kpi_cols[2].metric("Expected 90% band", "n/a")
-kpi_cols[3].metric("Measured slippage", "n/a")
-st.caption(
-    "How to read this: paper days counts distinct dates with at least one order logged; "
-    "the other three KPIs need exit/fill data this build doesn't persist yet."
-)
+with st.container(border=True):
+    kpi_cols = st.columns(4)
+    kpi_cols[0].metric("Paper days", f"{paper_days}/30")
+    kpi_cols[1].metric("Paper P&L", "n/a")
+    kpi_cols[2].metric("Expected 90% band", "n/a")
+    kpi_cols[3].metric("Measured slippage", "n/a")
+    st.caption(
+        "How to read this: paper days counts distinct dates with at least one order "
+        "logged; the other three KPIs need exit/fill data this build doesn't persist yet."
+    )
 
 st.subheader("Paper P&L vs expected band")
-if paper_days == 0:
-    st.info("No paper-trading days recorded yet.")
-else:
-    st.info(paper_pnl_note)
+with st.container(border=True):
+    if paper_days == 0:
+        st.info("No paper-trading days recorded yet.")
+    else:
+        st.info(paper_pnl_note)
 
 st.subheader("Slippage per trade vs assumed")
-st.info(paper_pnl_note)
+with st.container(border=True):
+    st.info(paper_pnl_note)
 
 st.subheader("Weekly summary")
-if not orders:
-    st.write("No orders logged yet.")
-else:
-    st.dataframe(orders, width="stretch", hide_index=True)
+with st.container(border=True):
+    if not orders:
+        st.write("No orders logged yet.")
+    else:
+        st.dataframe(orders, width="stretch", hide_index=True)

@@ -45,6 +45,7 @@ st.caption(
 
 # --- Risk gauges --------------------------------------------------------------
 st.subheader("Risk limits")
+risk_card = st.container(border=True)
 current_equity = snapshot.account.equity if snapshot.account else None
 
 
@@ -66,7 +67,7 @@ def _gauge(title: str, value: float, limit: float, suffix: str = "") -> go.Figur
     return fig
 
 
-gauge_cols = st.columns(5)
+gauge_cols = risk_card.columns(5)
 
 if current_equity and risk_state.daily_starting_equity:
     daily_loss_pct = max(
@@ -119,67 +120,73 @@ st.caption("How to read this: green under 70% of the limit, amber 70-90%, red at
 
 # --- Equity vs SPY ------------------------------------------------------------
 st.subheader("Intraday equity vs SPY")
-st.info(
-    "No equity history recorded yet — this fills in once the paper-trading loop has "
-    "run for at least one session. See docs/PLAN.md."
-)
+with st.container(border=True):
+    st.info(
+        "No equity history recorded yet — this fills in once the paper-trading loop has "
+        "run for at least one session. See docs/PLAN.md."
+    )
 
 # --- Session schedule (UK time) ----------------------------------------------
 st.subheader("Session schedule (UK time)")
-calendar = ExchangeCalendar()
-now_et = datetime.now(tz=EXCHANGE_TZ)
-session = calendar.session_for_date(now_et.date())
-if session is None:
-    st.write("No trading session today.")
-else:
-    no_entry_until = session.open + timedelta(minutes=settings.risk.no_entry_first_minutes)
-    flatten_from = session.close - timedelta(minutes=settings.risk.flatten_before_close_minutes)
-    schedule_cols = st.columns(4)
-    schedule_cols[0].metric(
-        "Open", SessionClock.to_display_timezone(session.open).strftime("%H:%M")
-    )
-    schedule_cols[1].metric(
-        "No entries until", SessionClock.to_display_timezone(no_entry_until).strftime("%H:%M")
-    )
-    schedule_cols[2].metric(
-        "Flatten from", SessionClock.to_display_timezone(flatten_from).strftime("%H:%M")
-    )
-    schedule_cols[3].metric(
-        "Close", SessionClock.to_display_timezone(session.close).strftime("%H:%M")
-    )
+with st.container(border=True):
+    calendar = ExchangeCalendar()
+    now_et = datetime.now(tz=EXCHANGE_TZ)
+    session = calendar.session_for_date(now_et.date())
+    if session is None:
+        st.write("No trading session today.")
+    else:
+        no_entry_until = session.open + timedelta(minutes=settings.risk.no_entry_first_minutes)
+        flatten_from = session.close - timedelta(minutes=settings.risk.flatten_before_close_minutes)
+        schedule_cols = st.columns(4)
+        schedule_cols[0].metric(
+            "Open", SessionClock.to_display_timezone(session.open).strftime("%H:%M")
+        )
+        schedule_cols[1].metric(
+            "No entries until", SessionClock.to_display_timezone(no_entry_until).strftime("%H:%M")
+        )
+        schedule_cols[2].metric(
+            "Flatten from", SessionClock.to_display_timezone(flatten_from).strftime("%H:%M")
+        )
+        schedule_cols[3].metric(
+            "Close", SessionClock.to_display_timezone(session.close).strftime("%H:%M")
+        )
 
 # --- Controls -----------------------------------------------------------------
 st.subheader("Controls")
-control_cols = st.columns(2)
-with control_cols[0]:
-    if risk_state.halted:
-        if st.button("▶️ Re-enable trading", width="stretch"):
-            actions.re_enable(settings)
-            st.rerun()
-    else:
-        if st.button("⏸️ Pause entries", width="stretch"):
-            actions.pause_entries(settings)
-            st.rerun()
+with st.container(border=True):
+    control_cols = st.columns(2)
+    with control_cols[0]:
+        if risk_state.halted:
+            if st.button("▶️ Re-enable trading", width="stretch"):
+                actions.re_enable(settings)
+                st.rerun()
+        else:
+            if st.button("⏸️ Pause entries", width="stretch"):
+                actions.pause_entries(settings)
+                st.rerun()
 
 # --- Open positions -------------------------------------------------------------
 st.subheader("Open positions")
-records_by_symbol = {r.symbol: r for r in data.load_open_position_records(settings.database_path)}
-if not snapshot.positions:
-    st.write("No open positions.")
-else:
-    for position in snapshot.positions:
-        record = records_by_symbol.get(position.symbol)
-        cols = st.columns([1, 1, 1, 1, 1, 1, 1])
-        cols[0].write(f"**{position.symbol}**")
-        cols[1].write(f"entry {format.money(position.avg_entry_price)}")
-        cols[2].write(f"last {format.money(position.current_price)}")
-        cols[3].write(f"stop {format.money(record.stop_price) if record else '—'}")
-        cols[4].write(f"P&L {format.money(position.unrealized_pl)}")
-        held = format.since(record.opened_at) if record else "—"
-        cols[5].write(f"since {held}")
-        if cols[6].button("Flatten", key=f"flatten_{position.symbol}"):
-            actions.flatten_one(settings, position.symbol)
-            st.rerun()
+with st.container(border=True):
+    records_by_symbol = {
+        r.symbol: r for r in data.load_open_position_records(settings.database_path)
+    }
+    if not snapshot.positions:
+        st.write("No open positions.")
+    else:
+        for position in snapshot.positions:
+            record = records_by_symbol.get(position.symbol)
+            cols = st.columns([1, 1, 1, 1, 1, 1, 1])
+            cols[0].write(f"**{position.symbol}**")
+            cols[1].write(f"entry {format.money(position.avg_entry_price)}")
+            cols[2].write(f"last {format.money(position.current_price)}")
+            cols[3].write(f"stop {format.money(record.stop_price) if record else '—'}")
+            cols[4].write(f"P&L {format.money(position.unrealized_pl)}")
+            held = format.since(record.opened_at) if record else "—"
+            cols[5].write(f"since {held}")
+            if cols[6].button("Flatten", key=f"flatten_{position.symbol}"):
+                actions.flatten_one(settings, position.symbol)
+                st.rerun()
 
 # --- Activity feed --------------------------------------------------------------
 st.subheader("Activity feed")
@@ -197,7 +204,8 @@ feed = sorted(
     key=lambda row: row["ts"],
     reverse=True,
 )[:20]
-if not feed:
-    st.write("No activity yet.")
-else:
-    st.dataframe(feed, width="stretch", hide_index=True)
+with st.container(border=True):
+    if not feed:
+        st.write("No activity yet.")
+    else:
+        st.dataframe(feed, width="stretch", hide_index=True)
