@@ -30,6 +30,37 @@ def test_submit_bracket_order_opens_a_position_and_deducts_commission() -> None:
     assert broker.get_account().equity < 100_000.0  # commission paid
 
 
+def test_signal_strength_flows_from_request_through_to_the_closed_trade_record() -> None:
+    """Purely descriptive plumbing (STRAT-*, see validation/signal_confidence.py) --
+    RiskManager never checks or sizes on this value, so the only thing worth locking in
+    here is that it survives open -> close unmodified, and that omitting it is fine."""
+    broker = SimulatedBroker(starting_equity=100_000.0, cost_model=CostModel())
+    t1, t2 = T0, T0 + timedelta(minutes=1)
+    broker.process_bar("AAPL", _bar(t1, 100, 100, 100, 100))
+    broker.submit_bracket_order(
+        BracketOrderRequest(
+            "id1", "AAPL", Side.BUY, 10, stop_loss_price=95.0, signal_strength=0.42
+        )
+    )
+
+    broker.process_bar("AAPL", _bar(t2, 100, 100.5, 94.0, 99.0))  # low pierces the stop
+
+    assert broker.closed_trades[0].signal_strength == 0.42
+
+
+def test_signal_strength_defaults_to_none_when_not_provided() -> None:
+    broker = SimulatedBroker(starting_equity=100_000.0, cost_model=CostModel())
+    t1, t2 = T0, T0 + timedelta(minutes=1)
+    broker.process_bar("AAPL", _bar(t1, 100, 100, 100, 100))
+    broker.submit_bracket_order(
+        BracketOrderRequest("id1", "AAPL", Side.BUY, 10, stop_loss_price=95.0)
+    )
+
+    broker.process_bar("AAPL", _bar(t2, 100, 100.5, 94.0, 99.0))
+
+    assert broker.closed_trades[0].signal_strength is None
+
+
 def test_stop_loss_triggers_on_bar_low() -> None:
     broker = SimulatedBroker(starting_equity=100_000.0, cost_model=CostModel())
     t1 = T0

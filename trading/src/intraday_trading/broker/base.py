@@ -32,6 +32,10 @@ class BracketOrderRequest:
     qty: float
     stop_loss_price: float
     take_profit_price: float | None = None
+    signal_strength: float | None = None
+    """Carried through from the originating `EntrySignal`, purely so a backtest's
+    `SimulatedBroker` can attach it to the resulting `TradeRecord` -- not used by any
+    broker adapter for order placement itself."""
 
     def __post_init__(self) -> None:
         if self.qty <= 0:

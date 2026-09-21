@@ -77,6 +77,15 @@ def test_RISK_002_accept_when_within_all_limits(tmp_path: Path) -> None:
     assert len(broker.submitted_orders) == 1
 
 
+def test_signal_strength_passes_through_to_the_broker_request(tmp_path: Path) -> None:
+    """Purely descriptive plumbing -- RiskManager doesn't check or size on this value,
+    it just carries it from the signal into the request the broker sees."""
+    manager, broker = _manager(tmp_path)
+    decision = manager.check_and_submit_entry(_signal(signal_strength=0.73))
+    assert decision.accepted is True
+    assert broker.submitted_orders[0].signal_strength == 0.73
+
+
 def test_RISK_001_reject_when_risk_per_trade_exceeded(tmp_path: Path) -> None:
     # qty=10, stop distance $1 -> risk $10 on $100k equity = 0.01% risk, fine normally;
     # crank qty up so risk exceeds the 1% default limit ($1,000).
