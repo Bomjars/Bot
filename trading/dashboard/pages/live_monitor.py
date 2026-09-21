@@ -25,6 +25,21 @@ st_autorefresh(interval=8_000, key="live_monitor_refresh")
 
 st.title("Live Monitor")
 
+with st.expander("What do these terms mean?"):
+    st.markdown(
+        "- **HALTED** — the RiskManager (the only code allowed to place orders) has "
+        "stopped trading because a hard risk limit was breached; it will not resume "
+        "until re-enabled below.\n"
+        "- **STALE** — the dashboard couldn't reach the broker just now, so figures on "
+        "this page may be a little out of date. Trading itself isn't necessarily "
+        "affected.\n"
+        "- **Drawdown from peak** — how far current account equity has fallen from its "
+        "highest-ever point, as a percentage.\n"
+        "- **Flatten** — close a position immediately at the market price.\n"
+        "- **Pause entries** — stop opening *new* positions; existing ones are left "
+        "alone (they still get flattened/stopped as normal)."
+    )
+
 risk_state = data.load_risk_state(settings.database_path)
 snapshot = actions.load_live_snapshot(settings)
 
