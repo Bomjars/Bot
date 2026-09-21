@@ -21,7 +21,9 @@ def get_connection(database_path: Path) -> sqlite3.Connection:
 def init_db(database_path: Path) -> None:
     conn = get_connection(database_path)
     try:
-        conn.executescript(_SCHEMA_PATH.read_text())
+        # Explicit encoding: Path.read_text() defaults to the platform's locale
+        # encoding, which is cp1252 on Windows -- wrong for a UTF-8 repo.
+        conn.executescript(_SCHEMA_PATH.read_text(encoding="utf-8"))
         conn.commit()
     finally:
         conn.close()

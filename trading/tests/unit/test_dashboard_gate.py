@@ -22,7 +22,10 @@ FORBIDDEN_PATTERNS = [
 def test_DASH_001_no_dashboard_file_calls_broker_order_methods_directly() -> None:
     offending: list[str] = []
     for path in DASHBOARD_ROOT.rglob("*.py"):
-        text = path.read_text()
+        # Explicit encoding: Path.read_text() defaults to the platform's locale
+        # encoding (cp1252 on Windows), which can't decode the emoji icons used
+        # throughout the dashboard pages.
+        text = path.read_text(encoding="utf-8")
         for pattern in FORBIDDEN_PATTERNS:
             if pattern.search(text):
                 offending.append(f"{path.relative_to(DASHBOARD_ROOT)}: {pattern.pattern}")

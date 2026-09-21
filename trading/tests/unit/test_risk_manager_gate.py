@@ -18,7 +18,10 @@ def test_RISK_021_only_risk_manager_calls_submit_bracket_order() -> None:
     for path in SRC_ROOT.rglob("*.py"):
         if path in ALLOWED_CALLERS:
             continue
-        text = path.read_text()
+        # Explicit encoding: Path.read_text() defaults to the platform's locale
+        # encoding (cp1252 on Windows), which can't decode this UTF-8 repo's non-ASCII
+        # characters -- crashes on some, silently mojibakes others.
+        text = path.read_text(encoding="utf-8")
         if CALL_PATTERN.search(text):
             offending.append(str(path.relative_to(SRC_ROOT)))
 
