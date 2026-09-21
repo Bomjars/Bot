@@ -17,7 +17,10 @@ class OrderLog:
         self._database_path = database_path
         init_db(database_path)
 
-    def log(self, signal: EntrySignal, order: OrderInfo) -> None:
+    def log(self, signal: EntrySignal, order: OrderInfo, ts: datetime | None = None) -> None:
+        """`ts` defaults to now -- only ever overridden by dev/demo_data.py, to spread
+        synthetic orders across distinct historical dates rather than collapsing them
+        all onto "today"."""
         conn = get_connection(self._database_path)
         try:
             conn.execute(
@@ -28,7 +31,7 @@ class OrderLog:
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    datetime.now(tz=UTC).isoformat(),
+                    (ts or datetime.now(tz=UTC)).isoformat(),
                     signal.strategy,
                     signal.symbol,
                     signal.side.value,

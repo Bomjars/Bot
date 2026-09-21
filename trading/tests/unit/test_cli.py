@@ -1,10 +1,10 @@
-"""`status`, the `golive` subcommands, and `backtest spy` are exercised here -- `run-paper`
-and `kill` construct a real AlpacaBroker and immediately reconcile against the network
-(see execution/wiring.py and CLAUDE.md), so they're deliberately never invoked in a test.
-`backtest spy` also touches the network (real historical bars), but only through
-`AlpacaMarketDataClient`, whose *underlying* vendor client is easy to fake (same pattern
-as test_data_client.py) while still exercising this file's own fetch/store/run/log logic
-for real.
+"""`status`, the `golive` subcommands, `backtest spy`, and `seed-demo-data` are exercised
+here -- `run-paper` and `kill` construct a real AlpacaBroker and immediately reconcile
+against the network (see execution/wiring.py and CLAUDE.md), so they're deliberately
+never invoked in a test. `backtest spy` also touches the network (real historical bars),
+but only through `AlpacaMarketDataClient`, whose *underlying* vendor client is easy to
+fake (same pattern as test_data_client.py) while still exercising this file's own
+fetch/store/run/log logic for real.
 """
 
 from __future__ import annotations
@@ -156,3 +156,51 @@ def test_backtest_spy_fetches_runs_the_grid_and_logs_trials(
     registry = TrialRegistry(db_path)
     assert len(registry.get_trials("spy_momentum")) == 3
     assert len(registry.get_trials("spy_momentum_paper_faithful")) == 1
+
+
+def test_seed_demo_data_writes_to_the_given_path(monkeypatch, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
+    real_db = tmp_path / "real.db"
+    demo_db = tmp_path / "demo.db"
+    monkeypatch.setenv("ALPACA_API_KEY", "fake")
+    monkeypatch.setenv("ALPACA_SECRET_KEY", "fake")
+    monkeypatch.setenv("DATABASE_PATH", str(real_db))
+
+    result = runner.invoke(app, ["seed-demo-data", "--database-path", str(demo_db)])
+
+    assert result.exit_code == 0, result.stdout
+    assert demo_db.exists()
+    assert not real_db.exists()  # never touched the real database
+    assert TrialRegistry(demo_db).get_trials("spy_momentum")
+
+
+def test_seed_demo_data_refuses_to_target_the_real_database(monkeypatch, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
+    real_db = tmp_path / "real.db"
+    monkeypatch.setenv("ALPACA_API_KEY", "fake")
+    monkeypatch.setenv("ALPACA_SECRET_KEY", "fake")
+    monkeypatch.setenv("DATABASE_PATH", str(real_db))
+
+    result = runner.invoke(app, ["seed-demo-data", "--database-path", str(real_db)])
+
+    assert result.exit_code == 1
+    assert "Refusing" in result.stdout
+    assert not real_db.exists()
+
+
+def test_seed_demo_data_refuses_to_overwrite_without_force(monkeypatch, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
+    real_db = tmp_path / "real.db"
+    demo_db = tmp_path / "demo.db"
+    demo_db.write_text("not a real database, just proving it wasn't touched")
+    monkeypatch.setenv("ALPACA_API_KEY", "fake")
+    monkeypatch.setenv("ALPACA_SECRET_KEY", "fake")
+    monkeypatch.setenv("DATABASE_PATH", str(real_db))
+
+    result = runner.invoke(app, ["seed-demo-data", "--database-path", str(demo_db)])
+
+    assert result.exit_code == 1
+    assert "already exists" in result.stdout
+    assert demo_db.read_text() == "not a real database, just proving it wasn't touched"
+
+    result = runner.invoke(app, ["seed-demo-data", "--database-path", str(demo_db), "--force"])
+
+    assert result.exit_code == 0, result.stdout
+    assert TrialRegistry(demo_db).get_trials("spy_momentum")

@@ -25,14 +25,14 @@ RED = "#ef4444"
 ACCENT = "#6366f1"
 
 _TEMPLATE_NAME = "intraday_dark"
-_FONT = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+_FONT = "'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
 
 
 def apply() -> None:
     st.markdown(
         f"""
         <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap');
 
         html, body, .stApp, [class*="css"] {{
             font-family: {_FONT};
@@ -41,6 +41,20 @@ def apply() -> None:
             background-color: {BACKGROUND};
             color: {TEXT};
         }}
+
+        /* Visibility at any viewport width: scroll wide content instead of clipping
+           it, and never let a single word/number force the page itself to overflow. */
+        .main .block-container {{
+            max-width: 100%;
+            overflow-x: auto;
+            padding-left: 1.5rem;
+            padding-right: 1.5rem;
+        }}
+        [data-testid="stMetricValue"], [data-testid="stMetricLabel"] {{
+            overflow-wrap: break-word;
+            white-space: normal;
+        }}
+        table {{ width: 100%; }}
 
         /* Sidebar */
         [data-testid="stSidebar"] {{
@@ -78,13 +92,15 @@ def apply() -> None:
             color: {TEXT};
         }}
 
-        /* Bordered containers -> cards */
+        /* Bordered containers -> cards. overflow-x: auto (never hidden) so a card
+           wider than the viewport scrolls instead of clipping its own content. */
         div[data-testid="stVerticalBlockBorderWrapper"] {{
             background: {SURFACE_RAISED};
             border: 1px solid {BORDER};
             border-radius: 16px;
             padding: 0.25rem 0.25rem;
             box-shadow: 0 1px 2px rgba(0,0,0,0.4), 0 8px 24px rgba(0,0,0,0.25);
+            overflow-x: auto;
         }}
 
         /* Alerts (success/error/warning/info) -> status cards */
@@ -142,11 +158,21 @@ def apply() -> None:
             height: 2px;
         }}
 
-        /* Dataframes / tables */
+        /* Dataframes / tables -- auto, never hidden, so a table wider than its card
+           scrolls horizontally rather than losing columns. */
         [data-testid="stDataFrame"] {{
             border-radius: 12px;
             border: 1px solid {BORDER};
-            overflow: hidden;
+            overflow: auto;
+            max-width: 100%;
+        }}
+
+        /* Narrow viewports: tighter padding, smaller stat numbers, so nothing is
+           forced off-screen on a phone or a small window. */
+        @media (max-width: 640px) {{
+            .main .block-container {{ padding-left: 0.75rem; padding-right: 0.75rem; }}
+            [data-testid="stMetricValue"] {{ font-size: 1.25rem; }}
+            h1 {{ font-size: 1.5rem; }}
         }}
 
         /* Progress bar */
@@ -169,7 +195,7 @@ def apply() -> None:
             layout=go.Layout(
                 paper_bgcolor="rgba(0,0,0,0)",
                 plot_bgcolor="rgba(0,0,0,0)",
-                font={"color": TEXT, "family": "Inter, sans-serif"},
+                font={"color": TEXT, "family": "Space Grotesk, sans-serif"},
                 xaxis={"gridcolor": BORDER, "zerolinecolor": BORDER},
                 yaxis={"gridcolor": BORDER, "zerolinecolor": BORDER},
                 colorway=[ACCENT, GREEN, AMBER, RED, MUTED],

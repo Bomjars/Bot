@@ -127,6 +127,19 @@ never placed a trade yet, most of the Paper vs Backtest and Journal pages are an
 empty state rather than placeholder numbers; the Validation Report page computes
 CSCV/PBO/PSR/DSR live from whatever's actually in the trial registry.
 
+**To preview what a populated dashboard looks like**, without touching real trading
+data:
+
+```powershell
+uv run intraday-trading seed-demo-data   # writes to data\demo.db by default
+$env:DATABASE_PATH = "data\demo.db"
+uv run streamlit run dashboard\main.py
+```
+
+Every number in `data\demo.db` is synthetic (`dev/demo_data.py`) — the command refuses
+to write to your real `DATABASE_PATH`, and this file is never read by anything except
+what you deliberately point at it.
+
 ## Repo layout
 
 ```

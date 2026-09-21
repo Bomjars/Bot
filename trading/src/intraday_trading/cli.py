@@ -13,12 +13,14 @@ from __future__ import annotations
 import sys
 import time
 from datetime import datetime
+from pathlib import Path
 
 import typer
 
 from intraday_trading.backtest.costs import CostModel
 from intraday_trading.config import load_settings
 from intraday_trading.data.client import AlpacaMarketDataClient
+from intraday_trading.dev.demo_data import generate_demo_data
 from intraday_trading.execution.wiring import build_paper_trading_components
 from intraday_trading.golive.gate import evaluate_go_live_gate
 from intraday_trading.killswitch.kill_switch import trip
@@ -33,6 +35,8 @@ from intraday_trading.strategies.spy_grid import (
     run_and_log_grid,
 )
 from intraday_trading.validation.registry import TrialRegistry
+
+DEFAULT_DEMO_DATABASE_PATH = Path("data/demo.db")
 
 app = typer.Typer(add_completion=False)
 golive_app = typer.Typer(
@@ -207,6 +211,52 @@ def backtest_spy(
     typer.echo(
         "Run `intraday-trading golive status --strategies spy_momentum` for the "
         "CSCV/PBO verdict, or open the dashboard's Validation Report page."
+    )
+
+
+@app.command("seed-demo-data")
+def seed_demo_data(
+    database_path_str: str = typer.Option(
+        "",
+        "--database-path",
+        help=(
+            "Where to write synthetic demo data. Defaults to data/demo.db -- a file "
+            "separate from your real database, since every number this writes is "
+            "fabricated (numpy.random, not a real backtest or trade) and must never "
+            "be mistaken for real trading history or fed into a real go-live decision."
+        ),
+    ),
+    force: bool = typer.Option(False, help="Overwrite the file if it already exists."),
+) -> None:
+    """Populate a demo database with synthetic SPY-momentum trials, orders, and
+    rejections, purely so the dashboard has something populated to render for a
+    design/UI preview -- see dev/demo_data.py. Point the dashboard at it with
+    DATABASE_PATH set to this file; never point it at your real database."""
+    database_path = Path(database_path_str) if database_path_str else DEFAULT_DEMO_DATABASE_PATH
+    settings = load_settings()
+    if database_path.resolve() == settings.database_path.resolve():
+        typer.secho(
+            "Refusing to seed synthetic data into your real DATABASE_PATH. Pass a "
+            "different --database-path (the default, data/demo.db, is fine).",
+            fg=typer.colors.RED,
+        )
+        raise typer.Exit(code=1)
+    if database_path.exists() and not force:
+        typer.secho(
+            f"{database_path} already exists -- pass --force to overwrite.",
+            fg=typer.colors.RED,
+        )
+        raise typer.Exit(code=1)
+
+    database_path.parent.mkdir(parents=True, exist_ok=True)
+    if database_path.exists():
+        database_path.unlink()
+
+    generate_demo_data(database_path)
+    typer.secho(f"Wrote synthetic demo data to {database_path}.", fg=typer.colors.GREEN)
+    typer.echo(
+        "Point the dashboard at it, e.g. in PowerShell:\n"
+        f'  $env:DATABASE_PATH = "{database_path}"; uv run streamlit run dashboard\\main.py'
     )
 
 
