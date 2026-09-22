@@ -20,10 +20,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from intraday_trading.backtest.simulated_broker import TradeRecord
 from intraday_trading.broker.base import OrderInfo, Side
 from intraday_trading.risk.signals import EntrySignal
-from intraday_trading.storage.closed_trade_log import ClosedTradeLog
 from intraday_trading.storage.order_log import OrderLog
 from intraday_trading.storage.rejection_log import RejectionLog
 from intraday_trading.strategies.spy_grid import house_risk_grid, paper_reference_config
@@ -32,7 +30,6 @@ from intraday_trading.validation.registry import TrialRegistry
 N_DEMO_DAYS = 60
 N_DEMO_CONFIGS = 24
 N_DEMO_TRADE_DAYS = 12
-N_DEMO_CLOSED_TRADES = 80
 DEMO_BASE_PRICE = 520.0
 
 _REJECTION_REASONS = ("position_pct_exceeded", "spread_too_wide", "max_trades_per_day_reached")
@@ -46,7 +43,6 @@ def generate_demo_data(database_path: Path, seed: int = 7) -> None:
     rng = np.random.default_rng(seed)
     _seed_trials(database_path, rng)
     _seed_orders_and_rejections(database_path, rng)
-    _seed_closed_trades(database_path, rng)
 
 
 def _seed_trials(database_path: Path, rng: np.random.Generator) -> None:
@@ -74,9 +70,7 @@ def _seed_trials(database_path: Path, rng: np.random.Generator) -> None:
     )
 
 
-def _demo_signal(
-    side: Side, price: float, qty: int, seq: str, signal_strength: float | None = None
-) -> EntrySignal:
+def _demo_signal(side: Side, price: float, qty: int, seq: str) -> EntrySignal:
     stop = price - 2.0 if side == Side.BUY else price + 2.0
     return EntrySignal(
         strategy="spy_momentum",
@@ -90,7 +84,6 @@ def _demo_signal(
         avg_dollar_volume=8_000_000_000.0,
         spread_pct=0.0004,
         signal_seq=seq,
-        signal_strength=signal_strength,
     )
 
 
@@ -103,8 +96,7 @@ def _seed_orders_and_rejections(database_path: Path, rng: np.random.Generator) -
         price = DEMO_BASE_PRICE + float(rng.normal(0, 3))
         side = Side.BUY if rng.random() > 0.4 else Side.SELL
         qty = int(rng.integers(50, 250))
-        strength = float(rng.uniform(0.02, 1.2))
-        signal = _demo_signal(side, price, qty, seq=f"demo-order-{i}", signal_strength=strength)
+        signal = _demo_signal(side, price, qty, seq=f"demo-order-{i}")
         order = OrderInfo(
             broker_order_id=f"demo-order-{i}",
             client_order_id=f"demo-client-{i}",
@@ -124,38 +116,3 @@ def _seed_orders_and_rejections(database_path: Path, rng: np.random.Generator) -
     for i, reason in enumerate(_REJECTION_REASONS * 2):
         signal = _demo_signal(Side.BUY, DEMO_BASE_PRICE, 500, seq=f"demo-rejected-{i}")
         rejection_log.log(signal, reason)
-
-
-def _seed_closed_trades(database_path: Path, rng: np.random.Generator) -> None:
-    """A synthetic closed-trade set with a deliberate positive relationship between
-    signal_strength and win probability -- not tuned against any real backtest or
-    validation metric (CLAUDE.md rule 7 governs real strategy decisions, not this
-    fabricated demo dataset), just a plausible shape so the demo's bucketed win-rate
-    table (validation/signal_confidence.py) has a trend worth looking at rather than
-    uniform noise."""
-    dates = pd.bdate_range(end=pd.Timestamp.today().normalize(), periods=N_DEMO_CLOSED_TRADES)
-    trades = []
-    for day in dates:
-        strength = float(rng.uniform(0.02, 1.3))
-        win_probability = min(0.35 + 0.35 * strength, 0.85)
-        won = bool(rng.random() < win_probability)
-        pnl = float(rng.uniform(50.0, 400.0)) if won else -float(rng.uniform(30.0, 250.0))
-        side = Side.BUY if rng.random() > 0.5 else Side.SELL
-        entry_time = day.to_pydatetime().replace(hour=10, minute=0, tzinfo=UTC)
-        exit_time = day.to_pydatetime().replace(hour=11, minute=0, tzinfo=UTC)
-        trades.append(
-            TradeRecord(
-                symbol="SPY",
-                side=side,
-                qty=int(rng.integers(50, 250)),
-                entry_price=DEMO_BASE_PRICE,
-                exit_price=DEMO_BASE_PRICE + (pnl / 100.0) * (1 if side == Side.BUY else -1),
-                entry_time=entry_time,
-                exit_time=exit_time,
-                exit_reason="take_profit" if won else "stop_loss",
-                realized_pnl=pnl,
-                total_commission=1.5,
-                signal_strength=strength,
-            )
-        )
-    ClosedTradeLog(database_path).log_many("spy_momentum", trades)

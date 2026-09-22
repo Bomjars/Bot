@@ -41,7 +41,6 @@ class _OpenPosition:
     stop_price: float
     take_profit_price: float | None
     entry_time: datetime
-    signal_strength: float | None = None
 
 
 @dataclass(frozen=True)
@@ -56,7 +55,6 @@ class TradeRecord:
     exit_reason: str
     realized_pnl: float
     total_commission: float
-    signal_strength: float | None = None
 
 
 @dataclass
@@ -116,7 +114,6 @@ class SimulatedBroker:
             stop_price=request.stop_loss_price,
             take_profit_price=request.take_profit_price,
             entry_time=self.current_time,
-            signal_strength=request.signal_strength,
         )
         self._order_seq += 1
         return OrderInfo(
@@ -192,7 +189,6 @@ class SimulatedBroker:
                 exit_reason=reason,
                 realized_pnl=realized_pnl,
                 total_commission=commission,
-                signal_strength=position.signal_strength,
             )
         )
         self._order_seq += 1

@@ -8,16 +8,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from intraday_trading.storage.closed_trade_log import ClosedTradeLog
 from intraday_trading.storage.db import get_connection, init_db
 from intraday_trading.storage.order_log import OrderLog
 from intraday_trading.storage.position_record_store import PositionRecord, PositionRecordStore
 from intraday_trading.storage.risk_state_store import RiskState, RiskStateStore
 from intraday_trading.validation.registry import TrialRecord, TrialRegistry
-from intraday_trading.validation.signal_confidence import (
-    SignalConfidenceTable,
-    build_confidence_table,
-)
 
 
 def load_risk_state(db_path: Path) -> RiskState:
@@ -60,14 +55,6 @@ def load_trials(db_path: Path, strategy: str) -> list[TrialRecord]:
 
 def trial_count(db_path: Path, strategy: str) -> int:
     return TrialRegistry(db_path).trial_count(strategy)
-
-
-def load_signal_confidence_table(db_path: Path, strategy: str) -> SignalConfidenceTable:
-    """Bucketed win-rate by signal strength, built from `strategy`'s persisted closed
-    trades (backtest/simulated_broker.py's TradeRecord, written by `backtest spy` or
-    dev/demo_data.py -- see storage/closed_trade_log.py). Empty buckets (win_rate=None)
-    when no backtest has been run for this strategy yet -- never a fabricated number."""
-    return build_confidence_table(list(ClosedTradeLog(db_path).load(strategy)))
 
 
 def count_paper_days(db_path: Path) -> int:

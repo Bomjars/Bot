@@ -24,21 +24,6 @@ settings = load_settings()
 
 st.title("Journal & Go-Live")
 
-with st.expander("What do these terms mean?"):
-    st.markdown(
-        "- **Reconciliation** — on every restart, the system compares its own record of "
-        "open positions/orders against what the broker actually reports, and refuses to "
-        'proceed if they disagree. "Tested" means a human deliberately restarted the '
-        "paper loop and confirmed this worked.\n"
-        "- **Kill switch** — an emergency stop that cancels every open order and closes "
-        "every position immediately, from any of three places (CLI, a file flag, or a "
-        "dashboard button).\n"
-        "- **CSCV/PBO** — see the glossary on the Validation Report page; a strategy "
-        "needs to pass this before it counts toward the first checklist item.\n"
-        "- **R multiple** — a trade's profit/loss expressed as a multiple of how much "
-        "was risked at entry (e.g. +2R means the trade made twice what was risked)."
-    )
-
 st.subheader("Trade journal")
 with st.container(border=True):
     orders = data.load_recent_orders(settings.database_path, limit=500)

@@ -41,8 +41,7 @@ if settings.dashboard_password and not st.session_state.get("authenticated"):
     st.stop()
 
 pages = [
-    st.Page("pages/getting_started.py", title="Getting Started", icon="👋", default=True),
-    st.Page("pages/live_monitor.py", title="Live Monitor", icon="🟢"),
+    st.Page("pages/live_monitor.py", title="Live Monitor", icon="🟢", default=True),
     st.Page("pages/validation_report.py", title="Validation Report", icon="🧪"),
     st.Page("pages/paper_vs_backtest.py", title="Paper vs Backtest", icon="⚖️"),
     st.Page("pages/journal_go_live.py", title="Journal & Go-Live", icon="🚀"),

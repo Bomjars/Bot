@@ -26,9 +26,9 @@ no-look-ahead guarantee + validation module (trial registry, CSCV/PBO, PSR/MinTR
 the SPY intraday momentum strategy (`strategies/spy_momentum.py`, both a `house_risk` and
 a `paper_faithful`-for-replication-only mode, plus its 192-config parameter grid in
 `strategies/spy_grid.py`) + paper-trading loop with reconciliation and Telegram alerting
-+ a 5-page Streamlit dashboard (including a Getting Started page) + the go-live
-checklist (`docs/GO_LIVE_CHECKLIST.md`), enforced in code by `golive/gate.py` and
-surfaced via both the CLI (`golive status`) and the dashboard's Journal & Go-Live page.
++ a 4-page Streamlit dashboard + the go-live checklist (`docs/GO_LIVE_CHECKLIST.md`),
+enforced in code by `golive/gate.py` and surfaced via both the CLI (`golive status`) and
+the dashboard's Journal & Go-Live page.
 
 `run-paper` still runs with zero strategies attached by default (nothing wires the SPY
 strategy into `execution/wiring.py` automatically — see `docs/PLAN.md` §14), so most of
@@ -162,7 +162,7 @@ trading/
 │   ├── state/                                Restart-safe state + reconciler   (step 8)
 │   ├── alerting/                               Telegram                        (step 8)
 │   └── killswitch/                               Kill switch                    (step 3)
-├── dashboard/            Streamlit app, 5 pages: main.py + pages/ + lib/     (step 9)
+├── dashboard/            Streamlit app, 4 pages: main.py + pages/ + lib/     (step 9)
 ├── docs/                 PLAN.md (this build's design doc + paper summaries),
 │                          GO_LIVE_CHECKLIST.md (step 10),
 │                          STRATEGY_SPEC_SPY.md (step 6)

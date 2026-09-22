@@ -182,7 +182,6 @@ class RiskManager:
             qty=signal.qty,
             stop_loss_price=signal.stop_price,
             take_profit_price=signal.take_profit_price,
-            signal_strength=signal.signal_strength,
         )
         order = self._broker.submit_bracket_order(request)
         if self._order_log is not None:

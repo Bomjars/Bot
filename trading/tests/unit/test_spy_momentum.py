@@ -157,45 +157,6 @@ def test_SPY_04_price_above_band_enters_long_never_short() -> None:
     assert signals[0].side == Side.BUY
 
 
-def test_STRAT_004_signal_strength_is_breakout_distance_normalized_by_band_width() -> None:
-    """Purely descriptive (risk/signals.py's EntrySignal.signal_strength) -- not used by
-    any risk check. Verified against the same band the strategy itself computed, since
-    the band's exact levels are already covered by SPY-01/02."""
-    strategy = _strategy(lookback_days=1, sizing="fixed_notional")
-    day1, day2 = date(2024, 1, 2), date(2024, 1, 3)
-    _feed_day(strategy, day1, session_open=100.0, decision_closes={time(10, 0): 100.5})
-
-    open_bar = _bar(day2, 9, 30, 100.0)
-    strategy.on_bar(SYMBOL, open_bar, _context(open_bar.ts))
-    upper, lower = strategy._compute_band(strategy._day, time(10, 0))  # type: ignore[arg-type]
-
-    entry_bar = _bar(day2, 10, 0, 200.0)  # comfortably above the band -> long
-    signals = strategy.on_bar(SYMBOL, entry_bar, _context(entry_bar.ts))
-    assert len(signals) == 1 and isinstance(signals[0], EntrySignal)
-    assert signals[0].signal_strength == pytest.approx((200.0 - upper) / (upper - lower))
-
-
-def test_signal_strength_for_a_short_entry_is_positive_when_price_falls_below_the_band() -> None:
-    strategy = _strategy(lookback_days=1, sizing="fixed_notional")
-    day1, day2 = date(2024, 1, 2), date(2024, 1, 3)
-    _feed_day(strategy, day1, session_open=100.0, decision_closes={time(10, 0): 100.5})
-
-    open_bar = _bar(day2, 9, 30, 100.0)
-    strategy.on_bar(SYMBOL, open_bar, _context(open_bar.ts))
-    upper, lower = strategy._compute_band(strategy._day, time(10, 0))  # type: ignore[arg-type]
-
-    entry_bar = _bar(day2, 10, 0, 10.0)  # comfortably below the band -> short
-    signals = strategy.on_bar(SYMBOL, entry_bar, _context(entry_bar.ts))
-    assert len(signals) == 1 and isinstance(signals[0], EntrySignal)
-    assert signals[0].side == Side.SELL
-    assert signals[0].signal_strength == pytest.approx((lower - 10.0) / (upper - lower))
-    assert signals[0].signal_strength > 0
-
-
-def test_signal_strength_is_none_for_a_degenerate_zero_width_band() -> None:
-    assert SpyMomentumStrategy._breakout_strength(Side.BUY, 101.0, 100.0, 100.0) is None
-
-
 def _warmed_up_strategy_with_open_long(
     day2: date, entry_price: float = 110.0
 ) -> tuple[SpyMomentumStrategy, EntrySignal]:

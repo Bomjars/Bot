@@ -34,27 +34,6 @@ settings = load_settings()
 
 st.title("Validation Report")
 
-with st.expander("What do these terms mean?"):
-    st.markdown(
-        "- **CSCV** (Combinatorially Symmetric Cross-Validation) — repeatedly splits the "
-        "backtest history into in-sample/out-of-sample halves to check whether the best "
-        "configuration in-sample still looks best out-of-sample.\n"
-        "- **PBO** (Probability of Backtest Overfitting) — CSCV's headline number: the "
-        "chance the 'best' configuration was picked by luck rather than real edge. "
-        "Below 5% is the bar this project treats as passing.\n"
-        "- **PSR** (Probabilistic Sharpe Ratio) — the probability the true Sharpe ratio "
-        "is actually above zero, given how few days of data and how noisy the returns "
-        "are. Higher is better.\n"
-        "- **DSR** (Deflated Sharpe Ratio) — PSR adjusted for how many configurations "
-        "were tried in total, since trying more configurations makes a lucky-looking "
-        "Sharpe more likely by chance alone.\n"
-        "- **MinTRL** (Minimum Track Record Length) — how many days of trading would be "
-        "needed to become statistically confident this strategy's Sharpe ratio is real, "
-        "at the current level of noise.\n"
-        "- **Sharpe ratio** — average return divided by the volatility of returns; a "
-        "standard way to compare risk-adjusted performance."
-    )
-
 strategies = data.known_strategies(settings.database_path)
 if not strategies:
     st.info(
@@ -120,13 +99,11 @@ for tab, strategy in zip(tabs, strategies, strict=True):
                 f"{result.pbo:.1%}",
                 help="Probability of Backtest Overfitting; reject above 5%.",
             )
-            psr_help = "Probability the true Sharpe ratio is above zero, given the sample size."
             try:
                 psr = probabilistic_sharpe_ratio(observed_sharpe, 0.0, n_obs, skewness, kurtosis)
-                card_cols[1].metric("PSR", f"{psr:.1%}", help=psr_help)
+                card_cols[1].metric("PSR", f"{psr:.1%}")
             except ValueError:
-                card_cols[1].metric("PSR", "n/a", help=psr_help)
-            dsr_help = "PSR adjusted for how many configurations were tried in the grid."
+                card_cols[1].metric("PSR", "n/a")
             try:
                 dsr = deflated_sharpe_ratio(
                     observed_sharpe,
@@ -136,15 +113,11 @@ for tab, strategy in zip(tabs, strategies, strict=True):
                     skewness,
                     kurtosis,
                 )
-                card_cols[2].metric("DSR", f"{dsr:.1%}", help=dsr_help)
+                card_cols[2].metric("DSR", f"{dsr:.1%}")
             except ValueError:
-                card_cols[2].metric("DSR", "n/a", help=dsr_help)
+                card_cols[2].metric("DSR", "n/a")
             mintrl = minimum_track_record_length(observed_sharpe, 0.0, skewness, kurtosis)
-            card_cols[3].metric(
-                "MinTRL",
-                "∞" if mintrl == float("inf") else f"{mintrl:.0f}d",
-                help="Days of trading needed to be confident the Sharpe ratio is real.",
-            )
+            card_cols[3].metric("MinTRL", "∞" if mintrl == float("inf") else f"{mintrl:.0f}d")
             card_cols[4].metric(
                 "2x-slippage SR",
                 "not logged",

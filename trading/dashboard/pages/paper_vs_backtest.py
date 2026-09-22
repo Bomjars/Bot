@@ -27,25 +27,10 @@ paper_pnl_note = "not available yet — needs fills/exits persisted, see docs/PL
 
 with st.container(border=True):
     kpi_cols = st.columns(4)
-    kpi_cols[0].metric(
-        "Paper days",
-        f"{paper_days}/30",
-        help="Distinct calendar dates with at least one order logged. 30 is the "
-        "minimum before go-live is considered.",
-    )
+    kpi_cols[0].metric("Paper days", f"{paper_days}/30")
     kpi_cols[1].metric("Paper P&L", "n/a")
-    kpi_cols[2].metric(
-        "Expected 90% band",
-        "n/a",
-        help="The range of daily P&L the backtest would predict with 90% confidence -- "
-        "paper trading falling far outside it is a warning sign, not just a curiosity.",
-    )
-    kpi_cols[3].metric(
-        "Measured slippage",
-        "n/a",
-        help="Real fill price vs. the price the strategy expected, per trade -- checks "
-        "whether the backtest's cost assumptions hold up live.",
-    )
+    kpi_cols[2].metric("Expected 90% band", "n/a")
+    kpi_cols[3].metric("Measured slippage", "n/a")
     st.caption(
         "How to read this: paper days counts distinct dates with at least one order "
         "logged; the other three KPIs need exit/fill data this build doesn't persist yet."

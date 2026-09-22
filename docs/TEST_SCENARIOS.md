@@ -150,7 +150,6 @@ section; never renumber.
 | VAL-011 | P0 | CSCV/PBO is never used as an optimisation objective anywhere in the codebase — a search over the codebase for any code path that varies strategy parameters based on a PBO value fails a static-analysis test. |
 | VAL-012 | P1 | Walk-forward validation results and the final untouched holdout result are computed from disjoint date ranges, verified programmatically (no overlap). |
 | VAL-013 | P1 | The holdout dataset cannot be read by any code path before the walk-forward gate has already produced a pass verdict (enforced by directory/flag access check, not just convention). |
-| VAL-014 | P0 | `validation/signal_confidence.py` buckets closed trades by `signal_strength` into configurable bands and reports each band's win rate as `n_wins/n`, with an empty band reporting `win_rate=None` (unknown), never a fabricated `0%`. |
 
 ## STATE — state & reconciliation
 
@@ -177,7 +176,6 @@ section; never renumber.
 | DASH-001 | P0 | No code path in the dashboard package can place, modify, or cancel an order — a static check confirms the dashboard never imports the broker adapter's write methods, only RiskManager-gated kill/pause/flatten and read-only data access. |
 | DASH-002 | P0 | The kill-switch button requires the exact typed confirmation string; any other input leaves the system untouched. |
 | DASH-003 | P1 | When exposed outside localhost, the dashboard requires the configured password; with no password configured, it refuses to bind to a non-localhost interface. |
-| DASH-004 | P1 | The Live Monitor page's "Signal confidence" card and activity feed surface each strategy's backtested win rate by signal-strength bucket, explicitly labeled as a historical statistic derived from closed trades -- never presented as a live guarantee. |
 
 ## STRAT — shared strategy-protocol plumbing (ExitSignal, context.equity/open_positions)
 
@@ -185,8 +183,6 @@ section; never renumber.
 |---|---|---|
 | STRAT-001 | P0 | `StrategyContext.equity` and `StrategyContext.open_positions` reflect the broker's real account/position state, refreshed once per bar by the driving engine (backtester and paper/live loop alike) -- never a value the strategy computed or cached itself. |
 | STRAT-002 | P0 | A strategy returning `[ExitSignal, EntrySignal]` in one `on_bar` call (a reversal) results in the position closed and the opposite-side position opened, in that order, via `RiskManager.check_and_submit_exit` then `check_and_submit_entry` -- never a direct broker call from strategy code. |
-| STRAT-003 | P0 | `EntrySignal.signal_strength` is optional (defaults to `None`) and, when set, flows unmodified through `BracketOrderRequest` and `RiskManager` into the resulting `SimulatedBroker` `TradeRecord` -- purely descriptive, never read by any risk check. |
-| STRAT-004 | P0 | `SpyMomentumStrategy._enter` sets `EntrySignal.signal_strength` to the entry price's distance past the crossed band edge, normalized by the band's own width (`None` only for the degenerate zero-width-band case). |
 
 ## SPY — SPY intraday momentum ("Noise Area"), docs/STRATEGY_SPEC_SPY.md
 

@@ -31,12 +31,6 @@ class EntrySignal:
     """A per-signal-instance identifier (e.g. strategy+symbol+date+bar index) used to
     build a deterministic client_order_id (EXEC-002) — the same signal retried after a
     crash must produce the same id."""
-    signal_strength: float | None = None
-    """A strategy-defined, normalized measure of this entry's conviction (e.g. how far
-    price broke out relative to the band width) -- None when a strategy doesn't compute
-    one. Purely descriptive: RiskManager never checks or sizes on it. Persisted alongside
-    the order so validation/signal_confidence.py can later bucket closed trades by it and
-    report a backtested win-rate for a given strength range -- never a live guarantee."""
 
 
 @dataclass(frozen=True)

@@ -20,7 +20,7 @@ import pandas as pd
 
 from intraday_trading.backtest.costs import CostModel
 from intraday_trading.backtest.engine import run_backtest
-from intraday_trading.backtest.simulated_broker import SimulatedBroker, TradeRecord
+from intraday_trading.backtest.simulated_broker import SimulatedBroker
 from intraday_trading.config import RiskLimits
 from intraday_trading.data.client import BAR_COLUMNS
 from intraday_trading.risk.risk_manager import RiskManager
@@ -131,23 +131,6 @@ def run_spy_config(
     """Runs one config through the real backtester/RiskManager/SimulatedBroker pipeline
     (BT-007: no shortcut around RiskManager, even for a grid run) and returns its daily
     P&L series."""
-    daily_pnl, _trades = run_spy_config_with_trades(symbol, strategy_config, bars, run_config)
-    return daily_pnl
-
-
-def run_spy_config_with_trades(
-    symbol: str,
-    strategy_config: SpyMomentumConfig,
-    bars: dict[str, list[Bar]],
-    run_config: GridRunConfig,
-) -> tuple[pd.Series, list[TradeRecord]]:
-    """Same run as `run_spy_config`, but also returns the closed trades (with their
-    signal_strength) -- for validation/signal_confidence.py's bucketed win-rate, only
-    ever called for a single fixed, pre-defined config (e.g. the paper_faithful
-    reference), never for every point in the 192-config grid: persisting every grid
-    config's trades into one shared `closed_trades` bucket would mix a well-behaved
-    config's trades with an overfit one's, and CLAUDE.md rule 7 forbids picking a
-    "best" config to persist instead by looking at results."""
     time_box = TimeBox(bars[symbol][0].ts)
     clock = SessionClock(
         calendar=ExchangeCalendar(),
@@ -169,8 +152,7 @@ def run_spy_config_with_trades(
     )
     strategy = SpyMomentumStrategy(symbol=symbol, config=strategy_config)
     result = run_backtest(strategy, bars, risk_manager, broker, time_box)
-    daily_pnl = daily_pnl_from_equity_curve(result.equity_curve, run_config.starting_equity)
-    return daily_pnl, result.trades
+    return daily_pnl_from_equity_curve(result.equity_curve, run_config.starting_equity)
 
 
 def run_and_log_grid(

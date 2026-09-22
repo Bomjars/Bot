@@ -25,21 +25,6 @@ st_autorefresh(interval=8_000, key="live_monitor_refresh")
 
 st.title("Live Monitor")
 
-with st.expander("What do these terms mean?"):
-    st.markdown(
-        "- **HALTED** — the RiskManager (the only code allowed to place orders) has "
-        "stopped trading because a hard risk limit was breached; it will not resume "
-        "until re-enabled below.\n"
-        "- **STALE** — the dashboard couldn't reach the broker just now, so figures on "
-        "this page may be a little out of date. Trading itself isn't necessarily "
-        "affected.\n"
-        "- **Drawdown from peak** — how far current account equity has fallen from its "
-        "highest-ever point, as a percentage.\n"
-        "- **Flatten** — close a position immediately at the market price.\n"
-        "- **Pause entries** — stop opening *new* positions; existing ones are left "
-        "alone (they still get flattened/stopped as normal)."
-    )
-
 risk_state = data.load_risk_state(settings.database_path)
 snapshot = actions.load_live_snapshot(settings)
 
@@ -203,67 +188,15 @@ with st.container(border=True):
                 actions.flatten_one(settings, position.symbol)
                 st.rerun()
 
-# --- Signal confidence (backtest-derived) --------------------------------------
-st.subheader("Signal confidence")
-with st.container(border=True):
-    known_strategies = data.known_strategies(settings.database_path)
-    confidence_tables = {
-        s: data.load_signal_confidence_table(settings.database_path, s) for s in known_strategies
-    }
-    if not known_strategies:
-        st.info(
-            "No strategy has logged any trials yet -- this fills in once a backtest has "
-            "been run (see the Validation Report page)."
-        )
-    else:
-        st.caption(
-            "Backtested win rate by breakout strength, from each strategy's logged "
-            "closed trades -- a historical statistic, not a guarantee for the next "
-            "signal of similar strength (published/backtested edges shrink "
-            "out-of-sample; McLean & Pontiff, 2016)."
-        )
-        for strategy_name, table in confidence_tables.items():
-            n_total = sum(b.n for b in table.buckets)
-            if n_total == 0:
-                continue
-            st.write(f"**{strategy_name}**")
-            rows = [
-                {
-                    "breakout strength": (
-                        f"{b.low:.2f} - {'∞' if b.high == float('inf') else f'{b.high:.2f}'}"
-                    ),
-                    "trades": b.n,
-                    "win rate": f"{b.win_rate:.0%}" if b.win_rate is not None else "n/a",
-                }
-                for b in table.buckets
-            ]
-            st.dataframe(rows, width="stretch", hide_index=True)
-        if all(sum(b.n for b in t.buckets) == 0 for t in confidence_tables.values()):
-            st.info("No closed trades logged yet for any known strategy.")
-
 # --- Activity feed --------------------------------------------------------------
 st.subheader("Activity feed")
 orders = data.load_recent_orders(settings.database_path, limit=20)
 rejections = data.load_recent_rejections(settings.database_path, limit=20)
-
-
-def _order_detail(order: dict[str, object]) -> str:
-    detail = f"{order['side']} {order['qty']} {order['symbol']}"
-    strength = order.get("signal_strength")
-    if strength is None:
-        return detail
-    table = confidence_tables.get(str(order["strategy"]))
-    bucket = table.lookup(float(strength)) if table is not None else None
-    if bucket is None or bucket.win_rate is None:
-        return f"{detail} (strength {float(strength):.2f})"
-    return (
-        f"{detail} (strength {float(strength):.2f}, backtested win rate "
-        f"{bucket.win_rate:.0%}, n={bucket.n})"
-    )
-
-
 feed = sorted(
-    [{"ts": o["ts"], "kind": "order", "detail": _order_detail(o)} for o in orders]
+    [
+        {"ts": o["ts"], "kind": "order", "detail": f"{o['side']} {o['qty']} {o['symbol']}"}
+        for o in orders
+    ]
     + [
         {"ts": r["ts"], "kind": "rejection", "detail": f"{r['symbol']}: {r['reason']}"}
         for r in rejections
@@ -276,7 +209,3 @@ with st.container(border=True):
         st.write("No activity yet.")
     else:
         st.dataframe(feed, width="stretch", hide_index=True)
-        st.caption(
-            "A signal's 'backtested win rate' (when shown) is this strategy's historical "
-            "win rate for breakout signals of similar strength -- not a live guarantee."
-        )

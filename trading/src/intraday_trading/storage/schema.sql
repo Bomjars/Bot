@@ -30,8 +30,7 @@ CREATE TABLE IF NOT EXISTS orders (
     stop_price REAL NOT NULL,
     take_profit_price REAL,
     client_order_id TEXT NOT NULL,
-    broker_order_id TEXT NOT NULL,
-    signal_strength REAL
+    broker_order_id TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS rejections (
@@ -42,29 +41,6 @@ CREATE TABLE IF NOT EXISTS rejections (
     reason TEXT NOT NULL,
     signal_json TEXT NOT NULL
 );
-
--- Closed trades with their originating signal_strength, for
--- validation/signal_confidence.py's bucketed win-rate. Only ever written by a backtest
--- run (backtest/simulated_broker.py's TradeRecord) or dev/demo_data.py's synthetic set --
--- paper/live trading has no exit-persistence path yet (see docs/PLAN.md), so this stays
--- empty for a strategy until a real backtest has actually been run for it.
-CREATE TABLE IF NOT EXISTS closed_trades (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    strategy TEXT NOT NULL,
-    symbol TEXT NOT NULL,
-    side TEXT NOT NULL,
-    qty REAL NOT NULL,
-    entry_price REAL NOT NULL,
-    exit_price REAL NOT NULL,
-    entry_time TEXT NOT NULL,
-    exit_time TEXT NOT NULL,
-    exit_reason TEXT NOT NULL,
-    realized_pnl REAL NOT NULL,
-    total_commission REAL NOT NULL,
-    signal_strength REAL
-);
-
-CREATE INDEX IF NOT EXISTS idx_closed_trades_strategy ON closed_trades (strategy);
 
 -- Trial registry: every parameter combination ever backtested, with its full daily P&L
 -- series. Nothing is ever deleted -- an abandoned run is marked retired, not removed

@@ -19,7 +19,6 @@ from typer.testing import CliRunner
 from intraday_trading import cli
 from intraday_trading.cli import app
 from intraday_trading.data.client import AlpacaMarketDataClient
-from intraday_trading.storage.closed_trade_log import ClosedTradeLog
 from intraday_trading.storage.go_live_checklist_store import GoLiveChecklistStore
 from intraday_trading.strategies.spy_momentum import SpyMomentumConfig
 from intraday_trading.validation.registry import TrialRegistry
@@ -157,11 +156,6 @@ def test_backtest_spy_fetches_runs_the_grid_and_logs_trials(
     registry = TrialRegistry(db_path)
     assert len(registry.get_trials("spy_momentum")) == 3
     assert len(registry.get_trials("spy_momentum_paper_faithful")) == 1
-    # Too little history for the paper_faithful config to ever trade either, so this
-    # proves ClosedTradeLog.log_many ran (see "closed trade(s)" in stdout) without
-    # asserting a trade count that this bar data can't produce.
-    assert "closed trade(s)" in result.stdout
-    assert ClosedTradeLog(db_path).count("spy_momentum") == 0
 
 
 def test_seed_demo_data_writes_to_the_given_path(monkeypatch, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
