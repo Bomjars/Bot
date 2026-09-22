@@ -157,7 +157,7 @@ def test_SPY_04_price_above_band_enters_long_never_short() -> None:
     assert signals[0].side == Side.BUY
 
 
-def test_signal_strength_is_breakout_distance_normalized_by_band_width() -> None:
+def test_STRAT_004_signal_strength_is_breakout_distance_normalized_by_band_width() -> None:
     """Purely descriptive (risk/signals.py's EntrySignal.signal_strength) -- not used by
     any risk check. Verified against the same band the strategy itself computed, since
     the band's exact levels are already covered by SPY-01/02."""

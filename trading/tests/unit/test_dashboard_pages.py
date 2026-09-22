@@ -190,7 +190,7 @@ def test_live_monitor_with_open_position(monkeypatch: pytest.MonkeyPatch, tmp_pa
     assert not at.exception
 
 
-def test_live_monitor_shows_signal_confidence_with_closed_trades(
+def test_DASH_004_live_monitor_shows_signal_confidence_with_closed_trades(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     from intraday_trading.backtest.simulated_broker import TradeRecord

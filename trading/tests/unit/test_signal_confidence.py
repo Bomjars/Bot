@@ -36,7 +36,7 @@ def _trade(signal_strength: float | None, realized_pnl: float) -> TradeRecord:
     )
 
 
-def test_trades_are_sorted_into_the_bucket_their_strength_falls_into() -> None:
+def test_VAL_014_trades_are_sorted_into_the_bucket_their_strength_falls_into() -> None:
     trades = [
         _trade(0.05, realized_pnl=10.0),  # bucket [0, 0.1)
         _trade(0.2, realized_pnl=-5.0),  # bucket [0.1, 0.25)
@@ -67,7 +67,7 @@ def test_win_rate_is_the_fraction_of_winning_trades_in_the_bucket() -> None:
     assert table.buckets[0].win_rate == pytest.approx(0.5)
 
 
-def test_win_rate_is_none_for_an_empty_bucket() -> None:
+def test_VAL_014_win_rate_is_none_for_an_empty_bucket() -> None:
     table = build_confidence_table([])
     assert all(bucket.win_rate is None for bucket in table.buckets)
 
