@@ -344,3 +344,22 @@ def test_no_password_gate_when_unconfigured(
 
     assert not at.exception
     assert any(s.value == "🟢 PAPER" for s in at.sidebar.success)
+
+
+def test_getting_started_is_the_default_page(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """getting_started.py uses st.page_link, which only resolves inside st.navigation --
+    so unlike the other four pages, it can't be smoke-tested by running its file
+    directly (see test_page_renders_without_raising); it's exercised here, through the
+    real entrypoint, the same way a user actually reaches it."""
+    monkeypatch.setenv("DATABASE_PATH", str(tmp_path / "main.db"))
+    monkeypatch.setenv("KILL_SWITCH_FILE", str(tmp_path / "KILL_SWITCH"))
+    _patch_broker(monkeypatch)
+
+    at = AppTest.from_file(str(DASHBOARD_DIR / "main.py"), default_timeout=30)
+    at.run()
+
+    assert not at.exception
+    assert any("Getting Started" in t.value for t in at.title)
+    assert any("Paper trading only" in s.value for s in at.success)
