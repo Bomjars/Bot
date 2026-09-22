@@ -190,6 +190,41 @@ def test_live_monitor_with_open_position(monkeypatch: pytest.MonkeyPatch, tmp_pa
     assert not at.exception
 
 
+def test_live_monitor_shows_signal_confidence_with_closed_trades(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from intraday_trading.backtest.simulated_broker import TradeRecord
+    from intraday_trading.storage.closed_trade_log import ClosedTradeLog
+
+    db_path = tmp_path / "populated.db"
+    _populate_db(db_path)
+    trades = [
+        TradeRecord(
+            symbol="AAPL",
+            side=Side.BUY,
+            qty=10,
+            entry_price=100.0,
+            exit_price=101.0,
+            entry_time=datetime.now(tz=UTC),
+            exit_time=datetime.now(tz=UTC),
+            exit_reason="take_profit",
+            realized_pnl=10.0,
+            total_commission=1.0,
+            signal_strength=0.3,
+        )
+        for _ in range(6)
+    ]
+    ClosedTradeLog(db_path).log_many("orb", trades)
+    monkeypatch.setenv("DATABASE_PATH", str(db_path))
+    _patch_broker(monkeypatch)
+
+    at = AppTest.from_file(str(DASHBOARD_DIR / "pages" / "live_monitor.py"), default_timeout=30)
+    at.run()
+
+    assert not at.exception
+    assert any("orb" in md.value for md in at.markdown)
+
+
 def test_journal_with_orders_and_trials(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     db_path = tmp_path / "populated.db"
     _populate_db(db_path)

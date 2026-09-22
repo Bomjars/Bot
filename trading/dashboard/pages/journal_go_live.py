@@ -28,7 +28,7 @@ with st.expander("What do these terms mean?"):
     st.markdown(
         "- **Reconciliation** — on every restart, the system compares its own record of "
         "open positions/orders against what the broker actually reports, and refuses to "
-        "proceed if they disagree. \"Tested\" means a human deliberately restarted the "
+        'proceed if they disagree. "Tested" means a human deliberately restarted the '
         "paper loop and confirmed this worked.\n"
         "- **Kill switch** — an emergency stop that cancels every open order and closes "
         "every position immediately, from any of three places (CLI, a file flag, or a "

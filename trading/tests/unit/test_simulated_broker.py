@@ -38,9 +38,7 @@ def test_signal_strength_flows_from_request_through_to_the_closed_trade_record()
     t1, t2 = T0, T0 + timedelta(minutes=1)
     broker.process_bar("AAPL", _bar(t1, 100, 100, 100, 100))
     broker.submit_bracket_order(
-        BracketOrderRequest(
-            "id1", "AAPL", Side.BUY, 10, stop_loss_price=95.0, signal_strength=0.42
-        )
+        BracketOrderRequest("id1", "AAPL", Side.BUY, 10, stop_loss_price=95.0, signal_strength=0.42)
     )
 
     broker.process_bar("AAPL", _bar(t2, 100, 100.5, 94.0, 99.0))  # low pierces the stop
