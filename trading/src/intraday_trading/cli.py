@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import sys
 import time
+from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 
@@ -26,6 +27,7 @@ from intraday_trading.golive.gate import evaluate_go_live_gate
 from intraday_trading.killswitch.kill_switch import trip
 from intraday_trading.session.calendar import EXCHANGE_TZ
 from intraday_trading.storage.bar_store import BarStore
+from intraday_trading.storage.closed_trade_log import ClosedTradeLog
 from intraday_trading.storage.go_live_checklist_store import GoLiveChecklistStore
 from intraday_trading.strategies.spy_grid import (
     GridRunConfig,
@@ -33,6 +35,7 @@ from intraday_trading.strategies.spy_grid import (
     house_risk_grid,
     paper_reference_config,
     run_and_log_grid,
+    run_spy_config_with_trades,
 )
 from intraday_trading.validation.registry import TrialRegistry
 
@@ -199,15 +202,23 @@ def backtest_spy(
     typer.echo(
         "Running the paper's own reference config (paper_faithful, for Table 3 comparison)..."
     )
-    paper_trial_ids = run_and_log_grid(
-        "SPY",
-        "spy_momentum_paper_faithful",
-        [paper_reference_config()],
-        bars,
-        paper_run_config,
-        registry,
+    paper_daily_pnl, paper_trades = run_spy_config_with_trades(
+        "SPY", paper_reference_config(), bars, paper_run_config
     )
-    typer.echo(f"Logged {len(paper_trial_ids)} paper_faithful reference trial(s).")
+    registry.log_trial(
+        "spy_momentum_paper_faithful", asdict(paper_reference_config()), paper_daily_pnl
+    )
+    typer.echo("Logged 1 paper_faithful reference trial.")
+
+    # Only this single, pre-defined reference config's trades are persisted -- never the
+    # 192-config grid's, which would mix a well-behaved config's trades with an overfit
+    # one's under the same "spy_momentum" bucket (see run_spy_config_with_trades'
+    # docstring).
+    ClosedTradeLog(settings.database_path).log_many("spy_momentum", paper_trades)
+    typer.echo(
+        f"Logged {len(paper_trades)} closed trade(s) for the signal-confidence bucketed "
+        "win-rate (Validation Report / Live Monitor pages)."
+    )
     typer.echo(
         "Run `intraday-trading golive status --strategies spy_momentum` for the "
         "CSCV/PBO verdict, or open the dashboard's Validation Report page."

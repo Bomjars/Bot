@@ -29,6 +29,7 @@ from intraday_trading.strategies.spy_grid import (
     house_risk_grid,
     paper_reference_config,
     run_and_log_grid,
+    run_spy_config_with_trades,
 )
 from intraday_trading.validation.registry import TrialRegistry
 
@@ -163,6 +164,54 @@ def _synthetic_multiday_bars(symbol: str, n_days: int) -> list[Bar]:
             trading_days += 1
         d = d + timedelta(days=1)
     return bars
+
+
+def test_run_spy_config_with_trades_returns_the_backtests_closed_trades(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`run_spy_config_with_trades` is `run_spy_config` plus `BacktestResult.trades`
+    passed through -- proven here against a stubbed `run_backtest` (real trade
+    generation through RiskManager's position-sizing/leverage checks is exercised by
+    SPY-04..07 in test_spy_momentum.py; that's a strategy-level concern, not this
+    module's wiring)."""
+    from intraday_trading.backtest.engine import BacktestResult
+    from intraday_trading.backtest.simulated_broker import TradeRecord
+    from intraday_trading.broker.base import Side
+    from intraday_trading.strategies import spy_grid as spy_grid_module
+    from intraday_trading.strategies.spy_momentum import SpyMomentumConfig
+
+    symbol = "SPY"
+    bars = {symbol: _synthetic_multiday_bars(symbol, n_days=2)}
+    fake_trade = TradeRecord(
+        symbol=symbol,
+        side=Side.BUY,
+        qty=10,
+        entry_price=100.0,
+        exit_price=99.0,
+        entry_time=bars[symbol][0].ts,
+        exit_time=bars[symbol][-1].ts,
+        exit_reason="stop_loss",
+        realized_pnl=-10.0,
+        total_commission=1.0,
+        signal_strength=0.3,
+    )
+    fake_result = BacktestResult(
+        equity_curve=[(bars[symbol][-1].ts, 99_990.0)], trades=[fake_trade], final_equity=99_990.0
+    )
+    monkeypatch.setattr(spy_grid_module, "run_backtest", lambda *a, **kw: fake_result)
+
+    run_config = GridRunConfig(
+        starting_equity=100_000.0,
+        cost_model=CostModel(),
+        risk_limits=RiskLimits(min_avg_dollar_volume_usd=1.0, min_price_usd=0.01),
+        database_path=tmp_path / "grid.db",
+    )
+    daily_pnl, trades = run_spy_config_with_trades(
+        symbol, SpyMomentumConfig(lookback_days=10, mode="house_risk"), bars, run_config
+    )
+
+    assert trades == [fake_trade]
+    assert not daily_pnl.empty
 
 
 def test_run_and_log_grid_logs_one_trial_per_config(tmp_path: Path) -> None:

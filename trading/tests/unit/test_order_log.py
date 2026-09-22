@@ -2,13 +2,15 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from intraday_trading.broker.base import OrderInfo, Side
 from intraday_trading.risk.signals import EntrySignal
 from intraday_trading.storage.order_log import OrderLog
 
 
-def _signal() -> EntrySignal:
-    return EntrySignal(
+def _signal(**overrides: object) -> EntrySignal:
+    defaults: dict[str, object] = dict(
         strategy="orb",
         symbol="AAPL",
         side=Side.BUY,
@@ -21,6 +23,8 @@ def _signal() -> EntrySignal:
         spread_pct=0.001,
         signal_seq="seq-1",
     )
+    defaults.update(overrides)
+    return EntrySignal(**defaults)  # type: ignore[arg-type]
 
 
 def _order() -> OrderInfo:
@@ -46,6 +50,20 @@ def test_log_and_recent_round_trip(tmp_path: Path) -> None:
     assert rows[0]["symbol"] == "AAPL"
     assert rows[0]["client_order_id"] == "c1"
     assert rows[0]["broker_order_id"] == "b1"
+
+
+def test_signal_strength_is_persisted(tmp_path: Path) -> None:
+    log = OrderLog(tmp_path / "orders.db")
+    log.log(_signal(signal_strength=0.42), _order())
+
+    assert log.recent()[0]["signal_strength"] == pytest.approx(0.42)
+
+
+def test_signal_strength_persists_as_null_when_not_set(tmp_path: Path) -> None:
+    log = OrderLog(tmp_path / "orders.db")
+    log.log(_signal(), _order())
+
+    assert log.recent()[0]["signal_strength"] is None
 
 
 def test_count(tmp_path: Path) -> None:

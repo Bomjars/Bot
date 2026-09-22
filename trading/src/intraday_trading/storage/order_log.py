@@ -27,8 +27,8 @@ class OrderLog:
                 """
                 INSERT INTO orders (
                     ts, strategy, symbol, side, qty, entry_price, stop_price,
-                    take_profit_price, client_order_id, broker_order_id
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    take_profit_price, client_order_id, broker_order_id, signal_strength
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     (ts or datetime.now(tz=UTC)).isoformat(),
@@ -41,6 +41,7 @@ class OrderLog:
                     signal.take_profit_price,
                     order.client_order_id,
                     order.broker_order_id,
+                    signal.signal_strength,
                 ),
             )
             conn.commit()
