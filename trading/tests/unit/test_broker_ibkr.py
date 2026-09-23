@@ -57,6 +57,15 @@ class FakeIB:
     global_cancel_called: int = 0
     current_time: datetime = T0
     qualify_result: list[Contract] | None = None
+    connected: bool = True
+    connect_calls: list[tuple[str, int, int]] = field(default_factory=list)
+
+    def isConnected(self) -> bool:
+        return self.connected
+
+    def connect(self, host: str, port: int, clientId: int = 1) -> None:
+        self.connect_calls.append((host, port, clientId))
+        self.connected = True
 
     def qualifyContracts(self, *contracts: Contract) -> list[Contract]:
         if self.qualify_result is not None:
@@ -113,6 +122,32 @@ def test_SAFE_004_live_requires_live_trading_true() -> None:
         assert "live_trading=True" in str(exc)
     else:
         raise AssertionError("expected a ValueError")
+
+
+def test_is_connected_reflects_the_underlying_ib_client() -> None:
+    broker, fake = _broker()
+    assert broker.is_connected() is True
+    fake.connected = False
+    assert broker.is_connected() is False
+
+
+def test_reconnect_redials_with_the_original_paper_connection_parameters() -> None:
+    fake = FakeIB(connected=False)
+    broker = IBKRBroker(fake, host="127.0.0.1", port=4002, client_id=7)  # type: ignore[arg-type]
+
+    broker.reconnect()
+
+    assert fake.connect_calls == [("127.0.0.1", 4002, 7)]
+    assert broker.is_connected() is True
+
+
+def test_reconnect_is_a_no_op_when_already_connected() -> None:
+    fake = FakeIB(connected=True)
+    broker = IBKRBroker(fake, host="127.0.0.1", port=4002, client_id=1)  # type: ignore[arg-type]
+
+    broker.reconnect()
+
+    assert fake.connect_calls == []
 
 
 def test_EXEC_001_bracket_order_always_carries_stop_loss() -> None:

@@ -184,6 +184,16 @@ class RiskManager:
             return self._reject(signal, "leverage_exceeded")
 
         client_order_id = make_client_order_id(signal.strategy, signal.symbol, signal.signal_seq)
+        if (
+            self._order_log is not None
+            and self._order_log.find_by_client_order_id(client_order_id) is not None
+        ):
+            # RISK-028: the same signal retried after a crash-and-restart produces the
+            # same deterministic client_order_id (EXEC-002) -- resubmitting it here
+            # would risk a duplicate live order rather than relying on the broker to
+            # reject it (which not every broker/order type guarantees).
+            return self._reject(signal, "duplicate_client_order_id")
+
         request = BracketOrderRequest(
             client_order_id=client_order_id,
             symbol=signal.symbol,

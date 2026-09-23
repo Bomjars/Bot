@@ -62,6 +62,8 @@ class PaperTradingLoop:
         poll_retry_base_delay_seconds: float = 1.0,
         sleep: Callable[[float], None] = lambda _seconds: None,
         error_log: ErrorLog | None = None,
+        connection_guard: Callable[[], None] | None = None,
+        fill_poller: Callable[[], None] | None = None,
     ) -> None:
         self._strategies = strategies
         self._data_feed = data_feed
@@ -76,6 +78,18 @@ class PaperTradingLoop:
         self._poll_retry_base_delay_seconds = poll_retry_base_delay_seconds
         self._sleep = sleep
         self._error_log = error_log
+        self._connection_guard = connection_guard
+        """Broker-specific "am I still connected, and if not, reconnect (with
+        backoff)" check -- e.g. IBKR's persistent socket connection needs this; Alpaca's
+        stateless REST calls don't, so wiring only ever sets this for IBKR. Raising
+        (e.g. retries exhausted) propagates into `run_once()`'s own catch-all, which
+        logs/alerts and skips the rest of this tick -- "no new orders" falls out of that
+        for free, rather than needing its own special case here."""
+        self._fill_poller = fill_poller
+        """Broker-specific "drain any newly-completed fills into storage" step -- e.g.
+        IBKRBroker.poll_fills() plus execution/fill_recorder.py's record_fill(), wrapped
+        into a single closure by wiring.py so this module never needs to import an
+        IBKR-specific type. None for Alpaca, whose REST fills are already synchronous."""
         self._history: dict[str, list[Bar]] = defaultdict(list)
         self._last_summary_date: date | None = None
 
@@ -94,6 +108,12 @@ class PaperTradingLoop:
             self._alerter.alert("Unhandled error in the paper-trading loop -- see logs.")
 
     def _run_once_unsafe(self) -> None:
+        if self._connection_guard is not None:
+            self._connection_guard()
+
+        if self._fill_poller is not None:
+            self._fill_poller()
+
         if is_kill_file_present(self._kill_switch_file):
             trip(self._risk_manager, "kill switch file detected")
             self._alerter.alert(

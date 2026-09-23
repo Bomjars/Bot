@@ -627,6 +627,44 @@ def test_no_order_logged_when_entry_is_rejected(tmp_path: Path) -> None:
     assert order_log.count() == 0
 
 
+def test_RISK_028_reject_duplicate_client_order_id(tmp_path: Path) -> None:
+    db = tmp_path / "risk.db"
+    broker = FakeBroker()
+    order_log = OrderLog(db)
+    manager = RiskManager(
+        broker=broker,
+        limits=RiskLimits(),
+        clock=_clock(),
+        state_store=RiskStateStore(db),
+        rejection_log=RejectionLog(db),
+        order_log=order_log,
+    )
+    manager.begin_session()
+    signal = _signal()  # same signal_seq both times -> same deterministic client_order_id
+
+    first = manager.check_and_submit_entry(signal)
+    second = manager.check_and_submit_entry(signal)
+
+    assert first.accepted is True
+    assert second.accepted is False
+    assert second.reason == "duplicate_client_order_id"
+    assert len(broker.submitted_orders) == 1  # the retry never reached the broker
+
+
+def test_duplicate_check_is_skipped_when_no_order_log_is_configured(tmp_path: Path) -> None:
+    # Mirrors existing behaviour for every other order_log-gated feature (e.g.
+    # position_records): RiskManager still works, just without this protection, when
+    # constructed without one (as most tests in this file deliberately do).
+    manager, broker = _manager(tmp_path)
+    signal = _signal()
+
+    manager.check_and_submit_entry(signal)
+    second = manager.check_and_submit_entry(signal)
+
+    assert second.accepted is True
+    assert len(broker.submitted_orders) == 2
+
+
 def test_flatten_one_closes_only_the_given_symbol(tmp_path: Path) -> None:
     broker = FakeBroker(
         positions=[

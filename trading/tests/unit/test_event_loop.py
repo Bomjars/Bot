@@ -81,6 +81,8 @@ def _setup(
     now_provider: Callable[[], datetime] | None = None,
     limits: RiskLimits | None = None,
     error_log: ErrorLog | None = None,
+    connection_guard: Callable[[], None] | None = None,
+    fill_poller: Callable[[], None] | None = None,
 ):
     db = tmp_path / "loop.db"
     time_box = TimeBox(T0)
@@ -116,6 +118,8 @@ def _setup(
         broker_clock_provider=broker_clock_provider,
         sleep=lambda _seconds: None,
         error_log=error_log,
+        connection_guard=connection_guard,
+        fill_poller=fill_poller,
     )
     return loop, broker, risk_manager, alerter, time_box
 
@@ -380,3 +384,57 @@ def test_unhandled_error_not_persisted_when_no_error_log_configured(tmp_path: Pa
 
     assert any("Unhandled error" in a for a in alerter.alerts)
     assert ErrorLog(tmp_path / "loop.db").count_last_days(1) == 0
+
+
+def test_connection_guard_is_called_every_tick_when_configured(tmp_path: Path) -> None:
+    calls = []
+    loop, _, _, _, _ = _setup(tmp_path, connection_guard=lambda: calls.append(1))
+    loop.startup()
+
+    loop.run_once()
+    loop.run_once()
+
+    assert len(calls) == 2
+
+
+def test_connection_guard_failure_alerts_and_skips_the_rest_of_the_tick(tmp_path: Path) -> None:
+    class BrokenStrategy:
+        name = "broken"
+
+        def on_bar(self, symbol: str, bar: Bar, context: StrategyContext) -> list[EntrySignal]:
+            raise AssertionError("should never be reached -- connection guard must skip this")
+
+    def failing_guard() -> None:
+        raise RuntimeError("IB Gateway unreachable after retries")
+
+    bar = _bar(T0)
+    loop, _, _, alerter, _ = _setup(
+        tmp_path,
+        strategies=[BrokenStrategy()],  # type: ignore[list-item]
+        feed_responses=[{"AAPL": bar}],
+        connection_guard=failing_guard,
+    )
+    loop.startup()
+
+    loop.run_once()  # must not raise -- falls into the same unhandled-error alert path
+
+    assert any("Unhandled error" in a for a in alerter.alerts)
+
+
+def test_fill_poller_is_called_every_tick_when_configured(tmp_path: Path) -> None:
+    calls = []
+    loop, _, _, _, _ = _setup(tmp_path, fill_poller=lambda: calls.append(1))
+    loop.startup()
+
+    loop.run_once()
+    loop.run_once()
+
+    assert len(calls) == 2
+
+
+def test_no_connection_guard_or_fill_poller_by_default(tmp_path: Path) -> None:
+    # Alpaca wiring passes neither -- confirms the loop runs fine without them.
+    loop, _, _, alerter, _ = _setup(tmp_path)
+    loop.startup()
+    loop.run_once()
+    assert alerter.alerts == []

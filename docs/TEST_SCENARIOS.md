@@ -68,6 +68,7 @@ section; never renumber.
 | RISK-025 | P1 | A partially filled entry (e.g. 60% filled) is risk-checked using the filled quantity, not the requested quantity, when computing current exposure for subsequent orders. |
 | RISK-026 | P0 | When `RiskLimits.cash_account_only` is true, an order whose notional exceeds the broker's reported cash is rejected, independent of `max_leverage`/`max_position_pct_of_equity` -- no margin/borrowed buying power is ever used. |
 | RISK-027 | P0 | An order whose `EntrySignal.currency` is not in `RiskLimits.allowed_currencies` is rejected (default excludes non-USD instruments, e.g. GBP-denominated UK-listed shares -- avoids UK stamp duty and keeps the bot US-only until explicitly reconfigured). |
+| RISK-028 | P0 | An entry whose deterministic `client_order_id` (EXEC-002) already exists in `OrderLog` -- the same signal resubmitted after a crash-and-restart -- is rejected before it ever reaches the broker, rather than risking a duplicate order. |
 
 ## EXEC — execution engine / broker adapter
 

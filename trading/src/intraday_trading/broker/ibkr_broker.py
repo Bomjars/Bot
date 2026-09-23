@@ -100,8 +100,13 @@ def _account_value(values: list[AccountValue], tag: str) -> float | None:
 
 
 class IBKRBroker:
-    def __init__(self, ib: IB) -> None:
+    def __init__(
+        self, ib: IB, host: str = "127.0.0.1", port: int = 4002, client_id: int = 1
+    ) -> None:
         self._ib = ib
+        self._host = host
+        self._port = port
+        self._client_id = client_id
         self._calendar = ExchangeCalendar()
         self._seen_exec_ids: set[str] = set()
 
@@ -111,7 +116,7 @@ class IBKRBroker:
         always `ibkr_port` (default 4002). There is no live path here; see `.live()`."""
         ib = IB()
         ib.connect(settings.ibkr_host, settings.ibkr_port, clientId=settings.ibkr_client_id)
-        return cls(ib)
+        return cls(ib, settings.ibkr_host, settings.ibkr_port, settings.ibkr_client_id)
 
     @classmethod
     def live(cls, settings: Settings) -> IBKRBroker:
@@ -125,7 +130,19 @@ class IBKRBroker:
             )
         ib = IB()
         ib.connect(settings.ibkr_host, settings.ibkr_live_port, clientId=settings.ibkr_client_id)
-        return cls(ib)
+        return cls(ib, settings.ibkr_host, settings.ibkr_live_port, settings.ibkr_client_id)
+
+    def is_connected(self) -> bool:
+        return bool(self._ib.isConnected())
+
+    def reconnect(self) -> None:
+        """Re-dials with the same host/port/clientId this instance was constructed
+        with (paper or live, whichever it already was) -- a no-op if already
+        connected. Callers should wrap this in `execution/reconnect.py`'s
+        `retry_with_backoff` rather than call it bare, since a dropped Gateway may take
+        a few attempts to come back."""
+        if not self.is_connected():
+            self._ib.connect(self._host, self._port, clientId=self._client_id)
 
     def get_account(self) -> AccountInfo:
         values = self._ib.accountSummary()
