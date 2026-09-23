@@ -280,3 +280,14 @@ def test_SPY_12_paper_reference_config_trades_under_its_own_limits() -> None:
     daily_pnl = run_spy_config("SPY", paper_reference_config(), bars, run_config)
 
     assert (daily_pnl != 0).sum() > 5
+
+
+def test_BT_010_paper_cost_model_is_exactly_the_specs_per_share_costs() -> None:
+    from intraday_trading.broker.base import Side
+    from intraday_trading.strategies.spy_grid import paper_cost_model
+
+    costs = paper_cost_model()
+
+    assert costs.fill_price(Side.BUY, 450.0) == pytest.approx(450.001)
+    assert costs.fill_price(Side.SELL, 450.0) == pytest.approx(449.999)
+    assert costs.commission(100) == pytest.approx(0.35)

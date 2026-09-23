@@ -93,9 +93,25 @@ def paper_faithful_risk_limits(base: RiskLimits) -> RiskLimits:
             "weekly_loss_limit_pct": 1.0,
             "drawdown_circuit_breaker_pct": 1.0,
             "cash_account_only": False,
-            "flatten_before_close_minutes": 0,
+            # 1, not 0: a 0-minute flatten only fires on a 16:00 bar, and regular-session
+            # minute bars end at 15:59 -- so it never fired and positions were carried
+            # overnight, which the paper never does. The 15:59 bar's close is the close.
+            "flatten_before_close_minutes": 1,
             "no_entry_last_minutes": 0,
         }
+    )
+
+
+def paper_cost_model() -> CostModel:
+    """Spec §5's costs exactly: $0.0035/share commission and $0.001/share slippage, and
+    nothing else. CostModel's own defaults add 5 bps slippage + 2 bps spread per fill
+    (~$0.27/share on a $450 SPY, ~50x the paper's figure); leaving those on silently
+    made the first real grid run cost-bound (BT-010)."""
+    return CostModel(
+        commission_per_share=0.0035,
+        slippage_per_share=0.001,
+        slippage_bps=0.0,
+        spread_bps=0.0,
     )
 
 
@@ -163,8 +179,9 @@ def run_spy_config(
     and nothing touches the real trading database's risk state. `calendar` can be shared
     across runs (it only caches immutable exchange sessions)."""
     time_box = TimeBox(bars[symbol][0].ts)
+    clock_calendar = calendar if calendar is not None else ExchangeCalendar()
     clock = SessionClock(
-        calendar=calendar if calendar is not None else ExchangeCalendar(),
+        calendar=clock_calendar,
         no_entry_first_minutes=run_config.risk_limits.no_entry_first_minutes,
         no_entry_last_minutes=run_config.risk_limits.no_entry_last_minutes,
         flatten_before_close_minutes=run_config.risk_limits.flatten_before_close_minutes,
@@ -182,7 +199,10 @@ def run_spy_config(
         leveraged_etf_symbols=run_config.leveraged_etf_symbols,
     )
     strategy = SpyMomentumStrategy(
-        symbol=symbol, config=strategy_config, risk_limits=run_config.risk_limits
+        symbol=symbol,
+        config=strategy_config,
+        risk_limits=run_config.risk_limits,
+        calendar=clock_calendar,
     )
     result = run_backtest(strategy, bars, risk_manager, broker, time_box)
     return daily_pnl_from_equity_curve(result.equity_curve, run_config.starting_equity)

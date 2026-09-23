@@ -449,3 +449,61 @@ def test_SPY_12_a_default_limits_backtest_actually_trades() -> None:
     daily_pnl = run_spy_config(SYMBOL, SpyMomentumConfig(lookback_days=10), bars, run_config)
 
     assert (daily_pnl != 0).sum() > 5
+
+
+def test_SPY_13_extended_hours_and_holiday_bars_are_ignored() -> None:
+    strategy = _strategy()
+    day = date(2024, 1, 2)
+    premarket = _bar(day, 4, 0, 470.0)
+    session_open = _bar(day, 9, 30, 475.0)
+    after_hours = _bar(day, 17, 0, 480.0)
+    holiday = _bar(date(2024, 1, 15), 10, 0, 490.0)  # Martin Luther King Jr. Day
+
+    for bar in (premarket, session_open, after_hours, holiday):
+        assert strategy.on_bar(SYMBOL, bar, _context(bar.ts)) == []
+
+    assert strategy._day is not None
+    assert strategy._day.session_open == 475.0  # not the 04:00 pre-market price
+    assert strategy._day.last_close == 475.0  # after-hours/holiday bars never counted
+    assert strategy._day.vwap_den == session_open.volume
+
+
+def test_SPY_14_paper_faithful_run_never_holds_overnight() -> None:
+    from intraday_trading.storage.rejection_log import InMemoryRejectionLog
+    from intraday_trading.storage.risk_state_store import InMemoryRiskStateStore
+    from intraday_trading.strategies.spy_grid import (
+        paper_cost_model,
+        paper_faithful_risk_limits,
+        paper_reference_config,
+    )
+
+    bars = {SYMBOL: _random_walk_bars(n_days=40, seed=11)}
+    limits = paper_faithful_risk_limits(RiskLimits())
+    time_box = TimeBox(bars[SYMBOL][0].ts)
+    clock = SessionClock(
+        calendar=ExchangeCalendar(),
+        no_entry_first_minutes=limits.no_entry_first_minutes,
+        no_entry_last_minutes=limits.no_entry_last_minutes,
+        flatten_before_close_minutes=limits.flatten_before_close_minutes,
+        now_provider=time_box,
+    )
+    broker = SimulatedBroker(starting_equity=100_000.0, cost_model=paper_cost_model())
+    risk_manager = RiskManager(
+        broker=broker,
+        limits=limits,
+        clock=clock,
+        state_store=InMemoryRiskStateStore(),
+        rejection_log=InMemoryRejectionLog(),
+    )
+    strategy = SpyMomentumStrategy(
+        symbol=SYMBOL, config=paper_reference_config(), risk_limits=limits
+    )
+
+    result = run_backtest(strategy, bars, risk_manager, broker, time_box)
+
+    assert len(result.trades) > 5
+    for trade in result.trades:
+        entry = trade.entry_time.astimezone(EXCHANGE_TZ)
+        exit_ = trade.exit_time.astimezone(EXCHANGE_TZ)
+        assert entry.date() == exit_.date(), trade
+    assert broker.get_positions() == []

@@ -537,3 +537,28 @@ def test_backtest_retire_requires_a_reason(monkeypatch: pytest.MonkeyPatch, tmp_
     _summary_env(monkeypatch, tmp_path / "retire.db")
     result = runner.invoke(app, ["backtest", "retire", "--strategy", "spy_momentum"])
     assert result.exit_code != 0
+
+
+def test_backtest_spy_reference_only_skips_the_grid(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    db_path = tmp_path / "backtest.db"
+    monkeypatch.setenv("ALPACA_API_KEY", "fake")
+    monkeypatch.setenv("ALPACA_SECRET_KEY", "fake")
+    monkeypatch.setenv("DATABASE_PATH", str(db_path))
+    monkeypatch.setattr(
+        AlpacaMarketDataClient,
+        "from_settings",
+        classmethod(lambda cls, settings: cls(_FakeHistoricalDataClient(_one_day_spy_bars()))),
+    )
+
+    result = runner.invoke(
+        app,
+        ["backtest", "spy", "--start", "2024-01-02", "--end", "2024-01-03", "--reference-only"],
+    )
+
+    assert result.exit_code == 0, result.stdout
+    assert "skipping the house_risk grid" in result.stdout
+    registry = TrialRegistry(db_path)
+    assert registry.trial_count("spy_momentum") == 0
+    assert registry.trial_count("spy_momentum_paper_faithful") == 1

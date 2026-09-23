@@ -139,6 +139,7 @@ section; never renumber.
 | BT-007 | P0 | The backtester enforces the same RiskManager limits as live (same class, same config) — a backtest is not allowed to exceed `max_open_positions` etc. |
 | BT-008 | P0 | Every backtest run (each grid config) starts from its own fresh RiskManager state: no halt, peak equity, or daily/weekly baseline from an earlier run carries into a later one, and a backtest never reads or writes the real trading database's `risk_state` or `rejections` tables. |
 | BT-009 | P1 | `backtest summary` reports, from the trial registry alone, the CSCV/PBO verdict, how many grid configs were profitable, the best config's return/drawdown/Sharpe/activity, the same figures for buy-and-hold over the same dates, and the paper_faithful run beside the paper's Table 3 — and warns when trials from more than one backtest date range are mixed together. |
+| BT-010 | P0 | The SPY grid's cost model is exactly the spec's (§5): $0.0035/share commission and $0.001/share slippage, with no bps-based slippage or spread added on top by CostModel's defaults. |
 
 ## VAL — validation (CSCV/PBO, PSR, MinTRL, DSR, trial registry)
 
@@ -209,6 +210,8 @@ section; never renumber.
 | SPY-10 | P0 | Given fewer than the configured `lookback_days` of prior history, no signals are emitted, and the gap is logged as insufficient history. |
 | SPY-11 | P1 | Given the paper's own settings, dates, and costs, backtest results land within a stated tolerance of the paper's Table 3; any gap is explained, not hidden (xfail/skip with a clear message if real historical data isn't available in this environment). |
 | SPY-12 | P0 | Given the RiskLimits its RiskManager enforces, every entry is sized down to fit max risk per trade, max position % of equity and max leverage — so a full backtest with the default limits on realistic bars actually trades, instead of every entry being rejected. |
+| SPY-13 | P0 | Pre-market, after-hours and holiday bars are ignored: the session open, VWAP and decision closes come from regular-session bars only (Alpaca's minute bars include extended-hours trading). |
+| SPY-14 | P0 | The paper_faithful run is flat at every session close too — every trade exits on the day it was entered (a 0-minute flatten never fired on 15:59-ending data and carried positions overnight). |
 
 ## GOLIVE — go-live gate
 

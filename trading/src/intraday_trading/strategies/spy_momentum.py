@@ -48,7 +48,7 @@ import structlog
 from intraday_trading.broker.base import Side
 from intraday_trading.config import RiskLimits
 from intraday_trading.risk.signals import EntrySignal, ExitSignal
-from intraday_trading.session.calendar import EXCHANGE_TZ
+from intraday_trading.session.calendar import EXCHANGE_TZ, ExchangeCalendar
 from intraday_trading.sizing.position_sizer import compute_target_size
 from intraday_trading.strategies.base import Bar, StrategyContext
 
@@ -146,6 +146,7 @@ class SpyMomentumStrategy:
         config: SpyMomentumConfig,
         name: str = "spy_momentum",
         risk_limits: RiskLimits | None = None,
+        calendar: ExchangeCalendar | None = None,
     ) -> None:
         """`risk_limits` should be the same limits the RiskManager checking this
         strategy's signals uses (SPY-12): each entry is then sized down to fit them, so
@@ -156,6 +157,7 @@ class SpyMomentumStrategy:
         self.symbol = symbol
         self._config = config
         self._risk_limits = risk_limits
+        self._calendar = calendar if calendar is not None else ExchangeCalendar()
         self._grid = _decision_grid(config.decision_interval_minutes)
         self._days: deque[_CompletedDay] = deque(
             maxlen=max(config.lookback_days, SIZING_LOOKBACK_DAYS) + 1
@@ -170,6 +172,12 @@ class SpyMomentumStrategy:
             return []
 
         local = bar.ts.astimezone(EXCHANGE_TZ)
+        session = self._calendar.session_for_date(local.date())
+        if session is None or not session.open <= local < session.close:
+            # SPY-13: Alpaca's minute bars include pre-market (from 04:00) and after-hours
+            # trading. The paper's "open", VWAP and decision closes are regular-session
+            # only -- a 04:00 bar must never become today's session open.
+            return []
         self._maybe_roll_day(local.date(), bar)
         day = self._day
         assert day is not None

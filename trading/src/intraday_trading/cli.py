@@ -22,7 +22,6 @@ import structlog
 import typer
 
 from intraday_trading.alerting.telegram import TelegramAlerter
-from intraday_trading.backtest.costs import CostModel
 from intraday_trading.broker.ibkr_broker import IBKRBroker
 from intraday_trading.config import load_settings
 from intraday_trading.data.client import AlpacaMarketDataClient
@@ -47,6 +46,7 @@ from intraday_trading.strategies.spy_grid import (
     GridRunConfig,
     bars_from_dataframe,
     house_risk_grid,
+    paper_cost_model,
     paper_faithful_risk_limits,
     paper_reference_config,
     run_and_log_grid,
@@ -235,6 +235,11 @@ def backtest_spy(
     starting_equity: float = typer.Option(
         100_000.0, help="Starting equity (USD) for each backtest run in the grid"
     ),
+    reference_only: bool = typer.Option(
+        False,
+        help="Only run the paper's own reference config (a few minutes) -- a quick "
+        "replication check before committing hours to the full grid",
+    ),
 ) -> None:
     """Fetch real SPY minute bars for [start, end) via Alpaca, run the full 192-config
     house_risk grid (docs/STRATEGY_SPEC_SPY.md §8) plus the paper's own reference config,
@@ -265,27 +270,30 @@ def backtest_spy(
     structlog.configure(wrapper_class=structlog.make_filtering_bound_logger(logging.WARNING))
     try:
         registry = TrialRegistry(settings.database_path)
-        # Spec §5's own cost assumptions: $0.0035/share commission, $0.001/share slippage,
-        # no separate bps-based spread (the paper's own reported figures already fold it in).
-        cost_model = CostModel(commission_per_share=0.0035, slippage_per_share=0.001)
+        cost_model = paper_cost_model()  # spec §5's costs exactly (BT-010)
 
         house_risk_run_config = GridRunConfig(
             starting_equity=starting_equity,
             cost_model=cost_model,
             risk_limits=settings.risk,
         )
-        grid = house_risk_grid()
-        typer.echo(f"Running {len(grid)} house_risk configs (this is the go-live decision grid)...")
-        trial_ids = run_and_log_grid(
-            "SPY",
-            "spy_momentum",
-            grid,
-            bars,
-            house_risk_run_config,
-            registry,
-            on_progress=_echo_grid_progress,
-        )
-        typer.echo(f"Logged {len(trial_ids)} trials under strategy=spy_momentum.")
+        if reference_only:
+            typer.echo("--reference-only: skipping the house_risk grid.")
+        else:
+            grid = house_risk_grid()
+            typer.echo(
+                f"Running {len(grid)} house_risk configs (this is the go-live decision grid)..."
+            )
+            trial_ids = run_and_log_grid(
+                "SPY",
+                "spy_momentum",
+                grid,
+                bars,
+                house_risk_run_config,
+                registry,
+                on_progress=_echo_grid_progress,
+            )
+            typer.echo(f"Logged {len(trial_ids)} trials under strategy=spy_momentum.")
 
         paper_faithful_limits = paper_faithful_risk_limits(settings.risk)
         paper_run_config = GridRunConfig(
