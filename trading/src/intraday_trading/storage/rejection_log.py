@@ -46,3 +46,18 @@ class RejectionLog:
             return int(row["n"])
         finally:
             conn.close()
+
+
+class InMemoryRejectionLog(RejectionLog):
+    """Same interface, no database: for backtests, whose historical rejections must
+    never land in the real `rejections` table the dashboard's Live Monitor reads (they'd
+    carry today's wall-clock timestamp and look like live rejections)."""
+
+    def __init__(self) -> None:
+        self.reasons: list[str] = []
+
+    def log(self, signal: EntrySignal, reason: str) -> None:
+        self.reasons.append(reason)
+
+    def count(self) -> int:
+        return len(self.reasons)

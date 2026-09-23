@@ -295,9 +295,58 @@ def test_backtest_spy_fetches_runs_the_grid_and_logs_trials(
     assert "Logged 3 trials under strategy=spy_momentum" in result.stdout
     assert "Logged 1 paper_faithful reference trial" in result.stdout
 
+    assert "[3/3] vm=1.0 lookback=20d" in result.stdout  # per-config progress
+
     registry = TrialRegistry(db_path)
     assert len(registry.get_trials("spy_momentum")) == 3
     assert len(registry.get_trials("spy_momentum_paper_faithful")) == 1
+
+
+def test_BT_008_backtest_spy_leaves_real_risk_state_and_log_config_alone(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The paper bot's real risk state must survive a backtest byte-for-byte (the grid
+    used to share -- and overwrite -- the real risk_state row: its trading day, baselines
+    and peak equity), no backtest rejection may land in the real rejections table, and
+    quieting info logs must not outlive the command."""
+    import sqlite3
+    from datetime import date
+
+    import structlog
+
+    from intraday_trading.storage.risk_state_store import RiskState, RiskStateStore
+
+    db_path = tmp_path / "backtest.db"
+    real_state = RiskState(
+        trading_day=date(2026, 9, 22),
+        daily_starting_equity=10_000.0,
+        week_start=date(2026, 9, 21),
+        weekly_starting_equity=10_000.0,
+        peak_equity=10_000.0,
+        trades_today=2,
+    )
+    RiskStateStore(db_path).save(real_state)
+    monkeypatch.setenv("ALPACA_API_KEY", "fake")
+    monkeypatch.setenv("ALPACA_SECRET_KEY", "fake")
+    monkeypatch.setenv("DATABASE_PATH", str(db_path))
+    monkeypatch.setattr(
+        AlpacaMarketDataClient,
+        "from_settings",
+        classmethod(lambda cls, settings: cls(_FakeHistoricalDataClient(_one_day_spy_bars()))),
+    )
+    monkeypatch.setattr(cli, "house_risk_grid", lambda: [SpyMomentumConfig(lookback_days=10)])
+    log_config_before = structlog.get_config()
+
+    result = runner.invoke(app, ["backtest", "spy", "--start", "2024-01-02", "--end", "2024-01-03"])
+
+    assert result.exit_code == 0, result.stdout
+    assert RiskStateStore(db_path).load() == real_state
+    conn = sqlite3.connect(db_path)
+    try:
+        assert conn.execute("SELECT COUNT(*) FROM rejections").fetchone()[0] == 0
+    finally:
+        conn.close()
+    assert structlog.get_config() == log_config_before
 
 
 def test_seed_demo_data_writes_to_the_given_path(monkeypatch, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]

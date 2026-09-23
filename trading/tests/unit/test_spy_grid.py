@@ -184,7 +184,6 @@ def test_run_and_log_grid_logs_one_trial_per_config(tmp_path: Path) -> None:
         starting_equity=100_000.0,
         cost_model=CostModel(),
         risk_limits=RiskLimits(min_avg_dollar_volume_usd=1.0, min_price_usd=0.01),
-        database_path=db_path,
     )
     registry = TrialRegistry(db_path)
 
@@ -197,3 +196,55 @@ def test_run_and_log_grid_logs_one_trial_per_config(tmp_path: Path) -> None:
     matrix = registry.daily_pnl_matrix("spy_momentum")
     assert matrix.shape[1] == 2
     assert len(matrix) > 0
+
+
+def test_BT_008_each_grid_run_starts_from_fresh_risk_state(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A DRAWDOWN halt (and peak equity) from one config must not leak into the next --
+    previously every run shared the real DB's single risk_state row, so one early
+    config halting silently stopped every later config from ever trading."""
+    import intraday_trading.strategies.spy_grid as spy_grid
+    from intraday_trading.backtest.engine import run_backtest as real_run_backtest
+    from intraday_trading.strategies.spy_momentum import SpyMomentumConfig
+
+    seen_halted_at_start: list[bool] = []
+
+    def _spy_run_backtest(strategy, bars, risk_manager, broker, time_box):  # type: ignore[no-untyped-def]
+        seen_halted_at_start.append(risk_manager.is_halted())
+        result = real_run_backtest(strategy, bars, risk_manager, broker, time_box)
+        risk_manager.trip_kill_switch("first run halts itself")
+        return result
+
+    monkeypatch.setattr(spy_grid, "run_backtest", _spy_run_backtest)
+    symbol = "SPY"
+    bars = {symbol: _synthetic_multiday_bars(symbol, n_days=3)}
+    run_config = GridRunConfig(
+        starting_equity=100_000.0, cost_model=CostModel(), risk_limits=RiskLimits()
+    )
+    config = SpyMomentumConfig(lookback_days=10, sizing="fixed_notional", mode="house_risk")
+
+    spy_grid.run_spy_config(symbol, config, bars, run_config)
+    spy_grid.run_spy_config(symbol, config, bars, run_config)
+
+    assert seen_halted_at_start == [False, False]
+
+
+def test_BT_008_grid_run_never_touches_the_trading_database(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from intraday_trading.strategies.spy_momentum import SpyMomentumConfig
+
+    monkeypatch.chdir(tmp_path)  # any stray relative-path DB would land here
+    symbol = "SPY"
+    bars = {symbol: _synthetic_multiday_bars(symbol, n_days=3)}
+    run_config = GridRunConfig(
+        starting_equity=100_000.0, cost_model=CostModel(), risk_limits=RiskLimits()
+    )
+    config = SpyMomentumConfig(lookback_days=10, sizing="fixed_notional", mode="house_risk")
+
+    run_and_log_grid(
+        symbol, "spy_momentum", [config], bars, run_config, TrialRegistry(tmp_path / "t.db")
+    )
+
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["t.db"]

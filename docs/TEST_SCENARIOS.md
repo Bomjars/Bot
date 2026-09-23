@@ -137,6 +137,7 @@ section; never renumber.
 | BT-005 | P0 | Backtest equity curve construction never uses a bar's close to decide an action that, per the strategy's own rules, could only be decided using data available earlier in that same bar (no intrabar look-ahead). |
 | BT-006 | P0 | A backtest run is fully deterministic given the same inputs and config (same trades, same P&L, byte-identical trial registry row) across two runs. |
 | BT-007 | P0 | The backtester enforces the same RiskManager limits as live (same class, same config) — a backtest is not allowed to exceed `max_open_positions` etc. |
+| BT-008 | P0 | Every backtest run (each grid config) starts from its own fresh RiskManager state: no halt, peak equity, or daily/weekly baseline from an earlier run carries into a later one, and a backtest never reads or writes the real trading database's `risk_state` or `rejections` tables. |
 
 ## VAL — validation (CSCV/PBO, PSR, MinTRL, DSR, trial registry)
 

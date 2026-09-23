@@ -135,6 +135,13 @@ uv run intraday-trading report daily --symbol SPY --notify
 uv run intraday-trading backtest spy --start 2015-01-01 --end 2024-05-01
 ```
 
+Budget roughly 2–3 hours for that full 2015–2024 range (about 50–60 µs per bar per
+config, measured; your PC may differ). It prints one `[n/192]` line per finished config.
+Try a short range first (e.g. `--start 2024-01-01 --end 2024-05-01`, a few minutes) to
+check your keys and the pipeline. Each config runs with its own fresh, in-memory risk
+state (BT-008), so a backtest never reads or changes the paper bot's real halt state or
+rejection log in `data\trading.db`. It only adds bars and trial-registry rows.
+
 ```powershell
 uv run intraday-trading golive status --strategies spy_momentum       # every check + verdict
 uv run intraday-trading golive mark-kill-switch-tested                # after running the drill in paper

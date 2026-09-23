@@ -6,7 +6,7 @@ only covers RiskManager's own bookkeeping, not position state.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date
 from pathlib import Path
 
@@ -88,3 +88,19 @@ class RiskStateStore:
             conn.commit()
         finally:
             conn.close()
+
+
+class InMemoryRiskStateStore(RiskStateStore):
+    """Same interface, no database: for backtests, where each run must start from a
+    fresh RiskState of its own. Sharing the real store's single `risk_state` row let one
+    grid config's peak equity or DRAWDOWN halt leak into every later config, and let a
+    backtest overwrite (or clear) the paper bot's real halt state."""
+
+    def __init__(self) -> None:
+        self._state = RiskState()
+
+    def load(self) -> RiskState:
+        return replace(self._state)
+
+    def save(self, state: RiskState) -> None:
+        self._state = replace(state)

@@ -11,11 +11,13 @@ execution/wiring.py ever calls it (see CLAUDE.md).
 
 from __future__ import annotations
 
+import logging
 import sys
 import time
 from datetime import datetime
 from pathlib import Path
 
+import structlog
 import typer
 
 from intraday_trading.alerting.telegram import TelegramAlerter
@@ -39,6 +41,7 @@ from intraday_trading.strategies.spy_grid import (
     paper_reference_config,
     run_and_log_grid,
 )
+from intraday_trading.strategies.spy_momentum import SpyMomentumConfig
 from intraday_trading.validation.registry import TrialRegistry
 
 DEFAULT_DEMO_DATABASE_PATH = Path("data/demo.db")
@@ -208,6 +211,13 @@ def golive_mark_reconciliation_tested() -> None:
     typer.secho("Recorded: reconciliation tested.", fg=typer.colors.GREEN)
 
 
+def _echo_grid_progress(done: int, total: int, config: SpyMomentumConfig) -> None:
+    typer.echo(
+        f"  [{done}/{total}] vm={config.vm} lookback={config.lookback_days}d "
+        f"every={config.decision_interval_minutes}min stop={config.stop_variant}"
+    )
+
+
 @backtest_app.command("spy")
 def backtest_spy(
     start: str = typer.Option(..., help="Start date, YYYY-MM-DD (ET, inclusive)"),
@@ -238,43 +248,64 @@ def backtest_spy(
     bars = {"SPY": bars_from_dataframe(df)}
     typer.echo(f"{len(bars['SPY'])} bars loaded.")
 
-    registry = TrialRegistry(settings.database_path)
-    # Spec §5's own cost assumptions: $0.0035/share commission, $0.001/share slippage,
-    # no separate bps-based spread (the paper's own reported figures already fold it in).
-    cost_model = CostModel(commission_per_share=0.0035, slippage_per_share=0.001)
+    # The strategy logs an info line per decision time while its lookback window fills
+    # (~170 per config, ~32k over the grid) -- quiet info logs for this command only,
+    # keeping warnings/errors, and restore whatever was configured afterwards.
+    previous_log_config = structlog.get_config()
+    structlog.configure(wrapper_class=structlog.make_filtering_bound_logger(logging.WARNING))
+    try:
+        registry = TrialRegistry(settings.database_path)
+        # Spec §5's own cost assumptions: $0.0035/share commission, $0.001/share slippage,
+        # no separate bps-based spread (the paper's own reported figures already fold it in).
+        cost_model = CostModel(commission_per_share=0.0035, slippage_per_share=0.001)
 
-    house_risk_run_config = GridRunConfig(
-        starting_equity=starting_equity,
-        cost_model=cost_model,
-        risk_limits=settings.risk,
-        database_path=settings.database_path,
-    )
-    grid = house_risk_grid()
-    typer.echo(f"Running {len(grid)} house_risk configs (this is the go-live decision grid)...")
-    trial_ids = run_and_log_grid("SPY", "spy_momentum", grid, bars, house_risk_run_config, registry)
-    typer.echo(f"Logged {len(trial_ids)} trials under strategy=spy_momentum.")
+        house_risk_run_config = GridRunConfig(
+            starting_equity=starting_equity,
+            cost_model=cost_model,
+            risk_limits=settings.risk,
+        )
+        grid = house_risk_grid()
+        typer.echo(f"Running {len(grid)} house_risk configs (this is the go-live decision grid)...")
+        trial_ids = run_and_log_grid(
+            "SPY",
+            "spy_momentum",
+            grid,
+            bars,
+            house_risk_run_config,
+            registry,
+            on_progress=_echo_grid_progress,
+        )
+        typer.echo(f"Logged {len(trial_ids)} trials under strategy=spy_momentum.")
 
-    paper_faithful_limits = settings.risk.model_copy(
-        update={"max_leverage": 4.0, "flatten_before_close_minutes": 0, "no_entry_last_minutes": 0}
-    )
-    paper_run_config = GridRunConfig(
-        starting_equity=starting_equity,
-        cost_model=cost_model,
-        risk_limits=paper_faithful_limits,
-        database_path=settings.database_path,
-    )
-    typer.echo(
-        "Running the paper's own reference config (paper_faithful, for Table 3 comparison)..."
-    )
-    paper_trial_ids = run_and_log_grid(
-        "SPY",
-        "spy_momentum_paper_faithful",
-        [paper_reference_config()],
-        bars,
-        paper_run_config,
-        registry,
-    )
-    typer.echo(f"Logged {len(paper_trial_ids)} paper_faithful reference trial(s).")
+        # The paper's own 4x leverage can't coexist with the cash-only rule (RISK-026) --
+        # this reference run exists only for the Table 3 comparison and never trades.
+        paper_faithful_limits = settings.risk.model_copy(
+            update={
+                "max_leverage": 4.0,
+                "cash_account_only": False,
+                "flatten_before_close_minutes": 0,
+                "no_entry_last_minutes": 0,
+            }
+        )
+        paper_run_config = GridRunConfig(
+            starting_equity=starting_equity,
+            cost_model=cost_model,
+            risk_limits=paper_faithful_limits,
+        )
+        typer.echo(
+            "Running the paper's own reference config (paper_faithful, for Table 3 comparison)..."
+        )
+        paper_trial_ids = run_and_log_grid(
+            "SPY",
+            "spy_momentum_paper_faithful",
+            [paper_reference_config()],
+            bars,
+            paper_run_config,
+            registry,
+        )
+        typer.echo(f"Logged {len(paper_trial_ids)} paper_faithful reference trial(s).")
+    finally:
+        structlog.configure(**previous_log_config)
     typer.echo(
         "Run `intraday-trading golive status --strategies spy_momentum` for the "
         "CSCV/PBO verdict, or open the dashboard's Validation Report page."

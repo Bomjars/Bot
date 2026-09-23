@@ -12,9 +12,9 @@ machine with real Alpaca paper keys and outbound network access.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from datetime import datetime
-from pathlib import Path
 
 import pandas as pd
 
@@ -26,8 +26,8 @@ from intraday_trading.data.client import BAR_COLUMNS
 from intraday_trading.risk.risk_manager import RiskManager
 from intraday_trading.session.calendar import EXCHANGE_TZ, ExchangeCalendar
 from intraday_trading.session.clock import SessionClock, TimeBox
-from intraday_trading.storage.rejection_log import RejectionLog
-from intraday_trading.storage.risk_state_store import RiskStateStore
+from intraday_trading.storage.rejection_log import InMemoryRejectionLog
+from intraday_trading.storage.risk_state_store import InMemoryRiskStateStore
 from intraday_trading.strategies.base import Bar
 from intraday_trading.strategies.spy_momentum import SpyMomentumConfig, SpyMomentumStrategy
 from intraday_trading.validation.registry import TrialRegistry
@@ -113,12 +113,12 @@ def daily_pnl_from_equity_curve(
 @dataclass(frozen=True)
 class GridRunConfig:
     """Everything a single grid config's backtest needs besides the strategy config
-    itself and the bars -- shared across every run in the grid."""
+    itself and the bars -- shared across every run in the grid. Deliberately no database
+    path: each run's risk state and rejections live in memory (see run_spy_config)."""
 
     starting_equity: float
     cost_model: CostModel
     risk_limits: RiskLimits
-    database_path: Path
     leveraged_etf_symbols: frozenset[str] = frozenset()
 
 
@@ -127,13 +127,19 @@ def run_spy_config(
     strategy_config: SpyMomentumConfig,
     bars: dict[str, list[Bar]],
     run_config: GridRunConfig,
+    calendar: ExchangeCalendar | None = None,
 ) -> pd.Series:
     """Runs one config through the real backtester/RiskManager/SimulatedBroker pipeline
     (BT-007: no shortcut around RiskManager, even for a grid run) and returns its daily
-    P&L series."""
+    P&L series.
+
+    Each run gets its own fresh, in-memory RiskState and rejection log -- exactly like its
+    fresh SimulatedBroker -- so no config's halts or peak equity can leak into the next,
+    and nothing touches the real trading database's risk state. `calendar` can be shared
+    across runs (it only caches immutable exchange sessions)."""
     time_box = TimeBox(bars[symbol][0].ts)
     clock = SessionClock(
-        calendar=ExchangeCalendar(),
+        calendar=calendar if calendar is not None else ExchangeCalendar(),
         no_entry_first_minutes=run_config.risk_limits.no_entry_first_minutes,
         no_entry_last_minutes=run_config.risk_limits.no_entry_last_minutes,
         flatten_before_close_minutes=run_config.risk_limits.flatten_before_close_minutes,
@@ -146,8 +152,8 @@ def run_spy_config(
         broker=broker,
         limits=run_config.risk_limits,
         clock=clock,
-        state_store=RiskStateStore(run_config.database_path),
-        rejection_log=RejectionLog(run_config.database_path),
+        state_store=InMemoryRiskStateStore(),
+        rejection_log=InMemoryRejectionLog(),
         leveraged_etf_symbols=run_config.leveraged_etf_symbols,
     )
     strategy = SpyMomentumStrategy(symbol=symbol, config=strategy_config)
@@ -162,12 +168,17 @@ def run_and_log_grid(
     bars: dict[str, list[Bar]],
     run_config: GridRunConfig,
     registry: TrialRegistry,
+    on_progress: Callable[[int, int, SpyMomentumConfig], None] | None = None,
 ) -> list[int]:
     """Runs every config in `configs`, logging each to the trial registry with its full
     daily P&L series (VAL-006) -- never a subset chosen after seeing partial results
-    (CLAUDE.md rule 7). Returns the logged trial ids, in `configs` order."""
+    (CLAUDE.md rule 7). Returns the logged trial ids, in `configs` order. `on_progress`,
+    if given, is called as (done, total, config) after each config is logged."""
     trial_ids = []
-    for strategy_config in configs:
-        daily_pnl = run_spy_config(symbol, strategy_config, bars, run_config)
+    calendar = ExchangeCalendar()
+    for done, strategy_config in enumerate(configs, start=1):
+        daily_pnl = run_spy_config(symbol, strategy_config, bars, run_config, calendar)
         trial_ids.append(registry.log_trial(strategy_name, asdict(strategy_config), daily_pnl))
+        if on_progress is not None:
+            on_progress(done, len(configs), strategy_config)
     return trial_ids
