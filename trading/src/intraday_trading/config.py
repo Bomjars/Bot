@@ -27,7 +27,7 @@ class RiskLimits(BaseModel):
     """
 
     max_risk_per_trade_pct: float = Field(default=0.01, gt=0, le=0.05)
-    max_open_positions: int = Field(default=3, ge=1)
+    max_open_positions: int = Field(default=5, ge=1)
     max_position_pct_of_equity: float = Field(default=0.20, gt=0, le=1.0)
     max_leverage: float = Field(default=1.0, ge=1.0, le=4.0)
     """Locked at 1.0 by default and for every real (paper/live) trading config -- see
@@ -38,9 +38,20 @@ class RiskLimits(BaseModel):
     above 1.0."""
     allow_leveraged_etfs: bool = False
 
-    daily_loss_limit_pct: float = Field(default=0.02, gt=0, le=1.0)
+    daily_loss_limit_pct: float = Field(default=0.03, gt=0, le=1.0)
     weekly_loss_limit_pct: float = Field(default=0.05, gt=0, le=1.0)
-    drawdown_circuit_breaker_pct: float = Field(default=0.10, gt=0, le=1.0)
+    drawdown_circuit_breaker_pct: float = Field(default=0.15, gt=0, le=1.0)
+
+    cash_account_only: bool = True
+    """No margin, ever: an entry's notional may not exceed the broker's reported
+    settled cash (RiskManager checks this independently of `max_leverage`, which only
+    bounds notional-vs-equity and wouldn't by itself catch a margin-account order sized
+    against unsettled or borrowed buying power)."""
+    allowed_currencies: tuple[str, ...] = ("USD",)
+    """Every entry's instrument currency must be in this set -- rejects UK-listed
+    (GBP) shares by default (0.5% stamp duty, and simply out of scope for now), not
+    just leveraged ETFs. `EntrySignal.currency` defaults to "USD" so existing
+    Alpaca/SPY signals are unaffected."""
 
     max_trades_per_day: int = Field(default=10, ge=1)
     no_entry_first_minutes: int = Field(default=15, ge=0)
@@ -81,6 +92,16 @@ class Settings(BaseSettings):
     alpaca_paper_base_url: str = "https://paper-api.alpaca.markets"
     alpaca_live_base_url: str = "https://api.alpaca.markets"
     alpaca_data_feed: DataFeed = DataFeed.IEX
+
+    # --- Interactive Brokers (IB Gateway / TWS) ---
+    ibkr_host: str = "127.0.0.1"
+    ibkr_port: int = Field(default=4002, gt=0, lt=65536)
+    """Used by `IBKRBroker.paper()` -- IB Gateway's default paper-trading socket port.
+    Configurable (e.g. multiple Gateway instances on one machine) but never the live
+    port: `IBKRBroker.live()` uses `ibkr_live_port` instead, and only ever constructs
+    when `settings.live_trading is True` (see broker/ibkr_broker.py and CLAUDE.md)."""
+    ibkr_live_port: int = Field(default=4001, gt=0, lt=65536)
+    ibkr_client_id: int = Field(default=1, ge=0)
 
     # --- Account ---
     account_currency: str = "GBP"

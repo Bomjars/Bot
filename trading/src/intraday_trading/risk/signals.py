@@ -31,6 +31,10 @@ class EntrySignal:
     """A per-signal-instance identifier (e.g. strategy+symbol+date+bar index) used to
     build a deterministic client_order_id (EXEC-002) — the same signal retried after a
     crash must produce the same id."""
+    currency: str = "USD"
+    """The instrument's trading currency (e.g. a GBP-denominated LSE listing would set
+    "GBP"). Defaults to "USD" so every existing Alpaca/SPY signal is unaffected;
+    RiskManager checks it against `RiskLimits.allowed_currencies`."""
 
 
 @dataclass(frozen=True)
