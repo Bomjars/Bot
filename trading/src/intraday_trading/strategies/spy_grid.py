@@ -74,6 +74,31 @@ def paper_reference_config(leverage_cap: float = 4.0) -> SpyMomentumConfig:
     )
 
 
+def paper_faithful_risk_limits(base: RiskLimits) -> RiskLimits:
+    """The limits the paper_faithful reference run is checked against: `base` with every
+    house rule the paper doesn't have lifted -- up to 4x leverage/position size, no
+    cash-only rule (RISK-026), no daily/weekly/drawdown halts (one 5% losing week would
+    otherwise halt it for the rest of the run), trading until the close. Replication
+    only: never used for the go-live grid or any RiskManager wired to a real broker.
+
+    Risk per trade is only raised to its 5% ceiling, so on very wide-stop days the
+    position is still sized below the paper's -- a known, stated gap in the replication.
+    """
+    return base.model_copy(
+        update={
+            "max_leverage": 4.0,
+            "max_position_pct_of_equity": 4.0,
+            "max_risk_per_trade_pct": 0.05,
+            "daily_loss_limit_pct": 1.0,
+            "weekly_loss_limit_pct": 1.0,
+            "drawdown_circuit_breaker_pct": 1.0,
+            "cash_account_only": False,
+            "flatten_before_close_minutes": 0,
+            "no_entry_last_minutes": 0,
+        }
+    )
+
+
 def bars_from_dataframe(df: pd.DataFrame) -> list[Bar]:
     """Converts a `BAR_COLUMNS`-shaped DataFrame (BarStore.get_bars/AlpacaMarketDataClient)
     into the `Bar` sequence the backtester consumes, sorted chronologically."""
@@ -156,7 +181,9 @@ def run_spy_config(
         rejection_log=InMemoryRejectionLog(),
         leveraged_etf_symbols=run_config.leveraged_etf_symbols,
     )
-    strategy = SpyMomentumStrategy(symbol=symbol, config=strategy_config)
+    strategy = SpyMomentumStrategy(
+        symbol=symbol, config=strategy_config, risk_limits=run_config.risk_limits
+    )
     result = run_backtest(strategy, bars, risk_manager, broker, time_box)
     return daily_pnl_from_equity_curve(result.equity_curve, run_config.starting_equity)
 

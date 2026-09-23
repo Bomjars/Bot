@@ -28,7 +28,10 @@ class RiskLimits(BaseModel):
 
     max_risk_per_trade_pct: float = Field(default=0.01, gt=0, le=0.05)
     max_open_positions: int = Field(default=5, ge=1)
-    max_position_pct_of_equity: float = Field(default=0.20, gt=0, le=1.0)
+    max_position_pct_of_equity: float = Field(default=0.20, gt=0, le=4.0)
+    """Above 1.0 only means anything alongside a raised `max_leverage` (which is itself
+    locked at 1.0 for every real trading config) -- the ceiling matches max_leverage's
+    so the paper_faithful replication run can hold the paper's own up-to-4x position."""
     max_leverage: float = Field(default=1.0, ge=1.0, le=4.0)
     """Locked at 1.0 by default and for every real (paper/live) trading config -- see
     docs/PLAN.md §2. The upper bound only exists so a `paper_faithful` backtest/paper

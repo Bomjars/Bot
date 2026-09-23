@@ -248,3 +248,35 @@ def test_BT_008_grid_run_never_touches_the_trading_database(
     )
 
     assert sorted(p.name for p in tmp_path.iterdir()) == ["t.db"]
+
+
+def test_paper_faithful_limits_lift_only_the_house_rules() -> None:
+    from intraday_trading.strategies.spy_grid import paper_faithful_risk_limits
+
+    base = RiskLimits()
+    limits = paper_faithful_risk_limits(base)
+
+    assert limits.max_leverage == 4.0
+    assert limits.max_position_pct_of_equity == 4.0
+    assert limits.cash_account_only is False
+    assert limits.weekly_loss_limit_pct == 1.0
+    assert limits.drawdown_circuit_breaker_pct == 1.0
+    assert base.max_leverage == 1.0  # the house limits themselves are untouched
+    assert base.cash_account_only is True
+    assert limits.allowed_currencies == base.allowed_currencies
+
+
+def test_SPY_12_paper_reference_config_trades_under_its_own_limits() -> None:
+    from intraday_trading.strategies.spy_grid import paper_faithful_risk_limits, run_spy_config
+    from tests.unit.test_spy_momentum import _random_walk_bars
+
+    bars = {"SPY": _random_walk_bars(n_days=40, seed=11)}
+    run_config = GridRunConfig(
+        starting_equity=100_000.0,
+        cost_model=CostModel(),
+        risk_limits=paper_faithful_risk_limits(RiskLimits()),
+    )
+
+    daily_pnl = run_spy_config("SPY", paper_reference_config(), bars, run_config)
+
+    assert (daily_pnl != 0).sum() > 5

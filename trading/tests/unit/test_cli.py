@@ -511,3 +511,29 @@ def test_backtest_summary_exits_1_without_trials(
 
     assert result.exit_code == 1
     assert "No trials logged for 'nope'" in result.stdout
+
+
+def test_VAL_015_backtest_retire_retires_without_deleting(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    db_path = tmp_path / "retire.db"
+    _summary_env(monkeypatch, db_path)
+    registry = TrialRegistry(db_path)
+    _log_summary_trials(registry, "spy_momentum", n_trials=3)
+
+    result = runner.invoke(
+        app, ["backtest", "retire", "--strategy", "spy_momentum", "--reason", "sizing bug"]
+    )
+
+    assert result.exit_code == 0, result.stdout
+    assert "Retired 3 trial(s) of 'spy_momentum'" in result.stdout
+    assert registry.trial_count("spy_momentum") == 3
+    assert registry.get_trials("spy_momentum", include_retired=False) == []
+    summary = runner.invoke(app, ["backtest", "summary"])
+    assert summary.exit_code == 1  # nothing active left to summarise
+
+
+def test_backtest_retire_requires_a_reason(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    _summary_env(monkeypatch, tmp_path / "retire.db")
+    result = runner.invoke(app, ["backtest", "retire", "--strategy", "spy_momentum"])
+    assert result.exit_code != 0

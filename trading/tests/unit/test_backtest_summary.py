@@ -142,3 +142,24 @@ def test_dsr_is_none_when_it_cannot_be_computed(
     assert summary is not None
     assert summary.pbo is not None
     assert summary.dsr is None
+
+
+def test_dsr_is_none_rather_than_nan_for_a_flat_grid(tmp_path: Path) -> None:
+    registry = TrialRegistry(tmp_path / "r.db")
+    for i in range(3):
+        registry.log_trial("s", {"vm": float(i)}, pd.Series([0.0] * 64, index=_dates(64)))
+
+    summary = summarize_grid(registry, "s", starting_equity=10_000.0)
+
+    assert summary is not None
+    assert summary.dsr is None
+    assert summary.cscv_passed is False
+    assert summary.cscv_reason is not None and "3/3 configs never traded" in summary.cscv_reason
+
+
+def test_VAL_015_summary_ignores_retired_trials(tmp_path: Path) -> None:
+    registry = TrialRegistry(tmp_path / "r.db")
+    _log_grid(registry, "s", n_trials=3, n_days=64)
+    registry.retire_all("s", reason="bad run")
+
+    assert summarize_grid(registry, "s", starting_equity=10_000.0) is None

@@ -144,6 +144,7 @@ rejection log in `data\trading.db`. It only adds bars and trial-registry rows.
 
 ```powershell
 uv run intraday-trading backtest summary                               # the numbers, in plain English
+uv run intraday-trading backtest retire --strategy spy_momentum --reason "..."  # drop a bad run from the verdict (nothing deleted)
 uv run intraday-trading golive status --strategies spy_momentum       # every check + verdict
 uv run intraday-trading golive mark-kill-switch-tested                # after running the drill in paper
 uv run intraday-trading golive mark-reconciliation-tested             # after running the drill in paper

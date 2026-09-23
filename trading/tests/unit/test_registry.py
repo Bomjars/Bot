@@ -106,3 +106,32 @@ def test_daily_pnl_matrix_filters_by_trial_ids(tmp_path: Path) -> None:
 def test_daily_pnl_matrix_empty_for_unknown_strategy(tmp_path: Path) -> None:
     registry = TrialRegistry(tmp_path / "trials.db")
     assert registry.daily_pnl_matrix("unknown_strategy").empty
+
+
+def test_VAL_015_retired_trials_leave_the_matrix_but_still_count(tmp_path: Path) -> None:
+    registry = TrialRegistry(tmp_path / "trials.db")
+    keep_id = registry.log_trial("orb", {"x": 1}, _pnl_series(date(2024, 1, 2), [1.0]))
+    retired_id = registry.log_trial("orb", {"x": 2}, _pnl_series(date(2024, 1, 2), [2.0]))
+    registry.retire_trial(retired_id, reason="sizing bug -- never traded")
+
+    assert list(registry.daily_pnl_matrix("orb").columns) == [keep_id]
+    assert set(registry.daily_pnl_matrix("orb", include_retired=True).columns) == {
+        keep_id,
+        retired_id,
+    }
+    assert registry.trial_count("orb") == 2  # DSR still sees both attempts
+
+
+def test_VAL_015_retire_all_marks_every_active_trial(tmp_path: Path) -> None:
+    registry = TrialRegistry(tmp_path / "trials.db")
+    for x in range(3):
+        registry.log_trial("orb", {"x": x}, _pnl_series(date(2024, 1, 2), [1.0]))
+    registry.log_trial("other", {"x": 0}, _pnl_series(date(2024, 1, 2), [1.0]))
+
+    assert registry.retire_all("orb", reason="bad run") == 3
+    assert registry.retire_all("orb", reason="again") == 0  # already retired
+
+    assert registry.get_trials("orb", include_retired=False) == []
+    assert registry.trial_count("orb") == 3  # nothing deleted
+    assert {t.retired_reason for t in registry.get_trials("orb")} == {"bad run"}
+    assert len(registry.get_trials("other", include_retired=False)) == 1

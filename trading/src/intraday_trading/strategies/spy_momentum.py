@@ -46,8 +46,10 @@ from statistics import stdev
 import structlog
 
 from intraday_trading.broker.base import Side
+from intraday_trading.config import RiskLimits
 from intraday_trading.risk.signals import EntrySignal, ExitSignal
 from intraday_trading.session.calendar import EXCHANGE_TZ
+from intraday_trading.sizing.position_sizer import compute_target_size
 from intraday_trading.strategies.base import Bar, StrategyContext
 
 logger = structlog.get_logger(__name__)
@@ -138,10 +140,22 @@ class _DayState:
 
 
 class SpyMomentumStrategy:
-    def __init__(self, symbol: str, config: SpyMomentumConfig, name: str = "spy_momentum") -> None:
+    def __init__(
+        self,
+        symbol: str,
+        config: SpyMomentumConfig,
+        name: str = "spy_momentum",
+        risk_limits: RiskLimits | None = None,
+    ) -> None:
+        """`risk_limits` should be the same limits the RiskManager checking this
+        strategy's signals uses (SPY-12): each entry is then sized down to fit them, so
+        the strategy never proposes an order RiskManager is certain to reject. Without
+        it, sizing follows the spec alone -- up to 100% of equity at 1x -- which the
+        default 1%-risk and 20%-per-position limits reject every time."""
         self.name = name
         self.symbol = symbol
         self._config = config
+        self._risk_limits = risk_limits
         self._grid = _decision_grid(config.decision_interval_minutes)
         self._days: deque[_CompletedDay] = deque(
             maxlen=max(config.lookback_days, SIZING_LOOKBACK_DAYS) + 1
@@ -310,6 +324,20 @@ class SpyMomentumStrategy:
         day.shares_for_today = max(shares, 0)
         return day.shares_for_today
 
+    def _fit_to_risk_limits(
+        self, shares: int, price: float, stop_price: float, equity: float
+    ) -> int:
+        """The largest size <= `shares` that passes RiskManager's per-trade risk,
+        per-position and leverage checks (SPY-12). RiskManager still re-checks it --
+        this only stops the strategy proposing what it already knows will be refused."""
+        if self._risk_limits is None:
+            return shares
+        limits = self._risk_limits
+        by_risk = compute_target_size(equity, price, stop_price, limits.max_risk_per_trade_pct)
+        max_notional_pct = min(limits.max_position_pct_of_equity, limits.max_leverage)
+        by_position = math.floor(equity * max_notional_pct / price)
+        return min(shares, by_risk, by_position)
+
     def _enter(
         self,
         day: _DayState,
@@ -320,11 +348,13 @@ class SpyMomentumStrategy:
         lower: float,
         context: StrategyContext,
     ) -> list[EntrySignal | ExitSignal]:
-        shares = self._shares_for_today(day, context)
+        stop_price = lower if side == Side.BUY else upper
+        shares = self._fit_to_risk_limits(
+            self._shares_for_today(day, context), price, stop_price, context.equity
+        )
         if shares <= 0:
             return []
 
-        stop_price = lower if side == Side.BUY else upper
         self._seq += 1
         return [
             EntrySignal(

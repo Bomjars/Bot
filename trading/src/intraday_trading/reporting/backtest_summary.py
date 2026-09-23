@@ -141,6 +141,8 @@ def summarize_grid(
             )
         except ValueError:
             dsr = None
+        if dsr is not None and math.isnan(dsr):
+            dsr = None  # e.g. every config flat: no Sharpe dispersion to deflate against
 
     return GridSummary(
         strategy=strategy,

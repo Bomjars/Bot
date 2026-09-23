@@ -157,6 +157,8 @@ section; never renumber.
 | VAL-011 | P0 | CSCV/PBO is never used as an optimisation objective anywhere in the codebase — a search over the codebase for any code path that varies strategy parameters based on a PBO value fails a static-analysis test. |
 | VAL-012 | P1 | Walk-forward validation results and the final untouched holdout result are computed from disjoint date ranges, verified programmatically (no overlap). |
 | VAL-013 | P1 | The holdout dataset cannot be read by any code path before the walk-forward gate has already produced a pass verdict (enforced by directory/flag access check, not just convention). |
+| VAL-014 | P0 | The CSCV verdict fails when more than half of the grid's configs never traded (zero P&L every day) — a matrix of flat lines otherwise scores PBO 0% and would "pass". |
+| VAL-015 | P0 | Retired trials are excluded from the CSCV/PBO matrix (so retiring a broken run removes it from the verdict), while still counting towards DSR's total trial count; `backtest retire` retires a strategy's active trials without deleting any. |
 
 ## STATE — state & reconciliation
 
@@ -206,6 +208,7 @@ section; never renumber.
 | SPY-09 | P0 | Given `sigma_SPY = 0.2%`, sizing is capped at 4x in paper-faithful mode and 1x in house-risk mode (never uncapped). |
 | SPY-10 | P0 | Given fewer than the configured `lookback_days` of prior history, no signals are emitted, and the gap is logged as insufficient history. |
 | SPY-11 | P1 | Given the paper's own settings, dates, and costs, backtest results land within a stated tolerance of the paper's Table 3; any gap is explained, not hidden (xfail/skip with a clear message if real historical data isn't available in this environment). |
+| SPY-12 | P0 | Given the RiskLimits its RiskManager enforces, every entry is sized down to fit max risk per trade, max position % of equity and max leverage — so a full backtest with the default limits on realistic bars actually trades, instead of every entry being rejected. |
 
 ## GOLIVE — go-live gate
 

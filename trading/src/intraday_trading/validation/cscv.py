@@ -28,6 +28,10 @@ class CSCVResult:
     """Every config's OOS Sharpe from every split, pooled -- the "all configs"
     distribution for the stochastic-dominance comparison against `oos_sharpes` (the
     "selected" distribution)."""
+    n_inactive_configs: int = 0
+    """Configs whose P&L is zero on every day -- they never traded. CSCV on a matrix of
+    flat lines reports PBO 0% (nothing can be overfit), which is meaningless, so
+    `evaluate` refuses to pass a grid where most configs never traded (VAL-014)."""
 
     @property
     def regression_slope(self) -> float:
@@ -83,6 +87,7 @@ def cscv_pbo(returns: pd.DataFrame, n_blocks: int = DEFAULT_N_BLOCKS) -> CSCVRes
         raise ValueError(f"not enough rows ({len(returns)}) for {n_blocks} blocks")
 
     values = returns.to_numpy(dtype=float)
+    n_inactive_configs = int(np.sum(np.all(values == 0.0, axis=0)))
     blocks = values.reshape(n_blocks, block_size, n_configs)
     block_sum = blocks.sum(axis=1)
     block_sumsq = (blocks**2).sum(axis=1)
@@ -132,6 +137,7 @@ def cscv_pbo(returns: pd.DataFrame, n_blocks: int = DEFAULT_N_BLOCKS) -> CSCVRes
         pbo=pbo,
         p_oos_sharpe_negative=p_oos_negative,
         oos_sharpes_pooled=oos_sharpes_pooled,
+        n_inactive_configs=n_inactive_configs,
     )
 
 
@@ -139,10 +145,17 @@ def evaluate(
     result: CSCVResult,
     pbo_threshold: float = 0.05,
     p_oos_negative_threshold: float = 0.5,
+    max_inactive_fraction: float = 0.5,
 ) -> CSCVVerdict:
     """A pass/fail verdict from an *already-computed* `CSCVResult`. Never wire this
     verdict (or the PBO value it's based on) back into choosing a parameter grid,
     search, or config -- see the module docstring and CLAUDE.md."""
+    if result.n_inactive_configs > result.n_configs * max_inactive_fraction:
+        return CSCVVerdict(
+            False,
+            f"{result.n_inactive_configs}/{result.n_configs} configs never traded -- "
+            "nothing to validate",
+        )
     if result.pbo > pbo_threshold:
         return CSCVVerdict(False, f"PBO {result.pbo:.2%} exceeds threshold {pbo_threshold:.2%}")
     if result.p_oos_sharpe_negative > p_oos_negative_threshold:

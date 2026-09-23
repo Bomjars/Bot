@@ -70,6 +70,14 @@ class TrialRegistry:
         finally:
             conn.close()
 
+    def retire_all(self, strategy: str, reason: str) -> int:
+        """Retire every still-active trial of `strategy` (e.g. a whole grid run with a
+        bug in it). Nothing is deleted. Returns how many were retired."""
+        active = self.get_trials(strategy, include_retired=False)
+        for trial in active:
+            self.retire_trial(trial.trial_id, reason)
+        return len(active)
+
     def retire_trial(self, trial_id: int, reason: str) -> None:
         conn = get_connection(self._database_path)
         try:
@@ -108,11 +116,19 @@ class TrialRegistry:
         default, since they were still attempted (see module docstring)."""
         return len(self.get_trials(strategy, include_retired=include_retired))
 
-    def daily_pnl_matrix(self, strategy: str, trial_ids: list[int] | None = None) -> pd.DataFrame:
+    def daily_pnl_matrix(
+        self,
+        strategy: str,
+        trial_ids: list[int] | None = None,
+        include_retired: bool = False,
+    ) -> pd.DataFrame:
         """Rows = dates, columns = trial ids, exactly the shape CSCV needs. Trials with
         gaps in their date coverage are left as NaN for those dates -- CSCV callers
-        should drop/align as needed rather than have this silently fabricate zeros."""
-        trials = self.get_trials(strategy, include_retired=True)
+        should drop/align as needed rather than have this silently fabricate zeros.
+        Retired trials are left out by default (VAL-015): retiring is how a broken or
+        superseded run stops counting towards the verdict. They still count towards
+        DSR's trial total via `trial_count()`, since they were still attempted."""
+        trials = self.get_trials(strategy, include_retired=include_retired)
         if trial_ids is not None:
             trials = [t for t in trials if t.trial_id in trial_ids]
         if not trials:

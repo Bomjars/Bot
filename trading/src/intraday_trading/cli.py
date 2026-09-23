@@ -47,6 +47,7 @@ from intraday_trading.strategies.spy_grid import (
     GridRunConfig,
     bars_from_dataframe,
     house_risk_grid,
+    paper_faithful_risk_limits,
     paper_reference_config,
     run_and_log_grid,
 )
@@ -286,16 +287,7 @@ def backtest_spy(
         )
         typer.echo(f"Logged {len(trial_ids)} trials under strategy=spy_momentum.")
 
-        # The paper's own 4x leverage can't coexist with the cash-only rule (RISK-026) --
-        # this reference run exists only for the Table 3 comparison and never trades.
-        paper_faithful_limits = settings.risk.model_copy(
-            update={
-                "max_leverage": 4.0,
-                "cash_account_only": False,
-                "flatten_before_close_minutes": 0,
-                "no_entry_last_minutes": 0,
-            }
-        )
+        paper_faithful_limits = paper_faithful_risk_limits(settings.risk)
         paper_run_config = GridRunConfig(
             starting_equity=starting_equity,
             cost_model=cost_model,
@@ -431,6 +423,19 @@ def backtest_summary(
             f"{PAPER_TABLE3_SHARPE}, worst drop {PAPER_TABLE3_MAX_DRAWDOWN_PCT}% "
             "(May 2007 - Apr 2024, so different dates)"
         )
+
+
+@backtest_app.command("retire")
+def backtest_retire(
+    strategy: str = typer.Option(..., help="Strategy whose active trials to retire"),
+    reason: str = typer.Option(..., help="Why -- stored with every retired trial"),
+) -> None:
+    """Mark every still-active trial of a strategy as retired, e.g. a whole grid run
+    that had a bug in it. Nothing is deleted (CLAUDE.md rule 8): retired trials drop out
+    of the CSCV/PBO verdict but still count towards DSR's total number of attempts."""
+    settings = load_settings()
+    retired = TrialRegistry(settings.database_path).retire_all(strategy, reason)
+    typer.echo(f"Retired {retired} trial(s) of {strategy!r} (kept in the registry, not deleted).")
 
 
 @app.command("seed-demo-data")

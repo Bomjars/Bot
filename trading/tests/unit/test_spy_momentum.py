@@ -369,3 +369,83 @@ def test_SPY_10_insufficient_history_emits_no_signals() -> None:
 )
 def test_SPY_11_replicates_the_papers_own_settings_within_tolerance() -> None:
     raise NotImplementedError
+
+
+def _limited_strategy(limits: RiskLimits) -> SpyMomentumStrategy:
+    return SpyMomentumStrategy(
+        symbol=SYMBOL, config=SpyMomentumConfig(sizing="fixed_notional"), risk_limits=limits
+    )
+
+
+def test_SPY_12_entry_is_capped_by_max_position_pct() -> None:
+    strategy = _limited_strategy(RiskLimits(max_position_pct_of_equity=0.20))
+    # 100k equity at $100 -> 1,000 shares uncapped; 20% cap -> 200. The $1 stop allows
+    # 1,000 shares under 1% risk, so the position cap is what binds.
+    shares = strategy._fit_to_risk_limits(1_000, price=100.0, stop_price=99.0, equity=100_000.0)
+    assert shares == 200
+    assert shares * 100.0 <= 100_000.0 * 0.20
+
+
+def test_SPY_12_entry_is_capped_by_risk_per_trade() -> None:
+    strategy = _limited_strategy(RiskLimits(max_position_pct_of_equity=1.0))
+    # 1% of 100k = $1,000 risk; $4 stop distance -> 250 shares.
+    shares = strategy._fit_to_risk_limits(1_000, price=100.0, stop_price=96.0, equity=100_000.0)
+    assert shares == 250
+    assert shares * 4.0 <= 100_000.0 * 0.01
+
+
+def test_SPY_12_leverage_caps_a_raised_position_limit() -> None:
+    strategy = _limited_strategy(
+        RiskLimits(max_position_pct_of_equity=4.0, max_leverage=1.0, max_risk_per_trade_pct=0.05)
+    )
+    shares = strategy._fit_to_risk_limits(4_000, price=100.0, stop_price=99.9, equity=100_000.0)
+    assert shares == 1_000  # 1x, not 4x
+
+
+def test_SPY_12_never_sizes_up() -> None:
+    strategy = _limited_strategy(RiskLimits(max_position_pct_of_equity=1.0))
+    assert strategy._fit_to_risk_limits(10, 100.0, 99.0, 100_000.0) == 10
+
+
+def test_SPY_12_no_limits_means_spec_sizing_unchanged() -> None:
+    strategy = _strategy()
+    assert strategy._fit_to_risk_limits(1_000, 100.0, 99.0, 100_000.0) == 1_000
+
+
+def _random_walk_bars(n_days: int, seed: int) -> list[Bar]:
+    import random
+    from datetime import timedelta
+
+    rng = random.Random(seed)
+    calendar = ExchangeCalendar()
+    bars: list[Bar] = []
+    day, days, price = date(2023, 1, 3), 0, 400.0
+    while days < n_days:
+        session = calendar.session_for_date(day)
+        if session is not None:
+            ts = session.open
+            while ts < session.close:
+                price *= 1 + rng.gauss(0, 0.0006)
+                bars.append(
+                    Bar(ts=ts, open=price, high=price, low=price, close=price, volume=20_000)
+                )
+                ts += timedelta(minutes=1)
+            days += 1
+        day += timedelta(days=1)
+    return bars
+
+
+def test_SPY_12_a_default_limits_backtest_actually_trades() -> None:
+    """The regression test for the grid that logged 202 all-zero trials: with the real
+    default RiskLimits (1% risk/trade, 20% per position), realistic bars must produce
+    trades -- previously every single entry was rejected as position_pct_exceeded."""
+    from intraday_trading.strategies.spy_grid import GridRunConfig, run_spy_config
+
+    bars = {SYMBOL: _random_walk_bars(n_days=40, seed=11)}
+    run_config = GridRunConfig(
+        starting_equity=100_000.0, cost_model=CostModel(), risk_limits=RiskLimits()
+    )
+
+    daily_pnl = run_spy_config(SYMBOL, SpyMomentumConfig(lookback_days=10), bars, run_config)
+
+    assert (daily_pnl != 0).sum() > 5

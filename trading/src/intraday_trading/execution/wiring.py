@@ -125,7 +125,9 @@ def build_paper_trading_components(
     # ORB strategy has no spec yet, so it isn't attached even when its symbols are polled.
     strategies: list[Strategy] = []
     if "SPY" in {s.upper() for s in symbols}:
-        strategies.append(SpyMomentumStrategy(symbol="SPY", config=SpyMomentumConfig()))
+        strategies.append(
+            SpyMomentumStrategy(symbol="SPY", config=SpyMomentumConfig(), risk_limits=settings.risk)
+        )
 
     loop = PaperTradingLoop(
         strategies=strategies,

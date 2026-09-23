@@ -127,3 +127,26 @@ def test_trims_rows_that_dont_divide_evenly() -> None:
     returns = _random_walk_returns(n_days=35, n_configs=3)  # 35 % 16 == 3
     result = cscv_pbo(returns)
     assert result.n_splits == 12870
+
+
+def test_VAL_014_a_grid_that_never_traded_fails_the_verdict() -> None:
+    flat = pd.DataFrame(np.zeros((64, 10)))
+
+    result = cscv_pbo(flat)
+    verdict = evaluate(result)
+
+    assert result.pbo == 0.0  # the meaningless "perfect" score this guards against
+    assert result.n_inactive_configs == 10
+    assert verdict.passed is False
+    assert "10/10 configs never traded" in verdict.reason
+
+
+def test_VAL_014_a_few_inactive_configs_do_not_by_themselves_fail() -> None:
+    rng = np.random.default_rng(7)
+    values = rng.normal(0, 1, (64, 10))
+    values[:, 0] += 1.0  # one clear winner, as in VAL-002
+    values[:, 1:4] = 0.0  # 3 of 10 never traded
+    result = cscv_pbo(pd.DataFrame(values))
+
+    assert result.n_inactive_configs == 3
+    assert "never traded" not in evaluate(result).reason
