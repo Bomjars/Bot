@@ -150,6 +150,54 @@ def test_accepted_when_within_live_notional_cap(tmp_path: Path) -> None:
     assert decision.accepted is True
 
 
+def test_RISK_026_reject_when_notional_exceeds_settled_cash(tmp_path: Path) -> None:
+    # notional = 10 * 100.0 = $1,000; cash is deliberately far below that while equity
+    # (and therefore every other equity-based check) stays comfortable, isolating the
+    # cash-only check.
+    broker = FakeBroker(equity=100_000.0, cash=500.0)
+    manager, _ = _manager(tmp_path, broker=broker)
+    decision = manager.check_and_submit_entry(_signal())
+    assert decision.accepted is False
+    assert decision.reason == "insufficient_settled_cash"
+    assert broker.submitted_orders == []
+
+
+def test_RISK_026_accepted_when_notional_within_settled_cash(tmp_path: Path) -> None:
+    broker = FakeBroker(equity=100_000.0, cash=100_000.0)
+    manager, _ = _manager(tmp_path, broker=broker)
+    decision = manager.check_and_submit_entry(_signal())
+    assert decision.accepted is True
+
+
+def test_RISK_026_cash_check_is_skipped_when_cash_account_only_is_false(tmp_path: Path) -> None:
+    broker = FakeBroker(equity=100_000.0, cash=500.0)
+    limits = RiskLimits(cash_account_only=False)
+    manager, _ = _manager(tmp_path, broker=broker, limits=limits)
+    decision = manager.check_and_submit_entry(_signal())
+    assert decision.accepted is True
+
+
+def test_RISK_027_reject_currency_not_in_allowed_currencies(tmp_path: Path) -> None:
+    manager, broker = _manager(tmp_path)
+    decision = manager.check_and_submit_entry(_signal(currency="GBP"))
+    assert decision.accepted is False
+    assert decision.reason == "currency_not_allowed"
+    assert broker.submitted_orders == []
+
+
+def test_RISK_027_accepted_for_a_default_usd_signal(tmp_path: Path) -> None:
+    manager, _ = _manager(tmp_path)
+    decision = manager.check_and_submit_entry(_signal())
+    assert decision.accepted is True
+
+
+def test_RISK_027_allowed_currencies_is_configurable(tmp_path: Path) -> None:
+    limits = RiskLimits(allowed_currencies=("USD", "GBP"))
+    manager, _ = _manager(tmp_path, limits=limits)
+    decision = manager.check_and_submit_entry(_signal(currency="GBP"))
+    assert decision.accepted is True
+
+
 def test_RISK_006_reject_leveraged_etf(tmp_path: Path) -> None:
     manager, _ = _manager(tmp_path, leveraged_etfs=frozenset({"TQQQ"}))
     decision = manager.check_and_submit_entry(_signal(symbol="TQQQ"))

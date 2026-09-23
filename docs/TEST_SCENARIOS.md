@@ -66,6 +66,8 @@ section; never renumber.
 | RISK-023 | P0 | All risk-limit values are read from `Settings.risk` (config), not hardcoded — changing a config value changes the enforced limit without a code change (parametrised test across each limit). |
 | RISK-024 | P0 | Two orders submitted concurrently that would each individually pass but together breach `max_open_positions` or the daily loss limit — only one is accepted (no race condition double-accept). |
 | RISK-025 | P1 | A partially filled entry (e.g. 60% filled) is risk-checked using the filled quantity, not the requested quantity, when computing current exposure for subsequent orders. |
+| RISK-026 | P0 | When `RiskLimits.cash_account_only` is true, an order whose notional exceeds the broker's reported cash is rejected, independent of `max_leverage`/`max_position_pct_of_equity` -- no margin/borrowed buying power is ever used. |
+| RISK-027 | P0 | An order whose `EntrySignal.currency` is not in `RiskLimits.allowed_currencies` is rejected (default excludes non-USD instruments, e.g. GBP-denominated UK-listed shares -- avoids UK stamp duty and keeps the bot US-only until explicitly reconfigured). |
 
 ## EXEC — execution engine / broker adapter
 

@@ -138,6 +138,8 @@ class RiskManager:
             return self._reject(signal, "spread_too_wide")
         if signal.symbol in self._leveraged_etf_symbols and not self._limits.allow_leveraged_etfs:
             return self._reject(signal, "leveraged_etf_excluded")
+        if signal.currency not in self._limits.allowed_currencies:
+            return self._reject(signal, "currency_not_allowed")
         if not self._clock.can_enter():
             return self._reject(signal, "outside_entry_window")
         if state.trades_today >= self._limits.max_trades_per_day:
@@ -155,7 +157,8 @@ class RiskManager:
         if len(positions) >= self._limits.max_open_positions:
             return self._reject(signal, "max_open_positions_reached")
 
-        equity = self._broker.get_account().equity
+        account = self._broker.get_account()
+        equity = account.equity
         risk_amount = signal.qty * stop_distance
         if risk_amount > equity * self._limits.max_risk_per_trade_pct:
             return self._reject(signal, "risk_per_trade_exceeded")
@@ -163,6 +166,12 @@ class RiskManager:
         notional = signal.qty * signal.entry_price
         if notional > equity * self._limits.max_position_pct_of_equity:
             return self._reject(signal, "position_pct_exceeded")
+
+        if self._limits.cash_account_only and notional > account.cash:
+            # No margin, ever: independent of max_leverage (which only bounds notional
+            # vs *equity*, and wouldn't by itself catch an order sized against borrowed
+            # or unsettled buying power on a margin-capable account).
+            return self._reject(signal, "insufficient_settled_cash")
 
         if self._live_notional_cap_usd is not None and notional > self._live_notional_cap_usd:
             # GOLIVE-006: the "start live with <= a small cap" constraint, independent
