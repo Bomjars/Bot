@@ -8,7 +8,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from intraday_trading.broker.alpaca_broker import AlpacaBroker
+from intraday_trading.broker.ibkr_broker import IBKRBroker
 from intraday_trading.config import Settings
 from intraday_trading.execution.event_loop import PaperTradingLoop
 from intraday_trading.execution.wiring import build_paper_trading_components
@@ -106,3 +109,167 @@ def test_spy_strategy_not_attached_when_spy_not_requested(tmp_path: Path) -> Non
     components = build_paper_trading_components(settings, symbols=["AAPL"])
 
     assert components.loop._strategies == []  # type: ignore[attr-defined]
+
+
+def test_alpaca_provider_has_no_connection_guard_or_fill_poller(tmp_path: Path) -> None:
+    settings = Settings(
+        alpaca_api_key="fake-key",
+        alpaca_secret_key="fake-secret",
+        database_path=tmp_path / "wiring.db",
+        kill_switch_file=tmp_path / "KILL_SWITCH",
+    )
+
+    components = build_paper_trading_components(settings, symbols=[], broker_provider="alpaca")
+
+    assert components.loop._connection_guard is None  # type: ignore[attr-defined]
+    assert components.loop._fill_poller is None  # type: ignore[attr-defined]
+
+
+def test_ibkr_provider_wires_an_ibkr_broker_without_network(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # IB.connect() dials a real socket immediately (unlike alpaca-py's TradingClient,
+    # which only stores credentials) -- .paper() is monkeypatched so this test never
+    # attempts one, mirroring how test_cli.py fakes AlpacaMarketDataClient.from_settings.
+    fake_broker = IBKRBroker(ib=object())  # type: ignore[arg-type]
+    monkeypatch.setattr(IBKRBroker, "paper", classmethod(lambda cls, settings: fake_broker))
+    settings = Settings(
+        alpaca_api_key="fake-key",
+        alpaca_secret_key="fake-secret",
+        database_path=tmp_path / "wiring.db",
+        kill_switch_file=tmp_path / "KILL_SWITCH",
+    )
+
+    components = build_paper_trading_components(settings, symbols=[], broker_provider="ibkr")
+
+    assert components.broker is fake_broker
+    assert components.loop._connection_guard is not None  # type: ignore[attr-defined]
+    assert components.loop._fill_poller is not None  # type: ignore[attr-defined]
+
+
+def test_ibkr_connection_guard_reconnects_when_disconnected(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from dataclasses import dataclass, field
+
+    @dataclass
+    class _FakeIB:
+        connected: bool = False
+        connect_calls: list[tuple[str, int, int]] = field(default_factory=list)
+
+        def isConnected(self) -> bool:
+            return self.connected
+
+        def connect(self, host: str, port: int, clientId: int = 1) -> None:
+            self.connect_calls.append((host, port, clientId))
+            self.connected = True
+
+        def fills(self) -> list[object]:
+            return []
+
+    fake_ib = _FakeIB()
+    fake_broker = IBKRBroker(ib=fake_ib)  # type: ignore[arg-type]
+    monkeypatch.setattr(IBKRBroker, "paper", classmethod(lambda cls, settings: fake_broker))
+    settings = Settings(
+        alpaca_api_key="fake-key",
+        alpaca_secret_key="fake-secret",
+        database_path=tmp_path / "wiring.db",
+        kill_switch_file=tmp_path / "KILL_SWITCH",
+    )
+
+    components = build_paper_trading_components(settings, symbols=[], broker_provider="ibkr")
+    components.loop._connection_guard()  # type: ignore[misc]
+
+    assert fake_ib.connected is True
+    assert len(fake_ib.connect_calls) == 1
+
+
+def test_ibkr_connection_guard_is_a_no_op_when_already_connected(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from dataclasses import dataclass, field
+
+    @dataclass
+    class _FakeIB:
+        connected: bool = True
+        connect_calls: list[tuple[str, int, int]] = field(default_factory=list)
+
+        def isConnected(self) -> bool:
+            return self.connected
+
+        def connect(self, host: str, port: int, clientId: int = 1) -> None:
+            self.connect_calls.append((host, port, clientId))
+
+        def fills(self) -> list[object]:
+            return []
+
+    fake_ib = _FakeIB()
+    fake_broker = IBKRBroker(ib=fake_ib)  # type: ignore[arg-type]
+    monkeypatch.setattr(IBKRBroker, "paper", classmethod(lambda cls, settings: fake_broker))
+    settings = Settings(
+        alpaca_api_key="fake-key",
+        alpaca_secret_key="fake-secret",
+        database_path=tmp_path / "wiring.db",
+        kill_switch_file=tmp_path / "KILL_SWITCH",
+    )
+
+    components = build_paper_trading_components(settings, symbols=[], broker_provider="ibkr")
+    components.loop._connection_guard()  # type: ignore[misc]
+
+    assert fake_ib.connect_calls == []  # already connected -- never redialed
+
+
+def test_ibkr_fill_poller_drains_fills_via_record_fill(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from dataclasses import dataclass, field
+    from datetime import UTC, datetime
+
+    from ib_async import CommissionReport, Execution, Fill, Stock
+
+    @dataclass
+    class _FakeIB:
+        connected: bool = True
+        fill_events: list[Fill] = field(default_factory=list)
+
+        def isConnected(self) -> bool:
+            return self.connected
+
+        def fills(self) -> list[Fill]:
+            return list(self.fill_events)
+
+    execution = Execution(
+        execId="exec-1",
+        orderId=1,
+        orderRef="itd-unmatched",  # no matching order -- record_fill just returns False
+        side="BOT",
+        shares=10.0,
+        price=100.0,
+        time=datetime(2024, 1, 2, 15, 0, tzinfo=UTC),
+    )
+    commission = CommissionReport(execId="exec-1", commission=1.0, currency="USD")
+    fake_ib = _FakeIB(fill_events=[Fill(Stock("AAPL"), execution, commission, execution.time)])
+    fake_broker = IBKRBroker(ib=fake_ib)  # type: ignore[arg-type]
+    monkeypatch.setattr(IBKRBroker, "paper", classmethod(lambda cls, settings: fake_broker))
+    settings = Settings(
+        alpaca_api_key="fake-key",
+        alpaca_secret_key="fake-secret",
+        database_path=tmp_path / "wiring.db",
+        kill_switch_file=tmp_path / "KILL_SWITCH",
+    )
+
+    components = build_paper_trading_components(settings, symbols=[], broker_provider="ibkr")
+
+    components.loop._fill_poller()  # type: ignore[misc]  # must not raise
+
+
+def test_unknown_broker_provider_raises(tmp_path: Path) -> None:
+    settings = Settings(
+        alpaca_api_key="fake-key",
+        alpaca_secret_key="fake-secret",
+        database_path=tmp_path / "wiring.db",
+        kill_switch_file=tmp_path / "KILL_SWITCH",
+    )
+
+    with pytest.raises(ValueError, match="broker_provider"):
+        build_paper_trading_components(settings, symbols=[], broker_provider="bogus")

@@ -1,7 +1,8 @@
 """`status`, the `golive` subcommands, `backtest spy`, and `seed-demo-data` are exercised
-here -- `run-paper` and `kill` construct a real AlpacaBroker and immediately reconcile
-against the network (see execution/wiring.py and CLAUDE.md), so they're deliberately
-never invoked in a test. `backtest spy` also touches the network (real historical bars),
+here -- `run-paper` and `kill` construct a real broker and immediately reconcile against
+the network (see execution/wiring.py and CLAUDE.md), so they're deliberately never
+invoked in a test beyond their `--broker` argument validation, which happens before any
+broker is constructed. `backtest spy` also touches the network (real historical bars),
 but only through `AlpacaMarketDataClient`, whose *underlying* vendor client is easy to
 fake (same pattern as test_data_client.py) while still exercising this file's own
 fetch/store/run/log logic for real.
@@ -34,6 +35,26 @@ def test_status_reports_live_trading_false_by_default(monkeypatch) -> None:  # t
 
     assert result.exit_code == 0
     assert "live_trading: False" in result.stdout
+
+
+def test_run_paper_rejects_an_unknown_broker(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    monkeypatch.setenv("ALPACA_API_KEY", "fake")
+    monkeypatch.setenv("ALPACA_SECRET_KEY", "fake")
+
+    result = runner.invoke(app, ["run-paper", "--broker", "bogus"])
+
+    assert result.exit_code == 1
+    assert "broker" in result.stdout
+
+
+def test_kill_rejects_an_unknown_broker(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    monkeypatch.setenv("ALPACA_API_KEY", "fake")
+    monkeypatch.setenv("ALPACA_SECRET_KEY", "fake")
+
+    result = runner.invoke(app, ["kill", "--broker", "bogus"])
+
+    assert result.exit_code == 1
+    assert "broker" in result.stdout
 
 
 def test_golive_status_reports_not_passed_on_fresh_database(monkeypatch, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
