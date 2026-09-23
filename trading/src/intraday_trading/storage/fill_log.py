@@ -34,6 +34,8 @@ class FillLog:
         commission: float,
         commission_currency: str,
         ts: datetime | None = None,
+        currency: str = "USD",
+        fx_cost: float = 0.0,
     ) -> None:
         slippage = _signed_slippage(side, expected_price, actual_price)
         conn = get_connection(self._database_path)
@@ -42,8 +44,9 @@ class FillLog:
                 """
                 INSERT INTO fills (
                     ts, client_order_id, broker_order_id, symbol, side, qty,
-                    expected_price, actual_price, slippage, commission, commission_currency
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    expected_price, actual_price, slippage, commission, commission_currency,
+                    currency, fx_cost
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     (ts or datetime.now(tz=UTC)).isoformat(),
@@ -57,6 +60,8 @@ class FillLog:
                     slippage,
                     commission,
                     commission_currency,
+                    currency,
+                    fx_cost,
                 ),
             )
             conn.commit()
@@ -77,6 +82,16 @@ class FillLog:
             row = conn.execute(
                 "SELECT COALESCE(SUM(commission), 0.0) AS total FROM fills"
             ).fetchone()
+            return float(row["total"])
+        finally:
+            conn.close()
+
+    def total_fx_cost(self) -> float:
+        """Sum of the per-fill FX cost *estimates* -- see fx_conversion_log.py for the
+        measured cost of conversions the broker actually executed."""
+        conn = get_connection(self._database_path)
+        try:
+            row = conn.execute("SELECT COALESCE(SUM(fx_cost), 0.0) AS total FROM fills").fetchone()
             return float(row["total"])
         finally:
             conn.close()

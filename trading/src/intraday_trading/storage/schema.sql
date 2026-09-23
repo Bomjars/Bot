@@ -50,10 +50,29 @@ CREATE TABLE IF NOT EXISTS fills (
     actual_price REAL NOT NULL,
     slippage REAL NOT NULL,   -- (actual - expected) signed so positive always costs money
     commission REAL NOT NULL,
-    commission_currency TEXT NOT NULL
+    commission_currency TEXT NOT NULL,
+    currency TEXT NOT NULL DEFAULT 'USD',  -- the instrument's trading currency
+    fx_cost REAL NOT NULL DEFAULT 0.0      -- estimated, in `currency`; see Settings.fx_cost_per_fill_pct
 );
+-- (currency/fx_cost were added after `fills` first shipped -- db.py's _ADDED_COLUMNS
+-- adds them to a database created before that.)
 
 CREATE INDEX IF NOT EXISTS idx_fills_client_order_id ON fills (client_order_id);
+
+-- Measured FX cost: every actual currency conversion the broker executed (e.g. an IBKR
+-- GBP.USD trade), with its real rate and commission -- as opposed to fills.fx_cost,
+-- which is only an estimate. Written from execution/fill_recorder.py.
+CREATE TABLE IF NOT EXISTS fx_conversions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts TEXT NOT NULL,
+    broker_order_id TEXT NOT NULL,
+    pair TEXT NOT NULL,        -- e.g. 'GBP.USD'
+    side TEXT NOT NULL,        -- 'buy' = bought the base currency (GBP in GBP.USD)
+    amount REAL NOT NULL,      -- in the base currency
+    rate REAL NOT NULL,        -- quote currency per unit of base
+    commission REAL NOT NULL,
+    commission_currency TEXT NOT NULL
+);
 
 CREATE TABLE IF NOT EXISTS rejections (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

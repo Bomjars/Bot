@@ -449,7 +449,51 @@ def test_poll_fills_returns_new_executions_only_once() -> None:
     assert event.fill_price == 100.5
     assert event.commission == 1.5
     assert event.commission_currency == "USD"
+    assert event.currency == "USD"
+    assert event.sec_type == "STK"
+    assert event.is_fx_conversion is False
     assert second == []  # already seen
+
+
+def test_EXEC_013_fill_is_held_back_until_its_commission_report_arrives() -> None:
+    broker, fake = _broker()
+    execution = Execution(
+        execId="exec-1", orderId=42, orderRef="itd-abc", side="BOT", shares=10.0, price=100.5
+    )
+    # IBKR's placeholder before the real report arrives: empty execId, zero commission.
+    fill = Fill(Stock("AAPL", "SMART", "USD"), execution, CommissionReport(), T0)
+    fake.fills_list = [fill]
+
+    before = broker.poll_fills()
+    fill.commissionReport.execId = "exec-1"  # the report arrives, updating the same Fill
+    fill.commissionReport.commission = 1.25
+    fill.commissionReport.currency = "USD"
+    after = broker.poll_fills()
+    again = broker.poll_fills()
+
+    assert before == []  # not recorded with a zero commission
+    assert len(after) == 1
+    assert after[0].commission == 1.25
+    assert again == []  # and only ever once
+
+
+def test_EXEC_014_poll_fills_marks_a_currency_conversion_as_fx() -> None:
+    from ib_async import Forex
+
+    broker, fake = _broker()
+    execution = Execution(execId="fx-1", orderId=7, side="SLD", shares=1_000.0, price=1.27)
+    commission = CommissionReport(execId="fx-1", commission=2.0, currency="USD")
+    fake.fills_list = [Fill(Forex("GBPUSD"), execution, commission, T0)]
+
+    (event,) = broker.poll_fills()
+
+    assert event.is_fx_conversion is True
+    assert event.sec_type == "CASH"
+    assert event.symbol == "GBP"
+    assert event.currency == "USD"
+    assert event.side == Side.SELL
+    assert event.qty == 1_000.0
+    assert event.fill_price == 1.27
 
 
 def test_get_clock_reports_open_during_a_regular_session() -> None:

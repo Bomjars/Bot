@@ -70,7 +70,8 @@ _STATUS_MAP = {
 @dataclass(frozen=True)
 class FillEvent:
     """A completed IBKR execution, drained via `IBKRBroker.poll_fills()` -- everything
-    storage/fill_log.py needs to record expected-vs-actual price and commission."""
+    storage/fill_log.py (a stock fill) or storage/fx_conversion_log.py (a currency
+    conversion, `sec_type == "CASH"`) needs to record it."""
 
     client_order_id: str
     broker_order_id: str
@@ -81,6 +82,15 @@ class FillEvent:
     commission: float
     commission_currency: str
     ts: datetime
+    currency: str = "USD"
+    """The contract's trading (quote) currency -- e.g. "USD" for a US stock, or for a
+    GBP.USD conversion (symbol "GBP")."""
+    sec_type: str = "STK"
+    """IBKR's security type: "STK" for a stock/ETF, "CASH" for a currency conversion."""
+
+    @property
+    def is_fx_conversion(self) -> bool:
+        return self.sec_type == "CASH"
 
 
 def _as_date(value: date | datetime) -> date:
@@ -249,12 +259,20 @@ class IBKRBroker:
     def poll_fills(self) -> list[FillEvent]:
         """Drains newly-seen executions since the last call -- `ib.fills()` itself
         returns every fill cached since connection, not just new ones, so this tracks
-        which `execId`s have already been returned."""
+        which `execId`s have already been returned.
+
+        IBKR sends an execution's commission report as a separate message, usually just
+        after the execution itself. Until it arrives, `fill.commissionReport` is an empty
+        placeholder (commission 0.0, no execId) -- so a fill is held back, not marked
+        seen, until its own report is attached, rather than being recorded once with a
+        commission of zero that never gets corrected."""
         events = []
         for fill in self._ib.fills():
             exec_id = fill.execution.execId
             if exec_id in self._seen_exec_ids:
                 continue
+            if fill.commissionReport.execId != exec_id:
+                continue  # commission report not in yet -- pick it up on a later tick
             self._seen_exec_ids.add(exec_id)
             events.append(_fill_event_from_fill(fill))
         return events
@@ -319,4 +337,6 @@ def _fill_event_from_fill(fill: Fill) -> FillEvent:
         commission=fill.commissionReport.commission,
         commission_currency=fill.commissionReport.currency,
         ts=fill.time,
+        currency=fill.contract.currency or "USD",
+        sec_type=fill.contract.secType or "STK",
     )

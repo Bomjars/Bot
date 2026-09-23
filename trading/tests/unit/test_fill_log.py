@@ -99,6 +99,41 @@ def test_total_slippage_cost_weights_by_qty(tmp_path: Path) -> None:
     assert log.total_slippage_cost() == pytest.approx(4.0)
 
 
+def test_currency_and_fx_cost_are_persisted(tmp_path: Path) -> None:
+    log = FillLog(tmp_path / "fills.db")
+    log.log(
+        "a",
+        "1",
+        "AAPL",
+        Side.BUY,
+        10,
+        100.0,
+        100.0,
+        commission=1.0,
+        commission_currency="USD",
+        currency="USD",
+        fx_cost=2.5,
+    )
+
+    row = log.recent()[0]
+    assert row["currency"] == "USD"
+    assert row["fx_cost"] == pytest.approx(2.5)
+
+
+def test_fx_cost_defaults_to_zero(tmp_path: Path) -> None:
+    log = FillLog(tmp_path / "fills.db")
+    log.log("a", "1", "AAPL", Side.BUY, 10, 100.0, 100.0, commission=1.0, commission_currency="USD")
+    assert log.recent()[0]["fx_cost"] == 0.0
+
+
+def test_total_fx_cost_sums_across_fills(tmp_path: Path) -> None:
+    log = FillLog(tmp_path / "fills.db")
+    assert log.total_fx_cost() == 0.0
+    log.log("a", "1", "AAPL", Side.BUY, 10, 100.0, 100.0, 0.0, "USD", fx_cost=1.5)
+    log.log("b", "2", "AAPL", Side.SELL, 10, 100.0, 100.0, 0.0, "USD", fx_cost=2.0)
+    assert log.total_fx_cost() == pytest.approx(3.5)
+
+
 def test_recent_respects_limit(tmp_path: Path) -> None:
     log = FillLog(tmp_path / "fills.db")
     for i in range(5):

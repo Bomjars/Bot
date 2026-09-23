@@ -263,6 +263,46 @@ def test_ibkr_fill_poller_drains_fills_via_record_fill(
     components.loop._fill_poller()  # type: ignore[misc]  # must not raise
 
 
+def test_EXEC_014_ibkr_fill_poller_logs_a_currency_conversion(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from dataclasses import dataclass, field
+    from datetime import UTC, datetime
+
+    from ib_async import CommissionReport, Execution, Fill, Forex
+
+    from intraday_trading.storage.fx_conversion_log import FxConversionLog
+
+    @dataclass
+    class _FakeIB:
+        fill_events: list[Fill] = field(default_factory=list)
+
+        def fills(self) -> list[Fill]:
+            return list(self.fill_events)
+
+    ts = datetime(2024, 1, 2, 15, 0, tzinfo=UTC)
+    execution = Execution(execId="fx-1", orderId=9, side="SLD", shares=1_000.0, price=1.27)
+    commission = CommissionReport(execId="fx-1", commission=2.0, currency="USD")
+    fake_ib = _FakeIB(fill_events=[Fill(Forex("GBPUSD"), execution, commission, ts)])
+    fake_broker = IBKRBroker(ib=fake_ib)  # type: ignore[arg-type]
+    monkeypatch.setattr(IBKRBroker, "paper", classmethod(lambda cls, settings: fake_broker))
+    db_path = tmp_path / "wiring.db"
+    settings = Settings(
+        alpaca_api_key="fake-key",
+        alpaca_secret_key="fake-secret",
+        database_path=db_path,
+        kill_switch_file=tmp_path / "KILL_SWITCH",
+    )
+
+    components = build_paper_trading_components(settings, symbols=[], broker_provider="ibkr")
+    components.loop._fill_poller()  # type: ignore[misc]
+
+    rows = FxConversionLog(db_path).recent()
+    assert len(rows) == 1
+    assert rows[0]["pair"] == "GBP.USD"
+    assert rows[0]["commission"] == 2.0
+
+
 def test_unknown_broker_provider_raises(tmp_path: Path) -> None:
     settings = Settings(
         alpaca_api_key="fake-key",

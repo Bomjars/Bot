@@ -86,6 +86,8 @@ section; never renumber.
 | EXEC-010 | P0 | A clock-drift check comparing local time to the broker/exchange clock beyond a configured threshold halts new entries and alerts, rather than trading on a skewed clock. |
 | EXEC-011 | P1 | Every order placed while `settings.live_trading is False` uses the paper base URL exclusively — a unit test asserts no code path can reach the live base URL with `live_trading=False`. |
 | EXEC-012 | P1 | Every order placed while `settings.live_trading is True` still passes through RiskManager unchanged (going live does not bypass or relax any check). |
+| EXEC-013 | P0 | A broker fill whose commission report hasn't arrived yet (IBKR sends it as a separate message) is held back rather than recorded with a commission of zero -- it's drained on a later tick, once, with its real commission. |
+| EXEC-014 | P0 | Every fill's FX cost is logged: a currency-conversion execution (e.g. IBKR GBP.USD) is recorded as a measured FX cost with its rate and commission rather than dropped, and each stock fill records an FX cost estimate (non-zero only when the instrument's currency differs from the account's and `fx_cost_per_fill_pct` is set). |
 
 ## BROKER — Alpaca-specific account rules
 

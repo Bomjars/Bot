@@ -46,7 +46,9 @@ An Interactive Brokers adapter (`broker/ibkr_broker.py`, via `ib_async`) now exi
 alongside Alpaca's, implementing the exact same `Broker` interface — `execution/wiring.py`
 and the CLI's `--broker` flag pick which one `RiskManager` trades through, unchanged
 either way. It adds cost-realism logging (`storage/fill_log.py`: expected vs. actual
-fill price, commission, signed slippage), reconnect-with-backoff for IBKR's persistent
+fill price, commission, signed slippage, and a per-fill FX cost estimate; plus
+`storage/fx_conversion_log.py`: every GBP↔USD conversion IBKR actually executes, with
+its real rate and commission), reconnect-with-backoff for IBKR's persistent
 socket connection, and duplicate-order prevention (RISK-028) that also protects the
 Alpaca path. Like Alpaca, it has never actually been run against a live Gateway in this
 environment (no outbound network access here) — the adapter is fully unit-tested against

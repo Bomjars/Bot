@@ -106,6 +106,14 @@ class Settings(BaseSettings):
     # --- Account ---
     account_currency: str = "GBP"
     starting_equity_gbp: float = 10_000.0
+    fx_cost_per_fill_pct: float = Field(default=0.0, ge=0, le=0.05)
+    """Estimated FX cost per fill, as a fraction of the fill's notional, applied only when
+    the instrument's currency differs from `account_currency` -- recorded in
+    `fills.fx_cost`. Default 0.0 assumes the backtest's own model (backtest/costs.py):
+    convert GBP to USD once to fund the account, then every trade happens in USD with no
+    per-trade conversion. If your broker instead auto-converts on every trade, set this
+    from its fee schedule. Actual conversions the broker executes are logged separately,
+    measured rather than estimated, in `fx_conversions` (storage/fx_conversion_log.py)."""
 
     # --- Sessions / calendar ---
     exchange_timezone: str = "America/New_York"

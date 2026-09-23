@@ -25,7 +25,7 @@ from intraday_trading.config import Settings
 from intraday_trading.data.client import AlpacaMarketDataClient
 from intraday_trading.execution.alpaca_feed import AlpacaPollingFeed
 from intraday_trading.execution.event_loop import PaperTradingLoop
-from intraday_trading.execution.fill_recorder import record_fill
+from intraday_trading.execution.fill_recorder import FxEstimate, record_event
 from intraday_trading.execution.reconnect import retry_with_backoff
 from intraday_trading.risk.risk_manager import RiskManager
 from intraday_trading.session.calendar import ExchangeCalendar
@@ -33,6 +33,7 @@ from intraday_trading.session.clock import SessionClock
 from intraday_trading.state.reconciler import Reconciler
 from intraday_trading.storage.error_log import ErrorLog
 from intraday_trading.storage.fill_log import FillLog
+from intraday_trading.storage.fx_conversion_log import FxConversionLog
 from intraday_trading.storage.order_log import OrderLog
 from intraday_trading.storage.position_record_store import PositionRecordStore
 from intraday_trading.storage.rejection_log import RejectionLog
@@ -63,6 +64,11 @@ def _build_broker_hooks(
     if broker_provider == "ibkr":
         ibkr_broker = IBKRBroker.paper(settings)
         fill_log = FillLog(settings.database_path)
+        fx_log = FxConversionLog(settings.database_path)
+        fx_estimate = FxEstimate(
+            account_currency=settings.account_currency,
+            cost_per_fill_pct=settings.fx_cost_per_fill_pct,
+        )
 
         def connection_guard() -> None:
             if not ibkr_broker.is_connected():
@@ -70,7 +76,7 @@ def _build_broker_hooks(
 
         def fill_poller() -> None:
             for event in ibkr_broker.poll_fills():
-                record_fill(fill_log, order_log, event)
+                record_event(fill_log, fx_log, order_log, event, fx_estimate)
 
         return ibkr_broker, connection_guard, fill_poller
     raise ValueError(f"broker_provider must be one of {BROKER_PROVIDERS}, got {broker_provider!r}")
