@@ -1,7 +1,8 @@
 # Intraday Trading System
 
 An automated intraday equities trading system for a £10,000 account, traded via Alpaca
-(US equities). Paper trading only until the go-live gate in
+or Interactive Brokers (US equities/ETFs only — no UK-listed shares, see RISK-027).
+Paper trading only until the go-live gate in
 [`docs/GO_LIVE_CHECKLIST.md`](docs/GO_LIVE_CHECKLIST.md) is passed (that file arrives in
 step 10 — see [`docs/PLAN.md`](docs/PLAN.md) for the full build order).
 
@@ -41,14 +42,32 @@ against real historical data in this environment (no outbound network access her
 its printed CSCV/PBO verdict and paper-replication numbers checked against the paper's
 own Table 3, before this strategy is validated for paper trading.
 
+An Interactive Brokers adapter (`broker/ibkr_broker.py`, via `ib_async`) now exists
+alongside Alpaca's, implementing the exact same `Broker` interface — `execution/wiring.py`
+and the CLI's `--broker` flag pick which one `RiskManager` trades through, unchanged
+either way. It adds cost-realism logging (`storage/fill_log.py`: expected vs. actual
+fill price, commission, signed slippage), reconnect-with-backoff for IBKR's persistent
+socket connection, and duplicate-order prevention (RISK-028) that also protects the
+Alpaca path. Like Alpaca, it has never actually been run against a live Gateway in this
+environment (no outbound network access here) — the adapter is fully unit-tested against
+a fake `IB` client, but connecting to a real paper Gateway and confirming an order
+round-trips correctly is still an outstanding manual step.
+
 ## Safety model, short version
 
 - `LIVE_TRADING=false` by default, everywhere, always. Flipping it requires an explicit
   `.env` confirmation string **and** passing the go-live checklist — see `CLAUDE.md`.
 - Every order passes through `RiskManager`, which is the only code allowed to call the
   broker's order-placement methods, and which fails closed on any unexpected error.
+- Hard limits (same for either broker): 1% max risk per trade, 3% max daily loss (halts
+  the rest of the day), 15% max drawdown from peak (halts until manually re-enabled), 5
+  max open positions, no leverage/margin (cash account only — RISK-026), US-listed/USD
+  instruments only (RISK-027).
 - A kill switch (CLI, a file flag, and a dashboard button) cancels all orders and flattens
   all positions from any of three independent entry points.
+- A signal's deterministic `client_order_id` is checked against the order log before
+  resubmission, so a crash-and-restart retry can never create a duplicate order
+  (RISK-028).
 
 Full details in `CLAUDE.md` and `docs/PLAN.md`.
 
@@ -69,6 +88,15 @@ notepad .env   # fill in your Alpaca PAPER keys — never the live ones for now
 `.env` is gitignored. Never commit it, and never ask an assistant to print it — see
 `CLAUDE.md`.
 
+**To trade through Interactive Brokers instead of (or alongside) Alpaca**: install and
+run [IB Gateway](https://www.interactivebrokers.com/en/trading/ibgateway-stable.php) (or
+TWS) in **paper** mode and log in — this codebase never launches or configures Gateway
+itself, it only connects to a socket Gateway already has open. Paper mode listens on
+port `4002` by default (`IBKR_PORT` in `.env`); nothing in this codebase can reach the
+live port (`4001`) unless `LIVE_TRADING=true`, which itself needs the confirmation
+string above. Alpaca paper keys are still needed even when trading through IBKR — market
+data (bars) always comes from Alpaca (see `execution/wiring.py`'s module docstring).
+
 ## Running things
 
 ```powershell
@@ -80,15 +108,23 @@ uv run mypy src
 ```
 
 ```powershell
-uv run intraday-trading run-paper --symbols SPY,AAPL   # starts the paper-trading loop
-uv run intraday-trading kill                            # trips the kill switch now
+uv run intraday-trading run-paper --symbols SPY,AAPL              # Alpaca paper (default)
+uv run intraday-trading run-paper --symbols SPY --broker ibkr     # IB Gateway paper instead
+uv run intraday-trading kill --broker ibkr                        # trips the kill switch now
 ```
 
-Both talk to Alpaca's **paper** endpoint only — there is no live path in this codebase
-yet (see CLAUDE.md). `run-paper` currently runs with an empty strategy list by default
-(wiring the SPY strategy in is a deliberate separate step, not done automatically), so it
-will do session/risk bookkeeping and reconciliation without proposing a trade unless you
-wire one in yourself.
+Both `--broker` values talk to that broker's **paper** endpoint only — `.live()` exists
+on both adapters but neither this CLI nor `execution/wiring.py` ever calls it (see
+CLAUDE.md). `run-paper` attaches `SpyMomentumStrategy` only when `SPY` is in `--symbols`,
+so other symbols just get session/risk bookkeeping and reconciliation without a trade
+proposed for them.
+
+```powershell
+# Compares the running paper session's P&L against buy-and-hold of --symbol over the
+# same window, using IBKR's account state and historical prices. Needs a run-paper
+# session already begun today. --notify also sends it to Telegram.
+uv run intraday-trading report daily --symbol SPY --notify
+```
 
 ```powershell
 # Fetches real SPY minute bars, runs the full 192-config house_risk grid plus the
@@ -147,7 +183,7 @@ trading/
 ├── src/intraday_trading/
 │   ├── config.py         Settings + RiskLimits (pydantic-settings, env-driven)
 │   ├── cli.py             CLI entry point
-│   ├── broker/            Broker interface + Alpaca adapter          (step 2)
+│   ├── broker/            Broker interface + Alpaca + IBKR (ib_async) adapters (step 2)
 │   ├── data/               Minute-bar client + bar store              (step 2)
 │   ├── risk/                RiskManager — the only path to the broker  (step 3)
 │   ├── sizing/               Position sizer (ATR/volatility-based)      (step 3)
@@ -161,6 +197,7 @@ trading/
 │   ├── session/                            Exchange calendar/clock, timezones (step 2)
 │   ├── state/                                Restart-safe state + reconciler   (step 8)
 │   ├── alerting/                               Telegram                        (step 8)
+│   ├── reporting/                               Bot vs. buy-and-hold benchmark
 │   └── killswitch/                               Kill switch                    (step 3)
 ├── dashboard/            Streamlit app, 4 pages: main.py + pages/ + lib/     (step 9)
 ├── docs/                 PLAN.md (this build's design doc + paper summaries),
