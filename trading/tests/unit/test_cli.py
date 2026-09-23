@@ -395,3 +395,119 @@ def test_seed_demo_data_refuses_to_overwrite_without_force(monkeypatch, tmp_path
 
     assert result.exit_code == 0, result.stdout
     assert TrialRegistry(demo_db).get_trials("spy_momentum")
+
+
+def _summary_env(monkeypatch: pytest.MonkeyPatch, db_path: Path) -> None:
+    monkeypatch.setenv("ALPACA_API_KEY", "fake")
+    monkeypatch.setenv("ALPACA_SECRET_KEY", "fake")
+    monkeypatch.setenv("DATABASE_PATH", str(db_path))
+    monkeypatch.setenv("ALPACA_DATA_FEED", "iex")
+
+
+def _log_summary_trials(registry: TrialRegistry, strategy: str, n_trials: int) -> None:
+    import numpy as np
+
+    rng = np.random.default_rng(3)
+    days = pd.bdate_range("2024-01-02", periods=64).date
+    for i in range(n_trials):
+        pnl = pd.Series(rng.normal(10.0 * i, 20.0, len(days)), index=days)
+        registry.log_trial(
+            strategy,
+            {"vm": 1.0 + i / 10, "lookback_days": 14, "stop_variant": "curr_band_vwap"},
+            pnl,
+        )
+
+
+def test_BT_009_backtest_summary_prints_plain_english_numbers(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from intraday_trading.storage.bar_store import BarStore
+
+    db_path = tmp_path / "summary.db"
+    _summary_env(monkeypatch, db_path)
+    registry = TrialRegistry(db_path)
+    _log_summary_trials(registry, "spy_momentum", n_trials=3)
+    _log_summary_trials(registry, "spy_momentum_paper_faithful", n_trials=1)
+    days = pd.bdate_range("2024-01-02", periods=64)
+    BarStore(db_path).upsert_bars(
+        pd.DataFrame(
+            {
+                "symbol": "SPY",
+                "ts": [
+                    pd.Timestamp(d).tz_localize("America/New_York") + pd.Timedelta(hours=10)
+                    for d in days
+                ],
+                "open": 470.0,
+                "high": 471.0,
+                "low": 469.0,
+                "close": [470.0 + i for i in range(len(days))],
+                "volume": 1_000.0,
+                "feed": "iex",
+            }
+        )
+    )
+
+    result = runner.invoke(app, ["backtest", "summary"])
+
+    assert result.exit_code == 0, result.stdout
+    out = result.stdout
+    assert "spy_momentum: 3 configs, 2024-01-02 to" in out
+    assert "Overfitting check (CSCV/PBO)" in out
+    assert "profitable after costs:" in out
+    assert "Best config (trial" in out
+    assert "vm=1.2" in out  # strongest drift
+    assert "Buy and hold SPY, same dates" in out
+    assert "no stored SPY bars" not in out
+    assert "Paper's own settings" in out
+    assert "the paper reported: 19.6% per year" in out
+    assert "WARNING" not in out
+
+
+def test_backtest_summary_warns_on_mixed_runs_and_missing_bars(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    db_path = tmp_path / "summary.db"
+    _summary_env(monkeypatch, db_path)
+    registry = TrialRegistry(db_path)
+    _log_summary_trials(registry, "spy_momentum", n_trials=2)
+    registry.log_trial(
+        "spy_momentum",
+        {"vm": 3.0},
+        pd.Series([1.0] * 5, index=pd.bdate_range("2024-06-03", periods=5).date),
+    )
+
+    result = runner.invoke(app, ["backtest", "summary"])
+
+    assert result.exit_code == 0, result.stdout
+    assert "WARNING: these trials cover 2 different date ranges" in result.stdout
+    assert "no stored SPY bars for these dates" in result.stdout
+    assert "Paper's own settings" not in result.stdout
+
+
+def test_backtest_summary_too_little_data_for_cscv(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    db_path = tmp_path / "summary.db"
+    _summary_env(monkeypatch, db_path)
+    TrialRegistry(db_path).log_trial(
+        "spy_momentum",
+        {"vm": 1.0},
+        pd.Series([1.0, -1.0, 2.0], index=pd.bdate_range("2024-01-02", periods=3).date),
+    )
+
+    result = runner.invoke(app, ["backtest", "summary"])
+
+    assert result.exit_code == 0, result.stdout
+    assert "not enough data to run it" in result.stdout
+    assert "DSR" not in result.stdout
+
+
+def test_backtest_summary_exits_1_without_trials(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _summary_env(monkeypatch, tmp_path / "summary.db")
+
+    result = runner.invoke(app, ["backtest", "summary", "--strategy", "nope"])
+
+    assert result.exit_code == 1
+    assert "No trials logged for 'nope'" in result.stdout

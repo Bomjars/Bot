@@ -14,9 +14,10 @@ from __future__ import annotations
 import logging
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
+import pandas as pd
 import structlog
 import typer
 
@@ -29,6 +30,14 @@ from intraday_trading.dev.demo_data import generate_demo_data
 from intraday_trading.execution.wiring import BROKER_PROVIDERS, build_paper_trading_components
 from intraday_trading.golive.gate import evaluate_go_live_gate
 from intraday_trading.killswitch.kill_switch import trip
+from intraday_trading.reporting.backtest_summary import (
+    PAPER_TABLE3_ANNUAL_RETURN_PCT,
+    PAPER_TABLE3_MAX_DRAWDOWN_PCT,
+    PAPER_TABLE3_SHARPE,
+    Performance,
+    performance_from_prices,
+    summarize_grid,
+)
 from intraday_trading.reporting.benchmark import compute_benchmark_comparison, format_daily_report
 from intraday_trading.session.calendar import EXCHANGE_TZ
 from intraday_trading.storage.bar_store import BarStore
@@ -310,6 +319,118 @@ def backtest_spy(
         "Run `intraday-trading golive status --strategies spy_momentum` for the "
         "CSCV/PBO verdict, or open the dashboard's Validation Report page."
     )
+
+
+def _fmt_perf_lines(perf: Performance) -> list[str]:
+    return [
+        f"  return per year:  {perf.annual_return_pct:6.1f}%   "
+        f"(total {perf.total_return_pct:,.0f}%)",
+        f"  worst drop:       {perf.max_drawdown_pct:6.1f}%   (peak to trough)",
+        f"  Sharpe ratio:     {perf.sharpe:6.2f}    (return per unit of risk; >1 is good)",
+        f"  ups and downs:    {perf.annual_vol_pct:6.1f}%   per year",
+    ]
+
+
+@backtest_app.command("summary")
+def backtest_summary(
+    strategy: str = typer.Option("spy_momentum", help="Strategy name in the trial registry"),
+    symbol: str = typer.Option("SPY", help="Instrument for the buy-and-hold comparison"),
+    starting_equity: float = typer.Option(
+        100_000.0, help="The --starting-equity the backtest was run with (USD)"
+    ),
+) -> None:
+    """Plain-English numbers behind a logged backtest grid: the overfitting verdict, how
+    the grid did overall, the best config vs buy-and-hold, and the paper_faithful run vs
+    the paper's own Table 3. Read-only -- it never changes the registry."""
+    settings = load_settings()
+    registry = TrialRegistry(settings.database_path)
+    summary = summarize_grid(registry, strategy, starting_equity)
+    if summary is None:
+        typer.secho(f"No trials logged for {strategy!r}.", fg=typer.colors.RED)
+        raise typer.Exit(code=1)
+
+    typer.secho(
+        f"{strategy}: {summary.n_trials} configs, {summary.first_date} to "
+        f"{summary.last_date} ({summary.best.days:,} trading days)",
+        bold=True,
+    )
+    if summary.n_date_ranges > 1:
+        typer.secho(
+            f"  WARNING: these trials cover {summary.n_date_ranges} different date ranges "
+            "(more than one backtest run is mixed together) -- the numbers below are "
+            "distorted until the extra runs are retired.",
+            fg=typer.colors.YELLOW,
+        )
+
+    typer.echo()
+    typer.secho("Overfitting check (CSCV/PBO)", bold=True)
+    if summary.pbo is None or summary.p_oos_sharpe_negative is None:
+        typer.echo("  not enough data to run it")
+    else:
+        status = "PASS" if summary.cscv_passed else "FAIL"
+        typer.echo(f"  {status}: {summary.cscv_reason}")
+        typer.echo(f"  PBO {summary.pbo:.1%}: chance the config that looked best was just lucky")
+        typer.echo(
+            f"  {summary.p_oos_sharpe_negative:.1%}: chance the chosen config loses money "
+            "on data it wasn't picked on"
+        )
+    if summary.dsr is not None:
+        typer.echo(
+            f"  DSR {summary.dsr:.1%}: confidence the best config's edge is real after "
+            f"allowing for {registry.trial_count(strategy)} tries (>95% is strong)"
+        )
+
+    typer.echo()
+    typer.secho(f"All {summary.n_trials} configs", bold=True)
+    typer.echo(f"  profitable after costs: {summary.n_profitable}/{summary.n_trials}")
+    typer.echo(f"  median return per year: {summary.median_annual_return_pct:.1f}%")
+
+    typer.echo()
+    typer.secho(
+        f"Best config (trial {summary.best_trial_id}; picked on the whole period, so flattering)",
+        bold=True,
+    )
+    shown = ("vm", "lookback_days", "decision_interval_minutes", "stop_variant", "sizing")
+    typer.echo(
+        "  " + ", ".join(f"{k}={summary.best_params[k]}" for k in shown if k in summary.best_params)
+    )
+    for line in _fmt_perf_lines(summary.best):
+        typer.echo(line)
+    typer.echo(f"  days with a trade:  {summary.best.active_day_pct:5.1f}%")
+
+    start_dt = datetime.fromisoformat(summary.first_date).replace(tzinfo=EXCHANGE_TZ)
+    end_dt = datetime.fromisoformat(summary.last_date).replace(tzinfo=EXCHANGE_TZ) + timedelta(
+        days=1
+    )
+    bars = BarStore(settings.database_path).get_bars(
+        symbol, start_dt, end_dt, settings.alpaca_data_feed.value
+    )
+    typer.echo()
+    typer.secho(f"Buy and hold {symbol}, same dates", bold=True)
+    if bars.empty:
+        typer.echo(f"  no stored {symbol} bars for these dates -- can't compare")
+    else:
+        dates = [pd.Timestamp(ts).astimezone(EXCHANGE_TZ).date() for ts in bars["ts"]]
+        daily_closes = bars.assign(date=dates).groupby("date")["close"].last()
+        for line in _fmt_perf_lines(
+            performance_from_prices(float(bars["open"].iloc[0]), daily_closes)
+        ):
+            typer.echo(line)
+
+    paper = summarize_grid(registry, f"{strategy}_paper_faithful", starting_equity)
+    if paper is not None:
+        typer.echo()
+        typer.secho(
+            "Paper's own settings (paper_faithful, up to 4x leverage -- replication only)",
+            bold=True,
+        )
+        for line in _fmt_perf_lines(paper.best):
+            typer.echo(line)
+        typer.echo(
+            f"  the paper reported: {PAPER_TABLE3_ANNUAL_RETURN_PCT}% per year, Sharpe "
+            f"{PAPER_TABLE3_SHARPE}, worst drop {PAPER_TABLE3_MAX_DRAWDOWN_PCT}% "
+            "(May 2007 - Apr 2024, so different dates)"
+        )
 
 
 @app.command("seed-demo-data")

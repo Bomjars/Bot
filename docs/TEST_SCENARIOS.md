@@ -138,6 +138,7 @@ section; never renumber.
 | BT-006 | P0 | A backtest run is fully deterministic given the same inputs and config (same trades, same P&L, byte-identical trial registry row) across two runs. |
 | BT-007 | P0 | The backtester enforces the same RiskManager limits as live (same class, same config) — a backtest is not allowed to exceed `max_open_positions` etc. |
 | BT-008 | P0 | Every backtest run (each grid config) starts from its own fresh RiskManager state: no halt, peak equity, or daily/weekly baseline from an earlier run carries into a later one, and a backtest never reads or writes the real trading database's `risk_state` or `rejections` tables. |
+| BT-009 | P1 | `backtest summary` reports, from the trial registry alone, the CSCV/PBO verdict, how many grid configs were profitable, the best config's return/drawdown/Sharpe/activity, the same figures for buy-and-hold over the same dates, and the paper_faithful run beside the paper's Table 3 — and warns when trials from more than one backtest date range are mixed together. |
 
 ## VAL — validation (CSCV/PBO, PSR, MinTRL, DSR, trial registry)
 
