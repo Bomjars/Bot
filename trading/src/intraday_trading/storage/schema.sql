@@ -33,6 +33,28 @@ CREATE TABLE IF NOT EXISTS orders (
     broker_order_id TEXT NOT NULL
 );
 
+-- Cost realism: every fill's actual price/commission against what the order expected,
+-- so slippage is a queryable number rather than a guess. Written from
+-- storage/fill_log.py, fed by a broker-specific fill poller (IBKR's fills arrive
+-- asynchronously; see broker/ibkr_broker.py's poll_fills()) -- deliberately separate
+-- from `orders`, which records the request, not the outcome.
+CREATE TABLE IF NOT EXISTS fills (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts TEXT NOT NULL,
+    client_order_id TEXT NOT NULL,
+    broker_order_id TEXT NOT NULL,
+    symbol TEXT NOT NULL,
+    side TEXT NOT NULL,
+    qty REAL NOT NULL,
+    expected_price REAL NOT NULL,
+    actual_price REAL NOT NULL,
+    slippage REAL NOT NULL,   -- (actual - expected) signed so positive always costs money
+    commission REAL NOT NULL,
+    commission_currency TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_fills_client_order_id ON fills (client_order_id);
+
 CREATE TABLE IF NOT EXISTS rejections (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     ts TEXT NOT NULL,

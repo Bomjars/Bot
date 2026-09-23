@@ -57,6 +57,21 @@ class OrderLog:
             conn.close()
         return [dict(row) for row in rows]
 
+    def find_by_client_order_id(self, client_order_id: str) -> dict[str, object] | None:
+        """Looks up the order this `client_order_id` was already logged under, if any --
+        used both for duplicate-order prevention (RiskManager checks this before
+        resubmitting a signal) and to recover a fill's *expected* price when a broker's
+        fill event (e.g. IBKR's async execDetails) arrives later than submission."""
+        conn = get_connection(self._database_path)
+        try:
+            row = conn.execute(
+                "SELECT * FROM orders WHERE client_order_id = ? ORDER BY ts DESC LIMIT 1",
+                (client_order_id,),
+            ).fetchone()
+        finally:
+            conn.close()
+        return dict(row) if row is not None else None
+
     def count(self) -> int:
         conn = get_connection(self._database_path)
         try:

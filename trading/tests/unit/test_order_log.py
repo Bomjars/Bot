@@ -60,3 +60,19 @@ def test_recent_respects_limit(tmp_path: Path) -> None:
     for _i in range(5):
         log.log(_signal(), _order())
     assert len(log.recent(limit=3)) == 3
+
+
+def test_find_by_client_order_id_returns_the_matching_row(tmp_path: Path) -> None:
+    log = OrderLog(tmp_path / "orders.db")
+    log.log(_signal(), _order())
+
+    row = log.find_by_client_order_id("c1")
+
+    assert row is not None
+    assert row["symbol"] == "AAPL"
+    assert row["entry_price"] == 100.0
+
+
+def test_find_by_client_order_id_returns_none_when_not_found(tmp_path: Path) -> None:
+    log = OrderLog(tmp_path / "orders.db")
+    assert log.find_by_client_order_id("nonexistent") is None
