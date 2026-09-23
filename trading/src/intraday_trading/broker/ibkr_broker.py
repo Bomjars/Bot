@@ -24,7 +24,7 @@ storage/fill_log.py.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 
 from ib_async import (
     IB,
@@ -81,6 +81,10 @@ class FillEvent:
     commission: float
     commission_currency: str
     ts: datetime
+
+
+def _as_date(value: date | datetime) -> date:
+    return value.date() if isinstance(value, datetime) else value
 
 
 def _us_stock_contract(symbol: str) -> Contract:
@@ -254,6 +258,23 @@ class IBKRBroker:
             self._seen_exec_ids.add(exec_id)
             events.append(_fill_event_from_fill(fill))
         return events
+
+    def get_daily_closes(self, symbol: str, duration_str: str = "5 D") -> list[tuple[date, float]]:
+        """Daily closing prices for `symbol` over `duration_str` (IBKR's own duration
+        format, e.g. "5 D", "1 Y") -- used only by reporting/benchmark.py's
+        buy-and-hold comparison, never by a strategy (CLAUDE.md rule 9: strategies only
+        ever read market data through `StrategyContext`, not a broker call of their
+        own)."""
+        contract = self._qualify(symbol)
+        bars = self._ib.reqHistoricalData(
+            contract,
+            endDateTime="",
+            durationStr=duration_str,
+            barSizeSetting="1 day",
+            whatToShow="TRADES",
+            useRTH=True,
+        )
+        return [(_as_date(bar.date), bar.close) for bar in bars]
 
     def _qualify(self, symbol: str) -> Contract:
         qualified = self._ib.qualifyContracts(_us_stock_contract(symbol))

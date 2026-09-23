@@ -18,9 +18,11 @@ import pytest
 from typer.testing import CliRunner
 
 from intraday_trading import cli
+from intraday_trading.broker.ibkr_broker import IBKRBroker
 from intraday_trading.cli import app
 from intraday_trading.data.client import AlpacaMarketDataClient
 from intraday_trading.storage.go_live_checklist_store import GoLiveChecklistStore
+from intraday_trading.storage.risk_state_store import RiskStateStore
 from intraday_trading.strategies.spy_momentum import SpyMomentumConfig
 from intraday_trading.validation.registry import TrialRegistry
 
@@ -55,6 +57,125 @@ def test_kill_rejects_an_unknown_broker(monkeypatch) -> None:  # type: ignore[no
 
     assert result.exit_code == 1
     assert "broker" in result.stdout
+
+
+@dataclass
+class _FakeReportIB:
+    equity: float = 101_000.0
+    closes: list[tuple[object, float]] | None = None
+
+    def accountSummary(self):  # type: ignore[no-untyped-def]
+        from ib_async import AccountValue
+
+        return [
+            AccountValue(
+                account="U1",
+                tag="NetLiquidation",
+                value=str(self.equity),
+                currency="USD",
+                modelCode="",
+            ),
+            AccountValue(
+                account="U1",
+                tag="SettledCash",
+                value=str(self.equity),
+                currency="USD",
+                modelCode="",
+            ),
+            AccountValue(
+                account="U1",
+                tag="BuyingPower",
+                value=str(self.equity),
+                currency="USD",
+                modelCode="",
+            ),
+        ]
+
+    def qualifyContracts(self, *contracts):  # type: ignore[no-untyped-def]
+        return list(contracts)
+
+    def reqHistoricalData(self, contract, **kwargs):  # type: ignore[no-untyped-def]
+        from datetime import date
+
+        from ib_async import BarData
+
+        if self.closes is not None:
+            return [BarData(date=d, close=c) for d, c in self.closes]
+        return [
+            BarData(date=date(2024, 1, 1), close=500.0),
+            BarData(date=date(2024, 1, 2), close=505.0),
+        ]
+
+
+def test_report_daily_requires_a_started_session(monkeypatch, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
+    monkeypatch.setenv("ALPACA_API_KEY", "fake")
+    monkeypatch.setenv("ALPACA_SECRET_KEY", "fake")
+    monkeypatch.setenv("DATABASE_PATH", str(tmp_path / "report.db"))
+
+    result = runner.invoke(app, ["report", "daily"])
+
+    assert result.exit_code == 1
+    assert "run `run-paper` first" in result.stdout
+
+
+def test_report_daily_prints_the_comparison(monkeypatch, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
+    db_path = tmp_path / "report.db"
+    monkeypatch.setenv("ALPACA_API_KEY", "fake")
+    monkeypatch.setenv("ALPACA_SECRET_KEY", "fake")
+    monkeypatch.setenv("DATABASE_PATH", str(db_path))
+    from intraday_trading.risk.signals import HaltType
+    from intraday_trading.storage.risk_state_store import RiskState
+
+    store = RiskStateStore(db_path)
+    state = RiskState(daily_starting_equity=100_000.0, halt_type=HaltType.NONE)
+    store.save(state)
+
+    fake_broker = IBKRBroker(ib=_FakeReportIB(equity=101_000.0))
+    monkeypatch.setattr(IBKRBroker, "paper", classmethod(lambda cls, settings: fake_broker))
+
+    result = runner.invoke(app, ["report", "daily", "--symbol", "SPY"])
+
+    assert result.exit_code == 0, result.stdout
+    assert "Bot:" in result.stdout
+    assert "SPY" in result.stdout
+
+
+def test_report_daily_fails_with_insufficient_historical_data(monkeypatch, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
+    db_path = tmp_path / "report.db"
+    monkeypatch.setenv("ALPACA_API_KEY", "fake")
+    monkeypatch.setenv("ALPACA_SECRET_KEY", "fake")
+    monkeypatch.setenv("DATABASE_PATH", str(db_path))
+    from intraday_trading.storage.risk_state_store import RiskState
+
+    RiskStateStore(db_path).save(RiskState(daily_starting_equity=100_000.0))
+
+    fake_broker = IBKRBroker(ib=_FakeReportIB(closes=[]))
+    monkeypatch.setattr(IBKRBroker, "paper", classmethod(lambda cls, settings: fake_broker))
+
+    result = runner.invoke(app, ["report", "daily"])
+
+    assert result.exit_code == 1
+    assert "Not enough historical data" in result.stdout
+
+
+def test_report_daily_notify_sends_a_telegram_summary(monkeypatch, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
+    db_path = tmp_path / "report.db"
+    monkeypatch.setenv("ALPACA_API_KEY", "fake")
+    monkeypatch.setenv("ALPACA_SECRET_KEY", "fake")
+    monkeypatch.setenv("DATABASE_PATH", str(db_path))
+    from intraday_trading.storage.risk_state_store import RiskState
+
+    RiskStateStore(db_path).save(RiskState(daily_starting_equity=100_000.0))
+
+    fake_broker = IBKRBroker(ib=_FakeReportIB())
+    monkeypatch.setattr(IBKRBroker, "paper", classmethod(lambda cls, settings: fake_broker))
+    sent = []
+    monkeypatch.setattr(cli.TelegramAlerter, "daily_summary", lambda self, text: sent.append(text))
+
+    result = runner.invoke(app, ["report", "daily", "--notify"])
+
+    assert result.exit_code == 0, result.stdout
+    assert len(sent) == 1
 
 
 def test_golive_status_reports_not_passed_on_fresh_database(monkeypatch, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]

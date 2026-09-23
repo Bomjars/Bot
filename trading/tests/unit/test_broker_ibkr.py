@@ -14,10 +14,11 @@ were given (EXEC-002, via IBKR's `orderRef`), and there is no live path unless
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 from ib_async import (
     AccountValue,
+    BarData,
     CommissionReport,
     Contract,
     Execution,
@@ -59,6 +60,7 @@ class FakeIB:
     qualify_result: list[Contract] | None = None
     connected: bool = True
     connect_calls: list[tuple[str, int, int]] = field(default_factory=list)
+    historical_bars: list[BarData] = field(default_factory=list)
 
     def isConnected(self) -> bool:
         return self.connected
@@ -66,6 +68,9 @@ class FakeIB:
     def connect(self, host: str, port: int, clientId: int = 1) -> None:
         self.connect_calls.append((host, port, clientId))
         self.connected = True
+
+    def reqHistoricalData(self, contract: Contract, **kwargs: object) -> list[BarData]:
+        return list(self.historical_bars)
 
     def qualifyContracts(self, *contracts: Contract) -> list[Contract]:
         if self.qualify_result is not None:
@@ -460,6 +465,27 @@ def test_get_clock_reports_closed_outside_session_hours() -> None:
     fake.current_time = datetime(2024, 1, 2, 2, 0, tzinfo=UTC)  # 21:00 ET, after close
     clock = broker.get_clock()
     assert clock.is_open is False
+
+
+def test_get_daily_closes_maps_bar_dates_and_closes() -> None:
+    broker, fake = _broker()
+    fake.historical_bars = [
+        BarData(date=date(2024, 1, 2), close=500.0),
+        BarData(date=date(2024, 1, 3), close=505.0),
+    ]
+
+    closes = broker.get_daily_closes("SPY", duration_str="2 D")
+
+    assert closes == [(date(2024, 1, 2), 500.0), (date(2024, 1, 3), 505.0)]
+
+
+def test_get_daily_closes_handles_a_datetime_valued_bar_date() -> None:
+    broker, fake = _broker()
+    fake.historical_bars = [BarData(date=datetime(2024, 1, 2, 0, 0, tzinfo=UTC), close=500.0)]
+
+    closes = broker.get_daily_closes("SPY")
+
+    assert closes == [(date(2024, 1, 2), 500.0)]
 
 
 def test_qualify_raises_when_ibkr_cannot_qualify_the_contract() -> None:

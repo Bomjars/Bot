@@ -18,16 +18,20 @@ from pathlib import Path
 
 import typer
 
+from intraday_trading.alerting.telegram import TelegramAlerter
 from intraday_trading.backtest.costs import CostModel
+from intraday_trading.broker.ibkr_broker import IBKRBroker
 from intraday_trading.config import load_settings
 from intraday_trading.data.client import AlpacaMarketDataClient
 from intraday_trading.dev.demo_data import generate_demo_data
 from intraday_trading.execution.wiring import BROKER_PROVIDERS, build_paper_trading_components
 from intraday_trading.golive.gate import evaluate_go_live_gate
 from intraday_trading.killswitch.kill_switch import trip
+from intraday_trading.reporting.benchmark import compute_benchmark_comparison, format_daily_report
 from intraday_trading.session.calendar import EXCHANGE_TZ
 from intraday_trading.storage.bar_store import BarStore
 from intraday_trading.storage.go_live_checklist_store import GoLiveChecklistStore
+from intraday_trading.storage.risk_state_store import RiskStateStore
 from intraday_trading.strategies.spy_grid import (
     GridRunConfig,
     bars_from_dataframe,
@@ -48,6 +52,8 @@ backtest_app = typer.Typer(
     add_completion=False, help="Run a strategy's parameter grid against real historical data."
 )
 app.add_typer(backtest_app, name="backtest")
+report_app = typer.Typer(add_completion=False, help="Bot performance vs. a buy-and-hold benchmark.")
+app.add_typer(report_app, name="report")
 
 
 @app.command()
@@ -115,6 +121,46 @@ def kill(
     components = build_paper_trading_components(settings, symbols=[], broker_provider=broker)
     trip(components.risk_manager, reason="manual CLI kill switch")
     typer.secho("Kill switch tripped: orders cancelled, positions flattened.", fg=typer.colors.RED)
+
+
+@report_app.command("daily")
+def report_daily(
+    symbol: str = typer.Option("SPY", help="Instrument to compare buy-and-hold against"),
+    notify: bool = typer.Option(False, help="Also send this report via Telegram"),
+) -> None:
+    """Compare the paper account's P&L since today's starting equity against simply
+    buying and holding `--symbol` over the same window. Uses IBKR's account state and
+    historical prices (IBKRBroker.get_daily_closes) -- requires IB Gateway reachable on
+    the configured paper port, and at least one `run-paper` session already begun today
+    (RiskStateStore.daily_starting_equity)."""
+    settings = load_settings()
+    risk_state = RiskStateStore(settings.database_path).load()
+    if risk_state.daily_starting_equity is None:
+        typer.secho(
+            "No trading session recorded yet today -- run `run-paper` first.",
+            fg=typer.colors.RED,
+        )
+        raise typer.Exit(code=1)
+
+    broker = IBKRBroker.paper(settings)
+    account = broker.get_account()
+    closes = broker.get_daily_closes(symbol, duration_str="2 D")
+    if len(closes) < 2:
+        typer.secho(f"Not enough historical data returned for {symbol!r}.", fg=typer.colors.RED)
+        raise typer.Exit(code=1)
+
+    comparison = compute_benchmark_comparison(
+        starting_equity=risk_state.daily_starting_equity,
+        current_equity=account.equity,
+        benchmark_start_price=closes[-2][1],
+        benchmark_current_price=closes[-1][1],
+    )
+    report_text = format_daily_report(symbol, comparison)
+    typer.echo(report_text)
+
+    if notify:
+        alerter = TelegramAlerter(settings.telegram_bot_token, settings.telegram_chat_id)
+        alerter.daily_summary(report_text)
 
 
 @golive_app.command("status")
