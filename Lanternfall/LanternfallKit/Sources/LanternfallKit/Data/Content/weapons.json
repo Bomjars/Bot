@@ -1,0 +1,32 @@
+[
+  {
+    "id": "lantern_flare",
+    "name": "Lantern Flare",
+    "summary": "Fires a bolt of light at the nearest enemy.",
+    "behavior": "projectile",
+    "color": "#FFD27F",
+    "spriteName": "weapon_lantern_flare",
+    "levels": [
+      { "damage": 10, "cooldown": 1.1, "count": 1, "area": 6, "duration": 1.6, "speed": 420, "pierce": 0, "range": 420, "spreadDegrees": 12, "knockback": 60, "description": "Fires a bolt of light at the nearest enemy." },
+      { "damage": 10, "cooldown": 1.1, "count": 2, "area": 6, "duration": 1.6, "speed": 420, "pierce": 0, "range": 420, "spreadDegrees": 12, "knockback": 60, "description": "Fires 1 more bolt." },
+      { "damage": 15, "cooldown": 1.1, "count": 2, "area": 7, "duration": 1.6, "speed": 440, "pierce": 0, "range": 440, "spreadDegrees": 12, "knockback": 70, "description": "+5 damage, slightly larger bolts." },
+      { "damage": 15, "cooldown": 0.85, "count": 2, "area": 7, "duration": 1.6, "speed": 440, "pierce": 0, "range": 440, "spreadDegrees": 12, "knockback": 70, "description": "Fires 25% faster." },
+      { "damage": 18, "cooldown": 0.85, "count": 3, "area": 8, "duration": 1.8, "speed": 460, "pierce": 1, "range": 460, "spreadDegrees": 12, "knockback": 80, "description": "+1 bolt, +3 damage, bolts pierce 1 enemy." }
+    ]
+  },
+  {
+    "id": "ember_orbit",
+    "name": "Ember Orbit",
+    "summary": "Embers circle you, burning anything they touch.",
+    "behavior": "orbit",
+    "color": "#FF7A3D",
+    "spriteName": "weapon_ember_orbit",
+    "levels": [
+      { "damage": 8, "cooldown": 2.5, "count": 2, "area": 70, "duration": 3.0, "speed": 3.2, "hitInterval": 0.45, "bodyRadius": 9, "knockback": 90, "description": "Two embers circle you, burning anything they touch." },
+      { "damage": 8, "cooldown": 2.5, "count": 3, "area": 70, "duration": 3.0, "speed": 3.2, "hitInterval": 0.45, "bodyRadius": 9, "knockback": 90, "description": "+1 ember." },
+      { "damage": 11, "cooldown": 2.5, "count": 3, "area": 85, "duration": 3.0, "speed": 3.4, "hitInterval": 0.45, "bodyRadius": 10, "knockback": 100, "description": "+3 damage, wider orbit." },
+      { "damage": 11, "cooldown": 2.0, "count": 3, "area": 85, "duration": 4.0, "speed": 3.4, "hitInterval": 0.4, "bodyRadius": 10, "knockback": 100, "description": "Burns 1s longer and returns sooner." },
+      { "damage": 14, "cooldown": 2.0, "count": 4, "area": 95, "duration": 4.0, "speed": 3.6, "hitInterval": 0.4, "bodyRadius": 11, "knockback": 110, "description": "+1 ember, +3 damage, wider orbit." }
+    ]
+  }
+]

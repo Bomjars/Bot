@@ -1,0 +1,91 @@
+{
+  "startup": { "levelID": "hollow_woods", "characterID": "wick" },
+  "simulation": {
+    "fixedTimestep": 0.0166666667,
+    "maxStepsPerFrame": 5,
+    "timestepSnapTolerance": 0.05,
+    "spatialCellSize": 64,
+    "maxProjectiles": 400,
+    "separationStrength": 10,
+    "maxSeparationNeighbors": 8,
+    "spawnMargin": 60,
+    "knockbackDamping": 12,
+    "minContactDamage": 1
+  },
+  "player": {
+    "maxHP": 100,
+    "moveSpeed": 120,
+    "radius": 12,
+    "armor": 0,
+    "pickupRadius": 70,
+    "collectRadius": 16,
+    "invulnerabilityTime": 0.5
+  },
+  "xp": {
+    "firstLevelRequirement": 5,
+    "brackets": [
+      { "fromLevel": 1, "increment": 10 },
+      { "fromLevel": 20, "increment": 13 },
+      { "fromLevel": 40, "increment": 16 }
+    ]
+  },
+  "upgrades": {
+    "choiceCount": 3,
+    "maxWeapons": 6,
+    "maxPassives": 6,
+    "newItemWeight": 1.0,
+    "levelUpWeight": 1.2,
+    "fallbackHealAmount": 30,
+    "minCooldownMultiplier": 0.4,
+    "pool": {
+      "weapons": ["lantern_flare", "ember_orbit"],
+      "passives": ["oil_flask", "copper_wire", "hearthstone"]
+    }
+  },
+  "pickups": {
+    "emberTiers": [
+      { "name": "small", "value": 1, "radius": 4, "color": "#FFD27F" },
+      { "name": "medium", "value": 5, "radius": 6, "color": "#FFB347" },
+      { "name": "large", "value": 25, "radius": 8, "color": "#FF7A3D" }
+    ],
+    "maxActiveEmbers": 400,
+    "magnetInitialSpeed": 60,
+    "magnetAcceleration": 900,
+    "magnetMaxSpeed": 700
+  },
+  "joystick": { "radius": 56, "knobRadius": 24, "deadZone": 0.12, "activeAreaFraction": 0.6667 },
+  "camera": { "followSharpness": 10 },
+  "juice": {
+    "hitFlashDuration": 0.08,
+    "playerHurtFlashDuration": 0.15,
+    "damageNumberLifetime": 0.55,
+    "damageNumberRise": 28,
+    "damageNumberPoolSize": 48,
+    "damageNumberFontSize": 13
+  },
+  "render": {
+    "characterSpriteSize": 32,
+    "enemySpriteScale": 1.3,
+    "groundTileSize": 250,
+    "groundDetailCount": 14,
+    "placeholderTextureSize": 64,
+    "pickupGlowAlpha": 0.16,
+    "projectileGlowScale": 3,
+    "mapBorderWidth": 6,
+    "healthBarWidth": 30,
+    "healthBarHeight": 4,
+    "healthBarOffset": 22
+  },
+  "palette": {
+    "background": "#1B1B2F",
+    "backgroundAlt": "#2E2A4F",
+    "foliage": "#3B5249",
+    "light": "#FFB347",
+    "lightSoft": "#FFD27F",
+    "enemyShadow": "#6B4E9B",
+    "danger": "#E94F64",
+    "playerCloak": "#3D3A66",
+    "playerScarf": "#FF7A1A",
+    "text": "#F4EBDD"
+  }
+}

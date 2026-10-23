@@ -1,0 +1,63 @@
+# XcodeGen spec. Lanternfall.xcodeproj is generated from this file and committed,
+# so you can just open it. After adding/removing files, regenerate with:
+#   brew install xcodegen && xcodegen generate
+name: Lanternfall
+options:
+  bundleIdPrefix: com.lanternfall
+  deploymentTarget:
+    iOS: "17.0"
+  developmentLanguage: en
+  createIntermediateGroups: true
+  xcodeVersion: "16.0"
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+packages:
+  LanternfallKit:
+    path: LanternfallKit
+targets:
+  Lanternfall:
+    type: application
+    platform: iOS
+    sources:
+      - path: App
+    dependencies:
+      - package: LanternfallKit
+    info:
+      path: Support/Info.plist
+      properties:
+        CFBundleDisplayName: Lanternfall
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        UILaunchScreen:
+          UIColorName: LaunchBackground
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        UIStatusBarHidden: true
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.lanternfall.game
+        TARGETED_DEVICE_FAMILY: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        CODE_SIGN_STYLE: Automatic
+        SUPPORTS_MACCATALYST: false
+schemes:
+  Lanternfall:
+    build:
+      targets:
+        Lanternfall: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - package: LanternfallKit/LanternfallKitTests
+    profile:
+      config: Release
+    archive:
+      config: Release
