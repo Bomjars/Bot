@@ -1,0 +1,26 @@
+[
+  {
+    "id": "wick", "name": "Wick", "title": "The Lantern Keeper",
+    "description": "The last keeper of the light. The lantern's glow pulls embers home.",
+    "startingWeapon": "lantern_flare", "playable": true, "color": "#FF7A1A",
+    "modifiers": { "maxHPBonus": 0, "damageMultiplier": 1, "moveSpeedMultiplier": 1, "damageTakenMultiplier": 1, "hpRegenPerSecond": 0, "critChance": 0 }
+  },
+  {
+    "id": "bolt", "name": "Bolt", "title": "The Scrap Robot",
+    "description": "Clanks along slowly, but shrugs off hits.",
+    "startingWeapon": "spark_coil", "playable": false, "color": "#8FA3B8",
+    "modifiers": { "maxHPBonus": 0, "damageMultiplier": 1, "moveSpeedMultiplier": 0.9, "damageTakenMultiplier": 0.9, "hpRegenPerSecond": 0, "critChance": 0 }
+  },
+  {
+    "id": "moss", "name": "Moss", "title": "The Mushroom Druid",
+    "description": "Slowly regrows, but hits softly.",
+    "startingWeapon": "spore_cloud", "playable": false, "color": "#7FB069",
+    "modifiers": { "maxHPBonus": 0, "damageMultiplier": 0.85, "moveSpeedMultiplier": 1, "damageTakenMultiplier": 1, "hpRegenPerSecond": 0.5, "critChance": 0 }
+  },
+  {
+    "id": "rook", "name": "Rook", "title": "The Crow-Masked Doctor",
+    "description": "Strikes where it hurts most.",
+    "startingWeapon": "feather_daggers", "playable": false, "color": "#2F2F3A",
+    "modifiers": { "maxHPBonus": 0, "damageMultiplier": 1, "moveSpeedMultiplier": 1, "damageTakenMultiplier": 1, "hpRegenPerSecond": 0, "critChance": 0.1 }
+  }
+]
