@@ -1,10 +1,10 @@
 [
-  { "id": "oil_flask",   "name": "Oil Flask",   "stat": "damage",       "perLevel": 0.10,  "maxLevel": 5, "description": "+10% damage.",         "color": "#E9A23B", "spriteName": "passive_oil_flask" },
+  { "id": "holy_oil",    "name": "Holy Oil",    "stat": "damage",       "perLevel": 0.10,  "maxLevel": 5, "description": "+10% damage.",         "color": "#FFE7A3", "spriteName": "passive_holy_oil" },
   { "id": "bellows",     "name": "Bellows",     "stat": "area",         "perLevel": 0.10,  "maxLevel": 5, "description": "+10% area.",           "color": "#C77D52", "spriteName": "passive_bellows" },
   { "id": "copper_wire", "name": "Copper Wire", "stat": "cooldown",     "perLevel": -0.08, "maxLevel": 5, "description": "-8% weapon cooldown.", "color": "#D9824B", "spriteName": "passive_copper_wire" },
   { "id": "wax_seal",    "name": "Wax Seal",    "stat": "armor",        "perLevel": 1,     "maxLevel": 5, "description": "+1 armour.",           "color": "#B4475A", "spriteName": "passive_wax_seal" },
   { "id": "hearthstone", "name": "Hearthstone", "stat": "maxHP",        "perLevel": 20,    "maxLevel": 5, "description": "+20 max HP.",          "color": "#E94F64", "spriteName": "passive_hearthstone" },
   { "id": "swift_boots", "name": "Swift Boots", "stat": "moveSpeed",    "perLevel": 0.10,  "maxLevel": 5, "description": "+10% move speed.",     "color": "#7FB7A4", "spriteName": "passive_swift_boots" },
   { "id": "moth_lure",   "name": "Moth Lure",   "stat": "pickupRadius", "perLevel": 0.25,  "maxLevel": 5, "description": "+25% pickup radius.",  "color": "#C6B8FF", "spriteName": "passive_moth_lure" },
-  { "id": "lucky_coin",  "name": "Lucky Coin",  "stat": "luck",         "perLevel": 0.10,  "maxLevel": 5, "description": "+10% luck.",           "color": "#F2D35B", "spriteName": "passive_lucky_coin" }
+  { "id": "ferrymans_coin", "name": "Ferryman's Coin", "stat": "luck",         "perLevel": 0.10,  "maxLevel": 5, "description": "+10% luck.",           "color": "#F2D35B", "spriteName": "passive_ferrymans_coin" }
 ]

@@ -23,10 +23,10 @@ final class UpgradeSystemTests: XCTestCase {
         let content = try TestContent.bundled()
         var loadout = Loadout()
         UpgradeSystem.apply(UpgradeOption(kind: .weapon, itemID: "lantern_flare", fromLevel: 4, toLevel: 5), to: &loadout)
-        UpgradeSystem.apply(UpgradeOption(kind: .passive, itemID: "oil_flask", fromLevel: 4, toLevel: 5), to: &loadout)
+        UpgradeSystem.apply(UpgradeOption(kind: .passive, itemID: "holy_oil", fromLevel: 4, toLevel: 5), to: &loadout)
         let ids = UpgradeSystem.candidates(for: loadout, content: content).map(\.itemID)
         XCTAssertFalse(ids.contains("lantern_flare"))
-        XCTAssertFalse(ids.contains("oil_flask"))
+        XCTAssertFalse(ids.contains("holy_oil"))
     }
 
     func testFullSlotsBlockNewItems() throws {

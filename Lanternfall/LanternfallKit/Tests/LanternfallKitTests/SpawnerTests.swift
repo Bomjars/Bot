@@ -6,7 +6,7 @@ final class SpawnerTests: XCTestCase {
     private let mapSize: Float = 4000
 
     private func wave(start: Float, end: Float, interval: Float, group: Int, pattern: SpawnPattern = .scatter) -> WaveConfig {
-        WaveConfig(enemy: "gloomling", start: start, end: end, interval: interval, groupSize: group, pattern: pattern)
+        WaveConfig(enemy: "imp", start: start, end: end, interval: interval, groupSize: group, pattern: pattern)
     }
 
     /// Runs the spawner from `from` to `to` seconds and returns every request.

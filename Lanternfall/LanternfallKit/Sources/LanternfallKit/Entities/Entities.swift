@@ -50,6 +50,7 @@ public struct Projectile: Poolable {
     public init() {}
 }
 
+/// XP pickup ("soul" in game).
 public struct Ember: Poolable {
     public var isActive = false
     public var position = Vec2.zero

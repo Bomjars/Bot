@@ -45,9 +45,9 @@ public struct PlayerConfig: Codable, Equatable {
     public var moveSpeed: Float
     public var radius: Float
     public var armor: Float
-    /// Lantern glow radius: embers inside it fly to the player.
+    /// Lantern glow radius: souls inside it fly to the player.
     public var pickupRadius: Float
-    /// Distance at which a magnetised ember is absorbed.
+    /// Distance at which a magnetised soul is absorbed.
     public var collectRadius: Float
     public var invulnerabilityTime: Float
 }
@@ -86,7 +86,7 @@ public struct UpgradePool: Codable, Equatable {
 public struct PickupConfig: Codable, Equatable {
     /// Visual tiers, ascending by value (small 1 / medium 5 / large 25).
     public var emberTiers: [EmberTierConfig]
-    /// When this many embers are on the map, new drops merge into the nearest one.
+    /// When this many souls are on the map, new drops merge into the nearest one.
     public var maxActiveEmbers: Int
     public var magnetInitialSpeed: Float
     public var magnetAcceleration: Float
@@ -142,7 +142,8 @@ public struct RenderConfig: Codable, Equatable {
 public struct PaletteConfig: Codable, Equatable {
     public var background: String
     public var backgroundAlt: String
-    public var foliage: String
+    /// Lava-crack specks on the ground tiles.
+    public var groundDetail: String
     public var light: String
     public var lightSoft: String
     public var enemyShadow: String
@@ -163,7 +164,7 @@ public struct EnemyConfig: Codable, Equatable {
     public var radius: Float
     public var xpValue: Float
     public var color: String
-    /// Base sprite name, e.g. "enemy_gloomling" → frames "enemy_gloomling_walk_0...3".
+    /// Base sprite name, e.g. "enemy_imp" → frames "enemy_imp_walk_0...3".
     public var spriteName: String
 }
 

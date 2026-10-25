@@ -155,7 +155,7 @@ final class GameScene: SKScene {
         let palette = config.palette
         let mapSize = CGFloat(simulation.level.mapSize)
         let tileSize = CGFloat(config.render.groundTileSize)
-        let detailColors = [UIColor(hex: palette.backgroundAlt), UIColor(hex: palette.foliage)]
+        let detailColors = [UIColor(hex: palette.backgroundAlt), UIColor(hex: palette.groundDetail)]
         let tiles = (0..<3).map { variant in
             textures.artOrPlaceholder("ground_\(simulation.level.id)_\(variant)") {
                 textures.groundTile(
@@ -225,7 +225,7 @@ final class GameScene: SKScene {
         }
         orbitalTextures = projectileTextures
         emberTextures = config.pickups.emberTiers.map { tier in
-            textures.artOrPlaceholder("pickup_ember_\(tier.name)") {
+            textures.artOrPlaceholder("pickup_soul_\(tier.name)") {
                 textures.orb(key: "ember_\(tier.name)", color: UIColor(hex: tier.color))
             }
         }

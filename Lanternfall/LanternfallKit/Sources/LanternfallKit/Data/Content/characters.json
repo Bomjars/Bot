@@ -1,8 +1,8 @@
 [
   {
-    "id": "wick", "name": "Wick", "title": "The Lantern Keeper",
-    "description": "The last keeper of the light. The lantern's glow pulls embers home.",
-    "startingWeapon": "lantern_flare", "playable": true, "color": "#FF7A1A",
+    "id": "wick", "name": "Wick", "title": "The Stolen Flame",
+    "description": "A damned soul who stole a lantern of heavenly light. Its glow pulls freed souls home.",
+    "startingWeapon": "lantern_flare", "playable": true, "color": "#FFE7A3",
     "modifiers": { "maxHPBonus": 0, "damageMultiplier": 1, "moveSpeedMultiplier": 1, "damageTakenMultiplier": 1, "hpRegenPerSecond": 0, "critChance": 0 }
   },
   {

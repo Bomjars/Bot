@@ -1,0 +1,27 @@
+{
+  "id": "ashen_wastes",
+  "name": "The Ashen Wastes",
+  "order": 1,
+  "duration": 480,
+  "mapSize": 4000,
+  "enemyCap": 300,
+  "obstacles": {
+    "count": 140,
+    "minRadius": 16,
+    "maxRadius": 40,
+    "clearRadius": 240,
+    "maxPlacementAttempts": 3000,
+    "kinds": [
+      { "id": "brimstone", "weight": 3, "color": "#4A2A26" },
+      { "id": "bone_pile", "weight": 1, "color": "#CFC2AE" }
+    ]
+  },
+  "waves": [
+    { "enemy": "imp", "start": 0,   "end": 90,  "interval": 1.4,  "groupSize": 2, "pattern": "scatter" },
+    { "enemy": "imp", "start": 45,  "end": 180, "interval": 1.0,  "groupSize": 3, "pattern": "scatter" },
+    { "enemy": "imp", "start": 150, "end": 300, "interval": 0.8,  "groupSize": 4, "pattern": "scatter" },
+    { "enemy": "imp", "start": 270, "end": 390, "interval": 0.6,  "groupSize": 5, "pattern": "scatter" },
+    { "enemy": "imp", "start": 390, "end": 480, "interval": 0.5,  "groupSize": 5, "pattern": "scatter" },
+    { "enemy": "imp", "start": 390, "end": 480, "interval": 9,    "groupSize": 28, "pattern": "ring" }
+  ]
+}

@@ -4,9 +4,9 @@ import XCTest
 final class ContentTests: XCTestCase {
     func testBundledContentLoads() throws {
         let content = try TestContent.bundled()
-        XCTAssertEqual(content.levels.first?.id, "hollow_woods")
+        XCTAssertEqual(content.levels.first?.id, "ashen_wastes")
         XCTAssertNotNil(content.weapon(id: "lantern_flare"))
-        XCTAssertNotNil(content.enemyIndex(id: "gloomling"))
+        XCTAssertNotNil(content.enemyIndex(id: "imp"))
         XCTAssertEqual(content.passives.count, 8)
         XCTAssertEqual(content.character(id: "wick")?.playable, true)
         XCTAssertEqual(content.characters.filter { !$0.playable }.map(\.id), ["bolt", "moss", "rook"])

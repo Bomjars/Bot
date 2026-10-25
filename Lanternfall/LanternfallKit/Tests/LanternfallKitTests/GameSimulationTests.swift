@@ -125,21 +125,21 @@ final class GameSimulationTests: XCTestCase {
 
     func testRejectsChoiceNotOnOffer() throws {
         let sim = try TestContent.simulation(try quietContent())
-        XCTAssertFalse(sim.chooseUpgrade(UpgradeOption(kind: .passive, itemID: "oil_flask", fromLevel: 0, toLevel: 1)))
+        XCTAssertFalse(sim.chooseUpgrade(UpgradeOption(kind: .passive, itemID: "holy_oil", fromLevel: 0, toLevel: 1)))
     }
 
     func testNewWeaponFromUpgradeStartsFiring() throws {
         let sim = try TestContent.simulation(try TestContent.modified(
-            config: { $0.upgrades.pool = UpgradePool(weapons: ["ember_orbit"], passives: []) },
+            config: { $0.upgrades.pool = UpgradePool(weapons: ["halo_shards"], passives: []) },
             level: { $0.waves = [] }
         ))
         sim.gainXP(sim.xpRequiredForNextLevel)
         sim.step(dt: dt)
-        let orbit = try XCTUnwrap(sim.upgradeChoices.first { $0.itemID == "ember_orbit" })
+        let orbit = try XCTUnwrap(sim.upgradeChoices.first { $0.itemID == "halo_shards" })
         sim.chooseUpgrade(orbit)
         steps(sim, seconds: 0.5)
         XCTAssertEqual(sim.weapons.count, 2)
-        XCTAssertEqual(sim.orbitals.count, sim.content.weapon(id: "ember_orbit")!.levels[0].count)
+        XCTAssertEqual(sim.orbitals.count, sim.content.weapon(id: "halo_shards")!.levels[0].count)
     }
 
     func testHearthstoneRaisesMaxAndCurrentHP() throws {

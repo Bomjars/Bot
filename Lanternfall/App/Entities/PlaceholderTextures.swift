@@ -5,7 +5,7 @@ import UIKit
 /// Draws simple placeholder textures at runtime so the game is playable
 /// before real art exists. `artOrPlaceholder` prefers an image with the
 /// given name from the asset catalog, so dropping in e.g.
-/// `enemy_gloomling_walk_0` replaces the placeholder with no code change.
+/// `enemy_imp_walk_0` replaces the placeholder with no code change.
 @MainActor
 final class PlaceholderTextures {
     private var cache: [String: SKTexture] = [:]
@@ -51,7 +51,7 @@ final class PlaceholderTextures {
         }
     }
 
-    /// Bright core with a coloured halo: projectiles, embers, orbitals.
+    /// Bright core with a coloured halo: projectiles, souls, orbitals.
     func orb(key: String, color: UIColor) -> SKTexture {
         cached(key) { context, rect in
             drawRadial(

@@ -9,14 +9,14 @@ struct RunEndView: View {
 
     var body: some View {
         ModalPanel(theme: theme) {
-            Text(summary.victory ? "DAWN BREAKS" : "THE GLOOM TAKES YOU")
+            Text(summary.victory ? "THE GATE OPENS" : "DRAGGED BACK DOWN")
                 .font(Theme.font(24, weight: .heavy))
                 .foregroundStyle(summary.victory ? theme.light : theme.danger)
                 .multilineTextAlignment(.center)
 
             VStack(spacing: 8) {
                 StatRow(label: "Time survived", value: String(format: "%d:%02d", summary.secondsSurvived / 60, summary.secondsSurvived % 60), theme: theme)
-                StatRow(label: "Gloom banished", value: "\(summary.kills)", theme: theme)
+                StatRow(label: "Demons slain", value: "\(summary.kills)", theme: theme)
                 StatRow(label: "Level reached", value: "\(summary.level)", theme: theme)
             }
 

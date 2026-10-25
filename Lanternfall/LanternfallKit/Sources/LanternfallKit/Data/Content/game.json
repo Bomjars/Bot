@@ -1,5 +1,5 @@
 {
-  "startup": { "levelID": "hollow_woods", "characterID": "wick" },
+  "startup": { "levelID": "ashen_wastes", "characterID": "wick" },
   "simulation": {
     "fixedTimestep": 0.0166666667,
     "maxStepsPerFrame": 5,
@@ -38,15 +38,15 @@
     "fallbackHealAmount": 30,
     "minCooldownMultiplier": 0.4,
     "pool": {
-      "weapons": ["lantern_flare", "ember_orbit"],
-      "passives": ["oil_flask", "copper_wire", "hearthstone"]
+      "weapons": ["lantern_flare", "halo_shards"],
+      "passives": ["holy_oil", "copper_wire", "hearthstone"]
     }
   },
   "pickups": {
     "emberTiers": [
-      { "name": "small", "value": 1, "radius": 4, "color": "#FFD27F" },
-      { "name": "medium", "value": 5, "radius": 6, "color": "#FFB347" },
-      { "name": "large", "value": 25, "radius": 8, "color": "#FF7A3D" }
+      { "name": "small", "value": 1, "radius": 4, "color": "#9FE8FF" },
+      { "name": "medium", "value": 5, "radius": 6, "color": "#5FC8FF" },
+      { "name": "large", "value": 25, "radius": 8, "color": "#B98CFF" }
     ],
     "maxActiveEmbers": 400,
     "magnetInitialSpeed": 60,
@@ -77,15 +77,15 @@
     "healthBarOffset": 22
   },
   "palette": {
-    "background": "#1B1B2F",
-    "backgroundAlt": "#2E2A4F",
-    "foliage": "#3B5249",
-    "light": "#FFB347",
-    "lightSoft": "#FFD27F",
-    "enemyShadow": "#6B4E9B",
-    "danger": "#E94F64",
-    "playerCloak": "#3D3A66",
-    "playerScarf": "#FF7A1A",
-    "text": "#F4EBDD"
+    "background": "#1A0D10",
+    "backgroundAlt": "#33141A",
+    "groundDetail": "#FF5A1F",
+    "light": "#FFE7A3",
+    "lightSoft": "#FFF6D6",
+    "enemyShadow": "#8E2B2B",
+    "danger": "#FF3B2F",
+    "playerCloak": "#4A4558",
+    "playerScarf": "#E8F1FF",
+    "text": "#F6E9E4"
   }
 }

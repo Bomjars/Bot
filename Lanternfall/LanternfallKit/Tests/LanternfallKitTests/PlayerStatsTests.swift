@@ -23,7 +23,7 @@ final class PlayerStatsTests: XCTestCase {
 
     func testPassivesScalePerLevel() throws {
         let content = try TestContent.bundled()
-        let result = stats([("oil_flask", 3), ("hearthstone", 2), ("swift_boots", 1), ("wax_seal", 4), ("moth_lure", 2)], content: content)
+        let result = stats([("holy_oil", 3), ("hearthstone", 2), ("swift_boots", 1), ("wax_seal", 4), ("moth_lure", 2)], content: content)
         XCTAssertEqual(result.damageMultiplier, 1.3, accuracy: 1e-5)
         XCTAssertEqual(result.maxHP, content.config.player.maxHP + 40, accuracy: 1e-5)
         XCTAssertEqual(result.moveSpeed, content.config.player.moveSpeed * 1.1, accuracy: 1e-4)

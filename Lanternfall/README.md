@@ -1,9 +1,11 @@
 # Lanternfall
 
 An original top-down survivor game for iPhone (SpriteKit + SwiftUI, iOS 17+, portrait).
-You are Wick, the last Lantern Keeper. Your lantern's glow is the only thing holding back the Gloom. Survive until dawn.
+You died, and the underworld took you, but you stole a lantern of heavenly light on the way down. As Wick, the Stolen Flame, you climb out through the circles of hell while demons swarm to drag you back. Survive each circle until its gate opens.
 
-**Status: Phase 1 (core loop).** You can move with the joystick, Gloomlings spawn and chase you, Lantern Flare fires on its own, kills drop XP embers, and the XP bar fills up. Each level-up pauses the game and offers 1 of 3 upgrades drawn from 2 weapons and 3 passives. The run ends when your HP runs out, or when the 8:00 timer is up. The Grove Mother boss replaces that timer win in Phase 3.
+The full design is in [`GAME_SPEC.md`](GAME_SPEC.md).
+
+**Status: Phase 1 (core loop).** You can move with the joystick, Imps spawn and chase you, Lantern Flare fires on its own, slain demons release souls (XP), and the XP bar fills up. Each level-up pauses the game and offers 1 of 3 upgrades drawn from 2 weapons and 3 passives. The run ends when your HP runs out, or when the 8:00 timer is up. The Gatekeeper boss replaces that timer win in Phase 3.
 
 ## Run it
 
@@ -47,7 +49,7 @@ Lanternfall/
 └── LanternfallKit/              Swift package: all game rules, no UIKit
     ├── Sources/LanternfallKit/
     │   ├── Core/                GameSimulation (fixed-step world), events, run phases
-    │   ├── Entities/            Player, Enemy, Projectile, Ember, Obstacle structs, Pool
+    │   ├── Entities/            Player, Enemy, Projectile, Ember (souls), Obstacle structs, Pool
     │   ├── Systems/             Spawner, SpatialHashGrid, UpgradeSystem, PlayerStats, XPCurve, clock
     │   └── Data/                Codable models + Content/*.json
     └── Tests/
@@ -70,8 +72,8 @@ All content is in `LanternfallKit/Sources/LanternfallKit/Data/Content/`. It's va
 Add an entry to `enemies.json`:
 
 ```json
-{ "id": "shade_bat", "name": "Shade Bat", "maxHP": 5, "moveSpeed": 95, "contactDamage": 4,
-  "radius": 9, "xpValue": 1, "color": "#4B3B77", "spriteName": "enemy_shade_bat" }
+{ "id": "hellbat", "name": "Hellbat", "maxHP": 5, "moveSpeed": 95, "contactDamage": 4,
+  "radius": 9, "xpValue": 1, "color": "#7A1F2B", "spriteName": "enemy_hellbat" }
 ```
 
 Then reference it from a wave in a level file. Phase 1 enemies all use the `chase` movement. Phase 2 adds per-enemy behaviours (erratic, ranged, charge).
@@ -97,13 +99,13 @@ Drop a new file into `levels/`. Every `*.json` there is loaded and sorted by `or
 
 ```json
 {
-  "id": "ashen_marsh", "name": "The Ashen Marsh", "order": 2,
+  "id": "burning_river", "name": "The Burning River", "order": 2,
   "duration": 480, "mapSize": 4000, "enemyCap": 300,
   "obstacles": { "count": 120, "minRadius": 16, "maxRadius": 40, "clearRadius": 240,
-                 "maxPlacementAttempts": 3000, "kinds": [{ "id": "reed", "weight": 1, "color": "#3B5249" }] },
+                 "maxPlacementAttempts": 3000, "kinds": [{ "id": "obsidian", "weight": 1, "color": "#2A1A24" }] },
   "waves": [
-    { "enemy": "gloomling", "start": 0, "end": 120, "interval": 1.2, "groupSize": 3, "pattern": "scatter" },
-    { "enemy": "gloomling", "start": 100, "end": 480, "interval": 10, "groupSize": 24, "pattern": "ring" }
+    { "enemy": "imp", "start": 0, "end": 120, "interval": 1.2, "groupSize": 3, "pattern": "scatter" },
+    { "enemy": "imp", "start": 100, "end": 480, "interval": 10, "groupSize": 24, "pattern": "ring" }
   ]
 }
 ```
@@ -117,11 +119,11 @@ Placeholder shapes are drawn at runtime. If the asset catalog contains an image 
 | thing | image name |
 |---|---|
 | player | `player_wick_idle_0` |
-| enemy | `<spriteName>_walk_0` (e.g. `enemy_gloomling_walk_0`) and `<spriteName>_flash` (white silhouette for hit flash) |
+| enemy | `<spriteName>_walk_0` (e.g. `enemy_imp_walk_0`) and `<spriteName>_flash` (white silhouette for hit flash) |
 | projectile / orbit body | `<weapon spriteName>_projectile` |
-| XP ember | `pickup_ember_small`, `pickup_ember_medium`, `pickup_ember_large` |
-| obstacle | `obstacle_tree`, `obstacle_rock` |
-| ground | `ground_hollow_woods_0`…`_2` |
+| soul (XP) | `pickup_soul_small`, `pickup_soul_medium`, `pickup_soul_large` |
+| obstacle | `obstacle_brimstone`, `obstacle_bone_pile` |
+| ground | `ground_ashen_wastes_0`…`_2` |
 
 Put sprites in a `.spriteatlas` folder inside `App/Resources/Assets.xcassets`. Multi-frame walk animation comes in Phase 5.
 
@@ -129,6 +131,6 @@ Put sprites in a `.spriteatlas` folder inside `App/Resources/Assets.xcassets`. M
 
 1. ~~Core loop~~ ✅
 2. Content: all 6 weapons, 8 passives in the pool, all Level 1 enemies, full wave timeline, pickups, elite + chest
-3. Boss & results: The Grove Mother, win condition, results screen, gold, save data
+3. Boss & results: The Gatekeeper, win condition, results screen, obols (gold), save data
 4. Meta & menus: main menu, character select, Camp shop, settings, haptics, sound hooks, pixel font
 5. Polish: lighting, juice (particles, shake), evolutions, performance pass on device, real art

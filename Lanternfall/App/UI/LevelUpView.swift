@@ -14,7 +14,7 @@ struct LevelUpView: View {
             Text("LEVEL UP")
                 .font(Theme.font(30, weight: .heavy))
                 .foregroundStyle(theme.light)
-            Text("Level \(level) · choose a blessing of light")
+            Text("Level \(level) · choose a stolen blessing")
                 .font(Theme.font(13, weight: .regular))
                 .foregroundStyle(theme.text.opacity(0.8))
             ForEach(options) { option in
@@ -52,7 +52,7 @@ struct UpgradeInfo {
             detail = passive?.description ?? ""
             colorHex = passive?.color ?? content.config.palette.light
         case .heal:
-            title = "Warm Supper"
+            title = "Holy Water"
             badge = "HEAL"
             detail = "Restore \(Int(content.config.upgrades.fallbackHealAmount)) HP."
             colorHex = content.config.palette.danger
