@@ -12,7 +12,8 @@
 		"separation": 2.2,
 		"intra_cell_spread": 2.5,
 		"density_cell_size": 0.5,
-		"threaded": true
+		"threaded": true,
+		"wander": 0.45
 	},
 	"test_range": {
 		"width": 200,

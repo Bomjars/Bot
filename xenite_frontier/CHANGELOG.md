@@ -36,7 +36,7 @@
 ### Measured (headless, CPU only; 4-thread 2.1 GHz cloud Xeon, a slow machine)
 | Aliens | Avg FPS | 1% low | Swarm sim avg / p99 |
 |---|---|---|---|
-| 10,000 | 145 | 134 | 4.0 ms / 6.1 ms |
+| 10,000 | 145 | 144 | 4.8 ms / 7.8 ms |
 | 20,000 | 142 | 90 | 6.4 ms / 9.9 ms |
 
 Flow field rebuild (200x140 cells): ~54 ms on a worker thread, with no frame hitch.

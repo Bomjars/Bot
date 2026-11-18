@@ -71,8 +71,8 @@ func _ready() -> void:
 
 ## Dev helper: `-- --aliens=N --screenshot=path.png` saves a frame after a warm-up.
 func _screenshot_after(path: String) -> void:
-	# simulate ~10 s at 60 Hz up front so slow (software) renderers show a horde
-	for k in 600:
+	# simulate ~40 s at 60 Hz up front so slow (software) renderers show a horde
+	for k in 2400:
 		swarm.approach_population(target_count)
 		swarm.simulate(1.0 / 60.0)
 	for arg in OS.get_cmdline_user_args():

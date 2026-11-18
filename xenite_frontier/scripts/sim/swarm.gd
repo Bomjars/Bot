@@ -23,6 +23,7 @@ var _dscale := 2.0
 
 var separation := 2.2
 var spread := 2.5
+var wander := 0.45
 var max_spawn_per_frame := 600
 
 var threaded := true
@@ -36,6 +37,7 @@ var _chunk_pool := PackedInt32Array()
 var _chunk_start := PackedInt32Array()
 var _chunk_reached := PackedInt32Array()
 var _f_dt := 0.0
+var _f_time := 0.0
 var _f_dirx: PackedFloat32Array
 var _f_dirz: PackedFloat32Array
 var _f_dist: PackedInt32Array
@@ -54,6 +56,7 @@ func setup(m: OutpostMap, f: FlowField, defs: Array) -> void:
 	spread = cfg.get("intra_cell_spread", spread)
 	max_spawn_per_frame = int(cfg.get("max_spawn_per_frame", max_spawn_per_frame))
 	threaded = bool(cfg.get("threaded", true))
+	wander = cfg.get("wander", wander)
 	_dscale = 1.0 / float(cfg.get("density_cell_size", 0.5))
 	_dw = int(map.w * _dscale)
 	_dh = int(map.h * _dscale)
@@ -143,6 +146,7 @@ func simulate(dt: float) -> void:
 	_frame += 1
 	# frame-constant inputs shared (read-only) by all worker chunks
 	_f_dt = dt
+	_f_time += dt
 	_f_dirx = field.dir_x
 	_f_dirz = field.dir_z
 	_f_dist = field.dist
@@ -222,8 +226,12 @@ func _sim_chunk(ci: int) -> void:
 		var cz := int(gz)
 		var c := cz * w + cx
 		var s := spd[i]
-		var tx := dirx[c] * s
-		var tz := dirz[c] * s
+		var fdx := dirx[c]
+		var fdz := dirz[c]
+		# predatory weave: each alien drifts side to side across the flow
+		var wv := sin(_f_time * 1.7 + float(i) * 0.6180339) * s * wander
+		var tx := fdx * s - fdz * wv
+		var tz := fdz * s + fdx * wv
 
 		# crowd pressure from density gradient
 		var fx := gx * ds
