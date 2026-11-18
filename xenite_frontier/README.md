@@ -135,3 +135,8 @@ xenite_frontier/
 - [ ] **M8** Steam (GodotSteam), achievements, cloud saves, Deck/controller, export + upload scripts
 
 See `CHANGELOG.md` for per-milestone notes.
+
+## Screenshots (M1, software-rendered)
+
+![Horde streaming into the compound](docs/m1_overview.png)
+![Strain silhouettes](docs/m1_strains.png)
