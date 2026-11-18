@@ -1,0 +1,53 @@
+{
+	"_comment": "Alien strain definitions. Order matters: it is the type id. Counters (weak/resists) are used from M2 on: weak = 150% damage, resists = 50%.",
+	"aliens": [
+		{
+			"id": "stalker",
+			"name": "Stalker",
+			"trait": "Fast pack hunter, low HP. Arrives in floods.",
+			"hp": 20, "speed": 7.0, "steer": 6.0, "size": 1.0, "mass": 1, "push": 1.0,
+			"spawn_weight": 55,
+			"weak": ["incendiary", "shock"], "resists": ["piercing"]
+		},
+		{
+			"id": "mauler",
+			"name": "Mauler",
+			"trait": "Armoured bruiser. Smashes blast doors.",
+			"hp": 220, "speed": 3.4, "steer": 3.0, "size": 1.0, "mass": 4, "push": 0.6,
+			"spawn_weight": 10,
+			"weak": ["piercing"], "resists": ["ballistic"]
+		},
+		{
+			"id": "spitter",
+			"name": "Spitter",
+			"trait": "Lobs acid from range. Fragile sac.",
+			"hp": 35, "speed": 4.2, "steer": 4.0, "size": 1.0, "mass": 1, "push": 1.0,
+			"spawn_weight": 12,
+			"weak": ["explosive"], "resists": ["shock"]
+		},
+		{
+			"id": "snatcher",
+			"name": "Snatcher",
+			"trait": "Fast, dodging abductor. Drags colonists away.",
+			"hp": 45, "speed": 6.6, "steer": 7.0, "size": 1.0, "mass": 1, "push": 1.2,
+			"spawn_weight": 10,
+			"weak": ["shock", "ballistic"], "resists": ["explosive"]
+		},
+		{
+			"id": "burrower",
+			"name": "Burrower",
+			"trait": "Tunnels beneath walls.",
+			"hp": 80, "speed": 4.6, "steer": 4.0, "size": 1.0, "mass": 2, "push": 0.8,
+			"spawn_weight": 10,
+			"weak": ["seismic"], "resists": ["incendiary"]
+		},
+		{
+			"id": "brood_mother",
+			"name": "Brood Mother",
+			"trait": "Boss. Spawns brood, eats to grow.",
+			"hp": 2500, "speed": 2.2, "steer": 1.5, "size": 1.0, "mass": 16, "push": 0.25,
+			"spawn_weight": 1,
+			"weak": ["piercing", "explosive"], "resists": ["shock"]
+		}
+	]
+}
