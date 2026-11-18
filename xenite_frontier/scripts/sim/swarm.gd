@@ -21,8 +21,8 @@ var _dw := 0
 var _dh := 0
 var _dscale := 2.0
 
-var separation := 0.55
-var spread := 1.4
+var separation := 2.2
+var spread := 2.5
 var max_spawn_per_frame := 600
 
 var threaded := true
@@ -242,6 +242,14 @@ func _sim_chunk(ci: int) -> void:
 			var crowd := float(here) * spr
 			tx += (fx - dx - 0.5) * crowd
 			tz += (fz - dz - 0.5) * crowd
+
+		# cap the desired speed so crowd pressure can't fling aliens
+		var t2 := tx * tx + tz * tz
+		var cap := s * 1.35
+		if t2 > cap * cap:
+			var ks := cap / sqrt(t2)
+			tx *= ks
+			tz *= ks
 
 		var cvx := vx[i]
 		var cvz := vz[i]

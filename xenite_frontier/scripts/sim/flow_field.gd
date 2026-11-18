@@ -229,4 +229,27 @@ func _compute(blk: PackedByteArray, cst: PackedByteArray) -> void:
 			if blk[k] == 0 and d[k] < best: best = d[k]; bx = INV_SQRT2; bz = INV_SQRT2
 		dx[c] = bx
 		dz[c] = bz
+	_smooth(blk, dx, dz)
 	_b_usec = Time.get_ticks_usec() - t0
+
+
+## One box-blur pass over free cells turns the 8-way "lanes" Dijkstra produces
+## into broad, curving streams so the horde spreads across a corridor.
+func _smooth(blk: PackedByteArray, dx: PackedFloat32Array, dz: PackedFloat32Array) -> void:
+	var ww := w
+	var n := ww * h
+	var sx := dx.duplicate()
+	var sz := dz.duplicate()
+	for c in range(ww + 1, n - ww - 1):
+		if blk[c] or (sx[c] == 0.0 and sz[c] == 0.0):
+			continue
+		var ax := sx[c] * 2.0
+		var az := sz[c] * 2.0
+		if blk[c - 1] == 0: ax += sx[c - 1]; az += sz[c - 1]
+		if blk[c + 1] == 0: ax += sx[c + 1]; az += sz[c + 1]
+		if blk[c - ww] == 0: ax += sx[c - ww]; az += sz[c - ww]
+		if blk[c + ww] == 0: ax += sx[c + ww]; az += sz[c + ww]
+		var l := sqrt(ax * ax + az * az)
+		if l > 0.001:
+			dx[c] = ax / l
+			dz[c] = az / l
