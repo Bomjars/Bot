@@ -69,18 +69,18 @@ func _ready() -> void:
 			_screenshot_after(arg.split("=")[1])
 
 
-## Dev helper: `-- --aliens=N --screenshot=path.png` saves a frame after 12s.
+## Dev helper: `-- --aliens=N --screenshot=path.png` saves a frame after a warm-up.
 func _screenshot_after(path: String) -> void:
 	# simulate ~10 s at 60 Hz up front so slow (software) renderers show a horde
 	for k in 600:
 		swarm.approach_population(target_count)
 		swarm.simulate(1.0 / 60.0)
-	var focus := OS.get_cmdline_user_args().filter(func(a): return a.begins_with("--cam="))
-	if not focus.is_empty():
-		var v: PackedStringArray = focus[0].split("=")[1].split(",")
-		cam.position = Vector3(float(v[0]), 0, float(v[1]))
-		cam._target_distance = float(v[2])
-		cam.distance = float(v[2])
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--cam="):
+			var v := arg.split("=")[1].split(",")
+			cam.position = Vector3(float(v[0]), 0, float(v[1]))
+			cam._target_distance = float(v[2])
+			cam.distance = float(v[2])
 	await get_tree().create_timer(3.0).timeout
 	if _heat_shot:
 		_heat_on = true
