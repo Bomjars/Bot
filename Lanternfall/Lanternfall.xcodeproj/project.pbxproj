@@ -1,0 +1,431 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 54;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		03E1276BEC381B33864CD93E /* LevelUpView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C01F8AE4C7927E4F6878045E /* LevelUpView.swift */; };
+		087A7019A414D918B2836FC4 /* VirtualJoystick.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0AEE5172DB905FADA6951CC /* VirtualJoystick.swift */; };
+		156637BA2BCD635049D88D13 /* HexColor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A095A5679E7F3C92A686F8E /* HexColor.swift */; };
+		159F8918BA669145D1013125 /* LanternfallApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BFC5BB2830A73DB1BA3BD5F /* LanternfallApp.swift */; };
+		2018490AC4C5C5851D946E6D /* GameRunView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 094A7973EAF415D75911898C /* GameRunView.swift */; };
+		2549F3722E8C25CCA3577185 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C52123DFF55AE909484D7232 /* RootView.swift */; };
+		35C2E7EAA6539121649161A7 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C0E854F99DB9F2BD7D102CB /* Theme.swift */; };
+		37C563CBD5F134F81CECB97F /* PlaceholderTextures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D54C0E27A090B7CA9B8E3F3 /* PlaceholderTextures.swift */; };
+		516B9BA51B8E33E0041C18F0 /* RunEndView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9D59E41EB90A00F6CA144A2 /* RunEndView.swift */; };
+		55648D05041B4F72293A72D0 /* DamageNumberLayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB13930FFBA478312D9BF16A /* DamageNumberLayer.swift */; };
+		6678013DFA0CC007AD458563 /* GameScene.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6319CF684990C910A8D9CCE /* GameScene.swift */; };
+		7601494DCC17497456082F47 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 0126C4FC2F6EA88E821715FB /* Assets.xcassets */; };
+		81AB2484C0441D56C0DD2EBF /* HUDView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F466CED9A82BDCBF96E6BE15 /* HUDView.swift */; };
+		A490490AA9A940A95DEB0E31 /* LanternfallKit in Frameworks */ = {isa = PBXBuildFile; productRef = FCD4E91411B7109B5041F619 /* LanternfallKit */; };
+		BEA91889AD231EC561300A17 /* GameViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8023E8D13B2EE9AB7168148 /* GameViewModel.swift */; };
+		E9523772B188217ABCDD05E0 /* PauseView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFBCEDDABA3D8B9C6CF1426D /* PauseView.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		0126C4FC2F6EA88E821715FB /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		0178DDC0699B365A84106FD1 /* Lanternfall.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Lanternfall.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		094A7973EAF415D75911898C /* GameRunView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameRunView.swift; sourceTree = "<group>"; };
+		0BFC5BB2830A73DB1BA3BD5F /* LanternfallApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LanternfallApp.swift; sourceTree = "<group>"; };
+		2A095A5679E7F3C92A686F8E /* HexColor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HexColor.swift; sourceTree = "<group>"; };
+		3D54C0E27A090B7CA9B8E3F3 /* PlaceholderTextures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceholderTextures.swift; sourceTree = "<group>"; };
+		4C0E854F99DB9F2BD7D102CB /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		A6319CF684990C910A8D9CCE /* GameScene.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameScene.swift; sourceTree = "<group>"; };
+		BFBCEDDABA3D8B9C6CF1426D /* PauseView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PauseView.swift; sourceTree = "<group>"; };
+		C01F8AE4C7927E4F6878045E /* LevelUpView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LevelUpView.swift; sourceTree = "<group>"; };
+		C0AEE5172DB905FADA6951CC /* VirtualJoystick.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VirtualJoystick.swift; sourceTree = "<group>"; };
+		C52123DFF55AE909484D7232 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
+		C8023E8D13B2EE9AB7168148 /* GameViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameViewModel.swift; sourceTree = "<group>"; };
+		C9D59E41EB90A00F6CA144A2 /* RunEndView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunEndView.swift; sourceTree = "<group>"; };
+		DE51D79ECC4527CB2BB8A770 /* LanternfallKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = LanternfallKit; path = LanternfallKit; sourceTree = SOURCE_ROOT; };
+		F466CED9A82BDCBF96E6BE15 /* HUDView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HUDView.swift; sourceTree = "<group>"; };
+		FB13930FFBA478312D9BF16A /* DamageNumberLayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DamageNumberLayer.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		DDE1EF7E08B7DFF6DF163973 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A490490AA9A940A95DEB0E31 /* LanternfallKit in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		0F473BE73C677DF7CABA8AD0 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				0126C4FC2F6EA88E821715FB /* Assets.xcassets */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		1D7A14039F61684C788F960A /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+				DE51D79ECC4527CB2BB8A770 /* LanternfallKit */,
+			);
+			name = Packages;
+			sourceTree = "<group>";
+		};
+		23E9EF52CCD430B3EBF8D6CC /* UI */ = {
+			isa = PBXGroup;
+			children = (
+				094A7973EAF415D75911898C /* GameRunView.swift */,
+				F466CED9A82BDCBF96E6BE15 /* HUDView.swift */,
+				C01F8AE4C7927E4F6878045E /* LevelUpView.swift */,
+				BFBCEDDABA3D8B9C6CF1426D /* PauseView.swift */,
+				C52123DFF55AE909484D7232 /* RootView.swift */,
+				C9D59E41EB90A00F6CA144A2 /* RunEndView.swift */,
+				4C0E854F99DB9F2BD7D102CB /* Theme.swift */,
+			);
+			path = UI;
+			sourceTree = "<group>";
+		};
+		716C7993B7CA7E3B44EE16DF /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				0178DDC0699B365A84106FD1 /* Lanternfall.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		C7F32EB6020B8B3E21FED70B /* Entities */ = {
+			isa = PBXGroup;
+			children = (
+				FB13930FFBA478312D9BF16A /* DamageNumberLayer.swift */,
+				2A095A5679E7F3C92A686F8E /* HexColor.swift */,
+				3D54C0E27A090B7CA9B8E3F3 /* PlaceholderTextures.swift */,
+			);
+			path = Entities;
+			sourceTree = "<group>";
+		};
+		DAE0293BA7DEE7F6252DA3E6 = {
+			isa = PBXGroup;
+			children = (
+				F904EF25F37331813B471D82 /* App */,
+				1D7A14039F61684C788F960A /* Packages */,
+				716C7993B7CA7E3B44EE16DF /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		ECFA1D0FE775432CB9A9B332 /* Core */ = {
+			isa = PBXGroup;
+			children = (
+				A6319CF684990C910A8D9CCE /* GameScene.swift */,
+				C8023E8D13B2EE9AB7168148 /* GameViewModel.swift */,
+				C0AEE5172DB905FADA6951CC /* VirtualJoystick.swift */,
+			);
+			path = Core;
+			sourceTree = "<group>";
+		};
+		F904EF25F37331813B471D82 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				0BFC5BB2830A73DB1BA3BD5F /* LanternfallApp.swift */,
+				ECFA1D0FE775432CB9A9B332 /* Core */,
+				C7F32EB6020B8B3E21FED70B /* Entities */,
+				0F473BE73C677DF7CABA8AD0 /* Resources */,
+				23E9EF52CCD430B3EBF8D6CC /* UI */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		1A55D8E08B2AD1B80D346E9D /* Lanternfall */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 03D313E205C1B1AD16DC9A2B /* Build configuration list for PBXNativeTarget "Lanternfall" */;
+			buildPhases = (
+				809F603A9073D80FD419B11D /* Sources */,
+				68A23F8B63029B25912E7C8C /* Resources */,
+				DDE1EF7E08B7DFF6DF163973 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Lanternfall;
+			packageProductDependencies = (
+				FCD4E91411B7109B5041F619 /* LanternfallKit */,
+			);
+			productName = Lanternfall;
+			productReference = 0178DDC0699B365A84106FD1 /* Lanternfall.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		60628B51429FC03913919DBB /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+					1A55D8E08B2AD1B80D346E9D = {
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 7EEC36BBAAA74DC72DE1EB97 /* Build configuration list for PBXProject "Lanternfall" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = DAE0293BA7DEE7F6252DA3E6;
+			packageReferences = (
+				48A69F7364641D5ED1BFF21F /* XCLocalSwiftPackageReference "LanternfallKit" */,
+			);
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				1A55D8E08B2AD1B80D346E9D /* Lanternfall */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		68A23F8B63029B25912E7C8C /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7601494DCC17497456082F47 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		809F603A9073D80FD419B11D /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				55648D05041B4F72293A72D0 /* DamageNumberLayer.swift in Sources */,
+				2018490AC4C5C5851D946E6D /* GameRunView.swift in Sources */,
+				6678013DFA0CC007AD458563 /* GameScene.swift in Sources */,
+				BEA91889AD231EC561300A17 /* GameViewModel.swift in Sources */,
+				81AB2484C0441D56C0DD2EBF /* HUDView.swift in Sources */,
+				156637BA2BCD635049D88D13 /* HexColor.swift in Sources */,
+				159F8918BA669145D1013125 /* LanternfallApp.swift in Sources */,
+				03E1276BEC381B33864CD93E /* LevelUpView.swift in Sources */,
+				E9523772B188217ABCDD05E0 /* PauseView.swift in Sources */,
+				37C563CBD5F134F81CECB97F /* PlaceholderTextures.swift in Sources */,
+				2549F3722E8C25CCA3577185 /* RootView.swift in Sources */,
+				516B9BA51B8E33E0041C18F0 /* RunEndView.swift in Sources */,
+				35C2E7EAA6539121649161A7 /* Theme.swift in Sources */,
+				087A7019A414D918B2836FC4 /* VirtualJoystick.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		67AE9C0688704932296ADA83 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 0.1.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		A907D3222902226E6E03A71E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				INFOPLIST_FILE = Support/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.lanternfall.game;
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = NO;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		AAD97920E07D840EE515807C /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 0.1.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		F68FB43DFC47667A20A21A88 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				INFOPLIST_FILE = Support/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.lanternfall.game;
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = NO;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		03D313E205C1B1AD16DC9A2B /* Build configuration list for PBXNativeTarget "Lanternfall" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A907D3222902226E6E03A71E /* Debug */,
+				F68FB43DFC47667A20A21A88 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		7EEC36BBAAA74DC72DE1EB97 /* Build configuration list for PBXProject "Lanternfall" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				67AE9C0688704932296ADA83 /* Debug */,
+				AAD97920E07D840EE515807C /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		48A69F7364641D5ED1BFF21F /* XCLocalSwiftPackageReference "LanternfallKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = LanternfallKit;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		FCD4E91411B7109B5041F619 /* LanternfallKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = LanternfallKit;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 60628B51429FC03913919DBB /* Project object */;
+}

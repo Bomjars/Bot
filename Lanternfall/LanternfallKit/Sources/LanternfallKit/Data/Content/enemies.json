@@ -1,0 +1,13 @@
+[
+  {
+    "id": "imp",
+    "name": "Imp",
+    "maxHP": 9,
+    "moveSpeed": 46,
+    "contactDamage": 6,
+    "radius": 11,
+    "xpValue": 1,
+    "color": "#B8322A",
+    "spriteName": "enemy_imp"
+  }
+]
