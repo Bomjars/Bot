@@ -27,7 +27,7 @@ void fragment() {
 	ALBEDO = mix(base, vec3(1.0), flash);
 	ROUGHNESS = 0.55;
 	float glow = 1.0 - vcol.a;
-	EMISSION = base * glow * 2.5 + vec3(1.0, 0.9, 0.8) * flash * 0.8;
-	RIM = 0.4;
+	EMISSION = base * glow * 0.9 + vec3(1.0, 0.9, 0.8) * flash * 0.8;
+	RIM = 0.25;
 	RIM_TINT = 0.3;
 }

@@ -109,8 +109,8 @@ static func _stalker(a: Acc) -> void:
 
 
 static func _mauler(a: Acc) -> void:
-	var hide := Color(0.62, 0.2, 0.1)
-	var plate := Color(0.42, 0.42, 0.44)
+	var hide := Color(0.7, 0.14, 0.06)
+	var plate := Color(0.32, 0.08, 0.05)
 	var claw := Color(0.9, 0.85, 0.75)
 	a.add(box(1.3, 0.9, 1.0), xf(Vector3(0, 1.05, -0.1), Vector3(12, 0, 0)), hide)
 	a.add(box(1.5, 0.3, 0.8), xf(Vector3(0, 1.6, 0.0), Vector3(12, 0, 0)), plate)
