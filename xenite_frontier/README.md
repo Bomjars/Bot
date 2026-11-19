@@ -295,6 +295,8 @@ See `CHANGELOG.md` for per-milestone notes.
 
 ## Screenshots (software-rendered)
 
+![M4: colonist bar, event feed of abductions and rescues, crewed Autocannon in the Inspector](docs/m4_colony.png)
+
 ![M3: Biomass HUD, harvester drones, tier II Autocannon in the Inspector, unaffordable tools greyed](docs/m3_economy.png)
 
 ![M2 combat: the swarm floods the airlocks while the demo battery fires](docs/m2_combat.png)

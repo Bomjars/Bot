@@ -65,6 +65,7 @@ var _suit: StandardMaterial3D
 var _helmet: StandardMaterial3D
 var _visor: StandardMaterial3D
 var _rng := RandomNumberGenerator.new()
+var _last_goals := PackedInt32Array()
 
 
 func setup(m: OutpostMap, st: Structures, c: Corpses, effects: Fx, hf: FlowField) -> void:
@@ -73,6 +74,7 @@ func setup(m: OutpostMap, st: Structures, c: Corpses, effects: Fx, hf: FlowField
 	corpses = c
 	fx = effects
 	hunt_field = hf
+	hunt_field.max_dist = int(float(GameConfig.colonists.get("hunt_sense_range", 14.0)) * 1.5 * FlowField.ORTHO)
 	var cfg := GameConfig.colonists
 	walk_speed = float(cfg.get("walk_speed", walk_speed))
 	uncrewed_rate = float(cfg.get("uncrewed_fire_rate", uncrewed_rate))
@@ -116,6 +118,7 @@ func reset() -> void:
 			col.node.queue_free()
 	colonists.clear()
 	crew_of.clear()
+	_last_goals = PackedInt32Array([-1])
 	abductions = 0
 	rescued = 0
 	taken = 0
@@ -314,8 +317,12 @@ func tick(dt: float) -> void:
 						goals.append(c)
 				S.CREWING:
 					goals.append(col.post)
-		hunt_field.set_goals(goals)
-		hunt_field.request_rebuild()
+		goals.sort()
+		if goals != _last_goals:
+			# only re-path the Snatchers when someone exposed actually moved cells
+			_last_goals = goals
+			hunt_field.set_goals(goals)
+			hunt_field.request_rebuild()
 
 
 ## Crew every turret, most valuable first, from the reserve in the core.

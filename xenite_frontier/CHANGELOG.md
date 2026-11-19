@@ -1,5 +1,47 @@
 # Changelog
 
+## M4 – Colonists, abduction, feeding
+
+### Added
+- **Colonists** (`colony/colonists.gd`, `data/colonists.json`). There are 10 named contract workers.
+  - They shelter in the core and automatically walk out to crew the most valuable uncrewed turrets.
+  - **Uncrewed turrets fire at 40%.** Crewed turrets fire at tier crew efficiency (100 / 115 / 130%).
+  - Walking uses `AStarGrid2D`. **Blast Doors let colonists through but not aliens.** Unreachable posts are reported.
+- **Abduction.**
+  - Snatchers and Burrowers grab exposed colonists: anyone walking, bailed out of a destroyed turret, or limping home.
+  - The carrier drags them along a **retreat flow field** to the nearest canyon mouth at 70% speed, leaving a blood trail.
+  - **Snatchers hunt.** A dedicated hunt flow field around exposed colonists and crewed turrets (rebuilt only when someone moves, radius-capped) leads them in, and they **pull crews out of turrets**.
+  - **Turrets prioritise carriers.** Killing a carrier drops the colonist, wounded. They recover in the core for 40 s before returning to duty.
+  - If the carrier reaches the edge, the colonist is lost for the run.
+- **Mauling.** Maulers (70 damage) and Brood Mothers (250) strike exposed colonists, who have 100 HP.
+  - Survivors are knocked down and wounded. The dead leave human remains.
+  - Grab immunity (1.5 s) after a rescue or knockdown.
+- **Feeding.**
+  - Aliens standing on corpses stop to eat (per-strain `feed_rate`; Brood Mothers gorge).
+  - Each meal: x1.12 size (cap x1.9) and +35% base HP. **Human remains = 3 meals**, eaten first.
+  - Eaten corpses yield nothing and lower piles. Grown aliens leave bigger corpses worth more Biomass.
+- **UI.**
+  - Colonist bar (alive, crewed/turrets, reserve, carried, recovering, lost).
+  - Colony event feed: seized, rescued, mauled, dragged off, back on duty.
+  - The Inspector shows the crew name or "UNCREWED – firing at 40%".
+- Corpse per-cell index (`corpse_count` grid) so the threaded swarm knows where it can feed.
+- Soak report adds colonist and feeding stats.
+
+### Changed
+- **Flow-field rebuilds now run as low-priority worker tasks.** Several queued rebuilds (surface, burrow, retreat, hunt) no longer starve the threaded swarm step. Sim p99 went from 25 ms to 10.7 ms on the 4-thread test machine.
+- Flow fields accept custom goal sets and a max search distance.
+
+### Measured (headless, slow 4-thread 2.1 GHz cloud CPU)
+| Scenario | Result |
+|---|---|
+| Benchmark 10k with combat + colonists | 115 fps avg, 65 fps 1% low, sim 7.1 ms (p99 10.8) – PASS |
+| 3-min soak, bot player, pressure 500 | core held (1471/6000), 7/10 colonists alive and crewing, 4 abductions (all rescued), 3 mauled, 97 meals, largest alien x1.9 |
+| 3-min soak, no player, pressure 500 | overrun; 22 abductions, 19 rescued, 3 dragged off |
+
+### Balance notes
+- Stalkers do **not** abduct. With 55% of the swarm grabbing people, abductions were constant noise (82 in 3 minutes). Abduction now belongs to Snatchers (hunters) and Burrowers (they surface inside your walls).
+
+
 ## M3 – Biomass economy, harvester drones, in-run turret tiers
 
 ### Added

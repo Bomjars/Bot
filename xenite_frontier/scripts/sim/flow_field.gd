@@ -24,6 +24,9 @@ var dist := PackedInt32Array()
 var dir_x := PackedFloat32Array()
 var dir_z := PackedFloat32Array()
 var build_usec := 0
+## stop expanding beyond this distance (0 = whole map). Cells further away
+## stay UNREACHABLE. Used by the hunt field (Snatchers only look 14 m).
+var max_dist := 0
 
 var _map: OutpostMap
 var _cost_name := "nav_cost"
@@ -68,7 +71,9 @@ func request_rebuild() -> void:
 	if _task != -1:
 		_dirty = true
 		return
-	_task = WorkerThreadPool.add_task(_compute.bind(_costs(), goals.duplicate()), true, "flow_field")
+	# low priority: Godot caps these to a fraction of the pool, so several
+	# queued rebuilds never starve the threaded swarm step
+	_task = WorkerThreadPool.add_task(_compute.bind(_costs(), goals.duplicate()), false, "flow_field")
 
 
 func busy() -> bool:
@@ -137,7 +142,10 @@ func _compute(cst: PackedByteArray, goal_list: PackedInt32Array) -> void:
 	# Border cells are always rock on our maps except canyon mouths, so neighbour
 	# bounds are checked once per cell (edge flag) instead of per neighbour.
 	var cur := 0
+	var limit := max_dist if max_dist > 0 else UNREACHABLE
 	while pending > 0:
+		if cur > limit:
+			break
 		var b := cur % kb
 		var node := heads[b]
 		if node == -1:
