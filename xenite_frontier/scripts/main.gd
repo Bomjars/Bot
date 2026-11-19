@@ -390,6 +390,11 @@ func _screenshot_after(path: String) -> void:
 			cam.position = Vector3(float(v[0]), 0, float(v[1]))
 			cam._target_distance = float(v[2])
 			cam.distance = float(v[2])
+	for arg in OS.get_cmdline_user_args():
+		if arg == "--intel":
+			build.toggle_intel()
+		elif arg.begins_with("--tool="):
+			build.select(arg.split("=")[1])
 	await get_tree().create_timer(3.0).timeout
 	if _heat_shot:
 		_heat_on = true

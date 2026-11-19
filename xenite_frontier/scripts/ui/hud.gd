@@ -23,8 +23,18 @@ func _ready() -> void:
 	root.theme = UiStyle.theme()
 	add_child(root)
 
-	_stats = _panel_label(root, Vector2(12, 12))
-	_report = _panel_label(root, Vector2(12, 330))
+	# left column: stats, controls help, benchmark report (stacked, never overlap)
+	var col := VBoxContainer.new()
+	col.position = Vector2(12, 12)
+	col.add_theme_constant_override("separation", 6)
+	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(col)
+	_stats = _panel_label(col, Vector2.ZERO)
+	_help = _panel_label(col, Vector2.ZERO)
+	_help.add_theme_font_size_override("font_size", 14)
+	_help.add_theme_color_override("font_color", Color(0.75, 0.8, 0.85))
+	_help.text = "1-8 / LB RB build tool    LMB (A) build    RMB (B) demolish\nI intel: counter table    F flow field    G gore\n+/- (D-pad) swarm pressure    F5-F8 1k/5k/10k/20k\nB (Y) benchmark    Space (Start) pause    R reset outpost\nPan WASD/stick/edge/MMB    Zoom wheel/Q,E/triggers\nF1 (Back) toggle details + help"
+	_report = _panel_label(col, Vector2.ZERO)
 	_report.get_parent().visible = false
 
 	var cp := PanelContainer.new()
@@ -58,16 +68,6 @@ func _ready() -> void:
 	_legend.custom_minimum_size = Vector2(250, 0)
 	_legend.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	lp.add_child(_legend)
-
-	_help = Label.new()
-	_help.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	_help.grow_horizontal = Control.GROW_DIRECTION_BEGIN
-	_help.position = Vector2(-12, 230)
-	_help.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	_help.add_theme_font_size_override("font_size", 14)
-	_help.add_theme_color_override("font_color", Color(0.75, 0.8, 0.85))
-	_help.text = "1-8 / LB RB  build tool     LMB (A) build   RMB (B) demolish\nI  intel: counter table     F  flow field     G  gore\n+/- (D-pad)  swarm pressure    F5-F8  1k/5k/10k/20k\nB (Y) benchmark    Space (Start) pause    R reset outpost\nPan WASD/stick/edge/MMB    Zoom wheel/Q,E/triggers    F1 HUD"
-	root.add_child(_help)
 
 	_banner = Label.new()
 	_banner.set_anchors_preset(Control.PRESET_CENTER)
@@ -144,6 +144,7 @@ func _process(delta: float) -> void:
 	if b.running():
 		txt += "\n" + b.status_text()
 	_stats.text = txt
+	_help.get_parent().visible = detailed
 
 	var lg := "[b]SWARM[/b]  alive / killed\n"
 	for p in swarm.pools:
