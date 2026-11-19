@@ -1,0 +1,12 @@
+{
+	"_comment": "Non-turret structures. nav_cost: how many metres of detour the swarm will accept before bashing through (x10 internally). climbable when the corpse pile next to it reaches climb_height.",
+	"climb_height": 1.6,
+	"max_pile_height": 2.6,
+	"turret_nav_cost": 28,
+	"turret_height": 1.6,
+	"structures": [
+		{ "id": "wall", "name": "Wall", "role": "Cheap barrier. The swarm paths around it, or bashes through.", "hp": 600, "height": 2.2, "nav_cost": 24 },
+		{ "id": "blast_door", "name": "Blast Door", "role": "Heavy armoured door. Maulers deal x4 damage to doors.", "hp": 1500, "height": 2.4, "nav_cost": 24 }
+	],
+	"core": { "name": "Outpost Core", "hp": 6000 }
+}

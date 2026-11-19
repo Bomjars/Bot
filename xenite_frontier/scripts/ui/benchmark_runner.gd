@@ -14,6 +14,8 @@ var ramp_seconds := 6.0
 var hold_seconds := 20.0
 var pass_fps := 60.0
 var swarm: Swarm
+var combat: Combat
+var fx: Fx
 var quit_when_done := false
 var last_report := ""
 
@@ -22,6 +24,7 @@ var _frames := PackedFloat32Array()
 var _sim := PackedFloat32Array()
 var _upload := PackedFloat32Array()
 var _gpu := PackedFloat32Array()
+var _other := PackedFloat32Array()
 var _prev_vsync := DisplayServer.VSYNC_ENABLED
 var _prev_max_fps := 0
 
@@ -51,7 +54,7 @@ func start(count := -1) -> void:
 	if count > 0:
 		target = count
 	_t = 0.0
-	_frames.clear(); _sim.clear(); _upload.clear(); _gpu.clear()
+	_frames.clear(); _sim.clear(); _upload.clear(); _gpu.clear(); _other.clear()
 	_prev_vsync = DisplayServer.window_get_vsync_mode()
 	_prev_max_fps = Engine.max_fps
 	# measure real headroom, not the monitor refresh
@@ -86,6 +89,7 @@ func _process(delta: float) -> void:
 			_frames.append(delta)
 			_sim.append(swarm.sim_usec / 1000.0)
 			_upload.append(swarm.upload_usec / 1000.0)
+			_other.append(((combat.combat_usec if combat else 0) + (fx.update_usec if fx else 0)) / 1000.0)
 			var rid := get_viewport().get_viewport_rid()
 			_gpu.append(RenderingServer.viewport_get_measured_render_time_gpu(rid))
 			if _t >= hold_seconds:
@@ -133,6 +137,7 @@ func _finish() -> void:
 		"Frame time  : %.2f ms avg" % (1000.0 * total_t / maxi(n, 1)),
 		"Swarm sim   : %.2f ms avg, %.2f ms p99" % [_avg(_sim), sim_sorted[clampi(int(n * 0.99), 0, n - 1)] if n > 0 else 0.0],
 		"Buffer upld : %.2f ms avg" % _avg(_upload),
+		"Combat + fx : %.2f ms avg (turrets, deaths, corpses, particles)" % _avg(_other),
 		"GPU render  : %.2f ms avg" % _avg(_gpu),
 		"Flow field  : %.2f ms per rebuild" % (swarm.field.build_usec / 1000.0),
 		"Result      : %s (target >= %.0f FPS 1%% low)" % ["PASS" if ok else "BELOW TARGET", pass_fps],

@@ -1,5 +1,63 @@
 # Changelog
 
+## M2 – Walls, turrets, damage types, death, corpse piling
+
+### Added
+- **Damage types and counter matrix.**
+  - Six damage types: Ballistic, Incendiary, Piercing, Shock, Explosive, Seismic.
+  - The weak/resist table from `aliens.json` is compiled into a matrix (150% / 50%, set in `turrets.json`).
+  - The build card and the Intel panel (**I**) show who each type counters.
+- **Six turrets** with distinct behaviours and primitive models, stats in `data/turrets.json`:
+  - Autocannon: rapid, dodgeable.
+  - Flamethrower: cone plus burning.
+  - Railgun: pierces 5 in a line.
+  - Shock Grid: arcs into 14 and slows.
+  - Mortar: lobbed splash shells, minimum range.
+  - Seismic Spike: slam that also hits underground Burrowers and surfaces them.
+  - All turrets use "first" targeting: the alien closest to the core along the flow field.
+- **Structures:** walls, blast doors and turrets, each with HP and damage tint.
+  - Drag-paint to build, right-drag to demolish.
+  - A ghost preview and range ring show while placing.
+  - The starting compound has a demo battery of one of each turret.
+- **Aliens fight back.**
+  - The flow field paths through structures at a cost, so aliens bash whatever the field leads them into.
+  - Maulers deal x4 damage to doors.
+  - Spitters shell structures with acid from 9 m.
+  - Burrowers tunnel along a second flow field and surface near the core.
+  - Brood Mothers birth Stalker broods.
+  - Snatchers dodge 35% of aimed shots.
+  - Aliens gnaw the core. Losing it means **OUTPOST OVERRUN**; press **R** to rebuild.
+- **Death and corpse piling.**
+  - Deaths are processed at the end of the frame (safe swap-remove).
+  - Each death throws carapace gibs and an acidic ichor spray, and leaves a persistent ichor splat.
+  - Pooled corpses are kept per strain, capped at `corpse_cap` with the oldest decaying first.
+  - Corpses stack on per-cell pile heights.
+  - Incendiary kills leave charred corpses (no Biomass from M3 on).
+  - Living aliens walk on top of piles.
+  - A pile of 1.6 m beside a wall makes the wall climbable: it tints green and the swarm pours over it.
+- **Hit flash**, burn and slow status, and a gore toggle (**G**).
+- **Spatial bucket grid** (4 m cells, linked lists rebuilt in one pass per frame) for turret queries.
+- **Headless combat soak**: `-- --combat-test=60`.
+- The benchmark now includes combat (core invulnerable during the run) and reports combat + fx ms.
+
+### Changed
+- Swarm pressure moved to + / − and F5–F8. Number keys 1–8 now pick build tools.
+- Starting swarm pressure is 1,500.
+
+### Measured (headless, slow 4-thread 2.1 GHz cloud CPU)
+| Scenario | Result |
+|---|---|
+| Benchmark 10k with combat | 114 fps avg, 62 fps 1% low, sim 6.9 ms, combat+fx 1.2 ms – PASS |
+| Soak 30 s at pressure 1,500 | 629 kills, all six turrets scoring, 4 walls made climbable, core 67% |
+| Soak 60 s at pressure 6,000 | 3,833 kills, 37 structures lost, outpost overrun |
+
+### Known limitations
+- No economy yet: building is free (Biomass in M3).
+- No colonists, abduction or feeding (M4). No waves or day/night (M5).
+- Turret specialisations, upgrade tiers and Hive adaptation come in M3 to M6.
+  Damage dealt per type is already tracked for adaptation.
+
+
 ## M1 – Swarm & flow field benchmark
 
 ### Added

@@ -13,7 +13,7 @@ signal rebuilt
 const UNREACHABLE := 1 << 29
 const ORTHO := 10
 const DIAG := 14
-const MAX_CELL_COST := 8
+const MAX_CELL_COST := 32
 const INV_SQRT2 := 0.70710678
 
 var w := 0
@@ -26,6 +26,7 @@ var dir_z := PackedFloat32Array()
 var build_usec := 0
 
 var _map: OutpostMap
+var _cost_name := "nav_cost"
 var _task := -1
 var _dirty := false
 # back buffers (written by the worker)
@@ -37,8 +38,11 @@ var _node_cell := PackedInt32Array()
 var _node_next := PackedInt32Array()
 
 
-func _init(map: OutpostMap) -> void:
+## cost_name: which OutpostMap cost array to path over ("nav_cost" for the
+## surface swarm, "burrow_cost" for tunnellers). Cost 0 = impassable.
+func _init(map: OutpostMap, cost_name := "nav_cost") -> void:
 	_map = map
+	_cost_name = cost_name
 	w = map.w
 	h = map.h
 	goals = map.goal_cells
@@ -53,7 +57,7 @@ func _init(map: OutpostMap) -> void:
 
 ## Blocking rebuild (startup).
 func build() -> void:
-	_compute(_map.blocked.duplicate(), _map.cost.duplicate())
+	_compute(_costs())
 	_swap()
 
 
@@ -62,9 +66,7 @@ func request_rebuild() -> void:
 	if _task != -1:
 		_dirty = true
 		return
-	var blk := _map.blocked.duplicate()
-	var cst := _map.cost.duplicate()
-	_task = WorkerThreadPool.add_task(_compute.bind(blk, cst), true, "flow_field")
+	_task = WorkerThreadPool.add_task(_compute.bind(_costs()), true, "flow_field")
 
 
 func busy() -> bool:
@@ -82,6 +84,11 @@ func poll() -> void:
 		request_rebuild()
 
 
+func _costs() -> PackedByteArray:
+	var a: PackedByteArray = _map.get(_cost_name)
+	return a.duplicate()
+
+
 func _swap() -> void:
 	var t := dist; dist = _b_dist; _b_dist = t
 	var tx := dir_x; dir_x = _b_dx; _b_dx = tx
@@ -90,7 +97,12 @@ func _swap() -> void:
 	rebuilt.emit()
 
 
-func _compute(blk: PackedByteArray, cst: PackedByteArray) -> void:
+func _compute(cst: PackedByteArray) -> void:
+	# impassable mask derived from cost (0 = impassable)
+	var blk := PackedByteArray()
+	blk.resize(cst.size())
+	for c in cst.size():
+		blk[c] = 1 if cst[c] == 0 else 0
 	var t0 := Time.get_ticks_usec()
 	var ww := w
 	var hh := h

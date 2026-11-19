@@ -1,68 +1,100 @@
 class_name Swarm
 extends Node3D
-## Simulates every alien in one tight pass per strain:
-##  1. sample flow-field direction for the alien's cell
-##  2. add crowd separation from a coarse density grid (previous frame) -
-##     O(1) per alien, no neighbour queries
-##  3. steer, integrate, slide along blocked cells
-##  4. splat into next frame's density grid and write the MultiMesh buffer
-## Cost is O(aliens) with a small constant and no allocations.
+## Simulates every alien in one tight pass per 1,024-alien chunk on worker
+## threads:
+##  1. burning / slow timers
+##  2. sample the surface flow field, or the burrow field when tunnelling
+##  3. strain traits: bash blocking structures, spitters shell structures
+##     from range, burrowers surface near the core, brood mothers give birth
+##  4. crowd separation from a coarse density grid (previous frame), O(1)
+##  5. steer, integrate, slide along solid cells (climb walls over corpse piles)
+##  6. gnaw the core, splat density, bucket for the spatial grid, write the
+##     MultiMesh buffer (position, facing, height, hit-flash decay)
+## Each chunk writes events (deaths, structure hits, acid spits, broods) to its
+## own arrays, which are merged on the main thread, so no locks are needed.
+
+const CHUNK := 1024
+const SHIFT := 17
+const MASK := (1 << 17) - 1
 
 var map: OutpostMap
-var field: FlowField
+var field: FlowField          # surface swarm
+var bfield: FlowField         # tunnellers
 var pools: Array[AlienPool] = []
 var rng := RandomNumberGenerator.new()
 var paused := false
-
-# density grid (finer than nav grid)
-var _dens := PackedInt32Array()
-var _dens_next := PackedInt32Array()
-var _dw := 0
-var _dh := 0
-var _dscale := 2.0
+var threaded := true
+## benchmark mode: aliens reaching the core are recycled to a canyon mouth
+var recycle_at_core := false
 
 var separation := 2.2
 var spread := 2.5
 var wander := 0.45
 var max_spawn_per_frame := 600
-
-var threaded := true
-const CHUNK := 1024
+var surface_dist := 80
+var grid_cell := 4.0
 
 var sim_usec := 0
 var upload_usec := 0
 var reached_core := 0
+
+# merged per-frame outputs
+var out_dead := PackedInt32Array()       # handles that burned to death
+var out_hit_cell := PackedInt32Array()   # structure cells being bashed
+var out_hit_dmg := PackedFloat32Array()
+var out_spit := PackedFloat32Array()     # [x, z, target_cell, damage]...
+var out_brood := PackedFloat32Array()    # [x, z, mother_type]...
+var core_damage := 0.0
+
+var grid_w := 0
+var grid_h := 0
+
+var _dens := PackedInt32Array()
+var _dens_next := PackedInt32Array()
+var _dw := 0
+var _dh := 0
+var _dscale := 2.0
 var _frame := 0
 var _chunk_pool := PackedInt32Array()
 var _chunk_start := PackedInt32Array()
-var _chunk_reached := PackedInt32Array()
+var _c_reached := PackedInt32Array()
+var _c_core := PackedFloat32Array()
+var _c_dead: Array[PackedInt32Array] = []
+var _c_hit_c: Array[PackedInt32Array] = []
+var _c_hit_d: Array[PackedFloat32Array] = []
+var _c_spit: Array[PackedFloat32Array] = []
+var _c_brood: Array[PackedFloat32Array] = []
 var _f_dt := 0.0
 var _f_time := 0.0
-var _f_dirx: PackedFloat32Array
-var _f_dirz: PackedFloat32Array
-var _f_dist: PackedInt32Array
-var _f_blk: PackedByteArray
-var _f_dens: PackedInt32Array
-var _f_dnext: PackedInt32Array
 var _weights := PackedFloat32Array()
 var _weight_total := 0.0
+var _burn_dps := 7.0
 
 
-func setup(m: OutpostMap, f: FlowField, defs: Array) -> void:
+func setup(m: OutpostMap, f: FlowField, bf: FlowField, defs: Array) -> void:
 	map = m
 	field = f
+	bfield = bf
 	var cfg := GameConfig.section("swarm")
 	separation = cfg.get("separation", separation)
 	spread = cfg.get("intra_cell_spread", spread)
+	wander = cfg.get("wander", wander)
 	max_spawn_per_frame = int(cfg.get("max_spawn_per_frame", max_spawn_per_frame))
 	threaded = bool(cfg.get("threaded", true))
-	wander = cfg.get("wander", wander)
 	_dscale = 1.0 / float(cfg.get("density_cell_size", 0.5))
+	var cc := GameConfig.section("combat")
+	surface_dist = int(float(cc.get("burrow_surface_distance", 8.0)) * FlowField.ORTHO)
+	grid_cell = float(cc.get("grid_cell", 4.0))
+	grid_w = int(ceil(map.w / grid_cell))
+	grid_h = int(ceil(map.h / grid_cell))
 	_dw = int(map.w * _dscale)
 	_dh = int(map.h * _dscale)
 	_dens.resize(_dw * _dh)
 	_dens_next.resize(_dw * _dh)
 	_dens.fill(0)
+	for t in GameConfig.turret_defs:
+		if t.id == "flamethrower":
+			_burn_dps = float(t.get("burn_dps", _burn_dps))
 
 	var mat := ShaderMaterial.new()
 	mat.shader = preload("res://scripts/render/alien.gdshader")
@@ -92,7 +124,6 @@ func _random_type() -> int:
 
 func _spawn_point() -> Vector2:
 	var cells := map.spawn_cells
-	# only spawn where the field can reach the core
 	for attempt in 8:
 		var c := cells[rng.randi() % cells.size()]
 		if field.dist[c] < FlowField.UNREACHABLE:
@@ -101,10 +132,8 @@ func _spawn_point() -> Vector2:
 	return Vector2(map.origin.x + (c0 % map.w) + 0.5, map.origin.y + (c0 / map.w) + 0.5)
 
 
-func spawn(type_id: int, n: int) -> void:
-	for k in n:
-		var p := _spawn_point()
-		pools[type_id].spawn(p.x, p.y, rng)
+func spawn_at(type_id: int, x: float, z: float) -> void:
+	pools[type_id].spawn(x, z, rng)
 
 
 ## Spawns/despawns gradually toward `target` (spawning is rate limited so the
@@ -130,10 +159,7 @@ func clear() -> void:
 		p.upload()
 
 
-func _process(delta: float) -> void:
-	var dt := minf(delta, 1.0 / 30.0)
-	if not paused:
-		simulate(dt)
+func upload() -> void:
 	var t0 := Time.get_ticks_usec()
 	for p in pools:
 		p.upload()
@@ -142,17 +168,19 @@ func _process(delta: float) -> void:
 
 func simulate(dt: float) -> void:
 	var t0 := Time.get_ticks_usec()
+	out_dead.clear()
+	out_hit_cell.clear()
+	out_hit_dmg.clear()
+	out_spit.clear()
+	out_brood.clear()
+	core_damage = 0.0
+	if paused:
+		sim_usec = 0
+		return
 	_dens_next.fill(0)
 	_frame += 1
-	# frame-constant inputs shared (read-only) by all worker chunks
 	_f_dt = dt
 	_f_time += dt
-	_f_dirx = field.dir_x
-	_f_dirz = field.dir_z
-	_f_dist = field.dist
-	_f_blk = map.blocked
-	_f_dens = _dens
-	_f_dnext = _dens_next
 	_chunk_pool.clear()
 	_chunk_start.clear()
 	for p in pools:
@@ -162,8 +190,14 @@ func simulate(dt: float) -> void:
 			_chunk_start.append(start)
 			start += CHUNK
 	var nchunks := _chunk_pool.size()
-	_chunk_reached.resize(nchunks)
-	_chunk_reached.fill(0)
+	while _c_dead.size() < nchunks:
+		_c_dead.append(PackedInt32Array())
+		_c_hit_c.append(PackedInt32Array())
+		_c_hit_d.append(PackedFloat32Array())
+		_c_spit.append(PackedFloat32Array())
+		_c_brood.append(PackedFloat32Array())
+	_c_reached.resize(nchunks)
+	_c_core.resize(nchunks)
 	if nchunks > 0:
 		if threaded and nchunks > 1:
 			var gid := WorkerThreadPool.add_group_task(_sim_chunk, nchunks, -1, true, "swarm")
@@ -171,17 +205,20 @@ func simulate(dt: float) -> void:
 		else:
 			for ci in nchunks:
 				_sim_chunk(ci)
-	for r in _chunk_reached:
-		reached_core += r
+	for ci in nchunks:
+		reached_core += _c_reached[ci]
+		core_damage += _c_core[ci]
+		out_dead.append_array(_c_dead[ci])
+		out_hit_cell.append_array(_c_hit_c[ci])
+		out_hit_dmg.append_array(_c_hit_d[ci])
+		out_spit.append_array(_c_spit[ci])
+		out_brood.append_array(_c_brood[ci])
 	var tmp := _dens
 	_dens = _dens_next
 	_dens_next = tmp
 	sim_usec = Time.get_ticks_usec() - t0
 
 
-## Simulates one chunk of up to CHUNK aliens of a single strain. Runs on worker
-## threads: touches only its own slots; density splats may race (lost
-## increments are harmless for a crowd-pressure estimate).
 func _sim_chunk(ci: int) -> void:
 	var pool := pools[_chunk_pool[ci]]
 	var i0 := _chunk_start[ci]
@@ -192,48 +229,161 @@ func _sim_chunk(ci: int) -> void:
 	var oz := map.origin.y
 	var max_x := float(map.w) - 0.501
 	var max_z := float(map.h) - 0.501
-	var dirx := _f_dirx
-	var dirz := _f_dirz
-	var dist := _f_dist
-	var blk := _f_blk
-	var dens := _f_dens
-	var dnext := _f_dnext
+	var gdx := field.dir_x
+	var gdz := field.dir_z
+	var gdist := field.dist
+	var bdx := bfield.dir_x
+	var bdz := bfield.dir_z
+	var bdist := bfield.dist
+	var solid := map.blocked
+	var kind := map.kind
+	var climb := map.climb
+	var pile := map.pile
+	var sheight := map.sheight
+	var stype := map.stype
+	var dens := _dens
+	var dnext := _dens_next
 	var dw := _dw
 	var ds := _dscale
 	var dmax_x := dw - 2
 	var dmax_z := _dh - 2
+	var gs := 1.0 / grid_cell
+	var gw := grid_w
 	var spawn_cells := map.spawn_cells
 	var n_spawn := spawn_cells.size()
-	var reached := 0
 	var seed_base := _frame * 7919 + ci * 104729
+	var frame := _frame
+	var time := _f_time
+	var surf := surface_dist
+	var recycle := recycle_at_core
 
+	var dead: PackedInt32Array = _c_dead[ci]
+	var hit_c: PackedInt32Array = _c_hit_c[ci]
+	var hit_d: PackedFloat32Array = _c_hit_d[ci]
+	var spit: PackedFloat32Array = _c_spit[ci]
+	var brood: PackedFloat32Array = _c_brood[ci]
+	dead.clear(); hit_c.clear(); hit_d.clear(); spit.clear(); brood.clear()
+	var reached := 0
+	var core_dmg := 0.0
+
+	var t := pool.type_id
+	var hbase := t << SHIFT
+	var def := pool.def
 	var px := pool.px
 	var pz := pool.pz
 	var vx := pool.vx
 	var vz := pool.vz
+	var hp := pool.hp
 	var spd := pool.speed
 	var sz := pool.size
+	var tmr := pool.timer
+	var slw := pool.slow
+	var brn := pool.burn
+	var aux := pool.aux
+	var tgt := pool.tgt
+	var bkt := pool.bucket
 	var buf := pool.buf
-	var steer := minf(1.0, float(pool.def.steer) * dt)
-	var mass := int(pool.def.mass)
-	var sep := separation * float(pool.def.push)
-	var spr := spread * float(pool.def.push)
+	var steer := minf(1.0, float(def.steer) * dt)
+	var mass := int(def.mass)
+	var sep := separation * float(def.push)
+	var spr := spread * float(def.push)
+	var sdps := float(def.get("structure_dps", 0.0)) * dt
+	var door_mult := float(def.get("door_mult", 1.0))
+	var cdps := float(def.get("core_dps", 0.0)) * dt
+	var burn_dmg := _burn_dps * GameConfig.multiplier(t, GameConfig.Dmg.INCENDIARY) * dt
+	var is_burrower := pool.burrows
+	var rr := int(pool.ranged_range)
+	var rcd := pool.ranged_cd
+	var rdmg := pool.ranged_dmg
+	var bint := pool.brood_interval
+
 	for i in range(i0, i1):
-		# grid space (0..w, 0..h)
+		var o := i * 16
+		# ---- status effects
+		var b := brn[i]
+		if b > 0.0:
+			var hh := hp[i] - burn_dmg
+			hp[i] = hh
+			brn[i] = b - dt
+			if hh <= 0.0:
+				dead.append(hbase | i)
+				continue
 		var gx := px[i] - ox
 		var gz := pz[i] - oz
 		var cx := int(gx)
 		var cz := int(gz)
 		var c := cz * w + cx
 		var s := spd[i]
-		var fdx := dirx[c]
-		var fdz := dirz[c]
-		# predatory weave: each alien drifts side to side across the flow
-		var wv := sin(_f_time * 1.7 + float(i) * 0.6180339) * s * wander
+		var sl := slw[i]
+		if sl > 0.0:
+			s *= 0.45
+			slw[i] = sl - dt
+		var tm := tmr[i] - dt
+
+		# ---- which field
+		var burrowed := false
+		if is_burrower:
+			burrowed = aux[i] > 0.5
+			if burrowed and bdist[c] < surf:
+				aux[i] = 0.0
+				burrowed = false
+			elif not burrowed and tm <= 0.0 and bdist[c] >= surf and kind[c] != OutpostMap.Kind.ROCK:
+				aux[i] = 1.0
+				burrowed = true
+		var fdx: float
+		var fdz: float
+		if burrowed:
+			fdx = bdx[c]
+			fdz = bdz[c]
+		else:
+			fdx = gdx[c]
+			fdz = gdz[c]
+
+		var wv := sin(time * 1.7 + float(i) * 0.6180339) * s * wander
 		var tx := fdx * s - fdz * wv
 		var tz := fdz * s + fdx * wv
 
-		# crowd pressure from density gradient
+		# ---- strain behaviour
+		if not burrowed:
+			var ac := int(gz + fdz * 0.8) * w + int(gx + fdx * 0.8)
+			if ac != c and kind[ac] == OutpostMap.Kind.STRUCT and climb[ac] == 0:
+				# blocked by a structure the field wants us through: bash it
+				hit_c.append(ac)
+				hit_d.append(sdps * (door_mult if stype[ac] == OutpostMap.SType.DOOR else 1.0))
+				tx *= 0.15
+				tz *= 0.15
+			elif rr > 0:
+				var tg := tgt[i]
+				if ((i + frame) & 7) == 0:
+					tg = -1
+					var mx := gx
+					var mz := gz
+					for step in rr:
+						mx += fdx
+						mz += fdz
+						var mc := int(mz) * w + int(mx)
+						if mc < 0 or mc >= solid.size() or kind[mc] == OutpostMap.Kind.ROCK:
+							break
+						if kind[mc] == OutpostMap.Kind.STRUCT:
+							tg = mc
+							break
+					tgt[i] = tg
+				if tg >= 0:
+					if kind[tg] != OutpostMap.Kind.STRUCT:
+						tgt[i] = -1
+					else:
+						tx = 0.0
+						tz = 0.0
+						if tm <= 0.0:
+							tm = rcd
+							spit.append(px[i]); spit.append(pz[i])
+							spit.append(float(tg)); spit.append(rdmg)
+		if bint > 0.0 and tm <= 0.0:
+			tm = bint
+			brood.append(px[i]); brood.append(pz[i]); brood.append(float(t))
+		tmr[i] = tm
+
+		# ---- crowd pressure from density gradient
 		var fx := gx * ds
 		var fz := gz * ds
 		var dx := int(fx)
@@ -250,8 +400,6 @@ func _sim_chunk(ci: int) -> void:
 			var crowd := float(here) * spr
 			tx += (fx - dx - 0.5) * crowd
 			tz += (fz - dz - 0.5) * crowd
-
-		# cap the desired speed so crowd pressure can't fling aliens
 		var t2 := tx * tx + tz * tz
 		var cap := s * 1.35
 		if t2 > cap * cap:
@@ -259,6 +407,7 @@ func _sim_chunk(ci: int) -> void:
 			tx *= ks
 			tz *= ks
 
+		# ---- integrate + collide
 		var cvx := vx[i]
 		var cvz := vz[i]
 		cvx += (tx - cvx) * steer
@@ -269,33 +418,46 @@ func _sim_chunk(ci: int) -> void:
 		elif nx > max_x: nx = max_x
 		if nz < 0.5: nz = 0.5
 		elif nz > max_z: nz = max_z
-
-		# slide along walls (unless already inside one: then climb out)
-		if blk[c] == 0:
-			if blk[cz * w + int(nx)]:
+		if burrowed:
+			if kind[c] != OutpostMap.Kind.ROCK:
+				if kind[cz * w + int(nx)] == OutpostMap.Kind.ROCK:
+					nx = gx
+					cvx *= -0.2
+				if kind[int(nz) * w + int(nx)] == OutpostMap.Kind.ROCK:
+					nz = gz
+					cvz *= -0.2
+		elif solid[c] == 0 or climb[c] == 1:
+			var tc := cz * w + int(nx)
+			if solid[tc] == 1 and climb[tc] == 0:
 				nx = gx
 				cvx *= -0.2
-			if blk[int(nz) * w + int(nx)]:
+			tc = int(nz) * w + int(nx)
+			if solid[tc] == 1 and climb[tc] == 0:
 				nz = gz
 				cvz *= -0.2
 
-		if dist[int(nz) * w + int(nx)] == 0:
-			# reached the core: the M1 test range recycles it to a canyon mouth
-			reached += 1
-			var hsh := (seed_base + i * 2654435761) & 0x7fffffff
-			var sc := spawn_cells[hsh % n_spawn]
-			nx = (sc % w) + float(hsh & 1023) / 1024.0
-			nz = (sc / w) + float((hsh >> 10) & 1023) / 1024.0
-			cvx = 0.0
-			cvz = 0.0
+		var ncell := int(nz) * w + int(nx)
+		if not burrowed and gdist[ncell] == 0:
+			if recycle:
+				reached += 1
+				var hsh := (seed_base + i * 2654435761) & 0x7fffffff
+				var sc := spawn_cells[hsh % n_spawn]
+				nx = (sc % w) + float(hsh & 1023) / 1024.0
+				nz = (sc / w) + float((hsh >> 10) & 1023) / 1024.0
+				ncell = int(nz) * w + int(nx)
+				cvx = 0.0
+				cvz = 0.0
+			else:
+				core_dmg += cdps
 
 		vx[i] = cvx
 		vz[i] = cvz
 		px[i] = nx + ox
 		pz[i] = nz + oz
 		dnext[int(nz * ds) * dw + int(nx * ds)] += mass
+		bkt[i] = int(nz * gs) * gw + int(nx * gs)
 
-		var o := i * 16
+		# ---- render buffer
 		var sp2 := cvx * cvx + cvz * cvz
 		if sp2 > 0.05:
 			var k := sz[i] / sqrt(sp2)
@@ -307,4 +469,16 @@ func _sim_chunk(ci: int) -> void:
 			buf[o + 10] = cs
 		buf[o + 3] = nx + ox
 		buf[o + 11] = nz + oz
-	_chunk_reached[ci] = reached
+		var y := 0.0
+		if burrowed:
+			y = -0.55 * sz[i]
+		elif kind[ncell] == OutpostMap.Kind.STRUCT:
+			y = sheight[ncell]
+		else:
+			y = pile[ncell] * 0.85
+		buf[o + 7] = y
+		var fl := buf[o + 12]
+		if fl > 0.0:
+			buf[o + 12] = maxf(0.0, fl - dt * 7.0)
+	_c_reached[ci] = reached
+	_c_core[ci] = core_dmg

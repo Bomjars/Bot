@@ -1,0 +1,48 @@
+{
+	"_comment": "Turret definitions. range/min_range/aoe in metres, fire_rate shots per second, damage per hit before the counter multiplier. Tier upgrades (M3) and specialisations (M6) extend these entries.",
+	"damage_types": ["ballistic", "incendiary", "piercing", "shock", "explosive", "seismic"],
+	"damage_type_names": {
+		"ballistic": "Ballistic", "incendiary": "Incendiary", "piercing": "Piercing",
+		"shock": "Shock", "explosive": "Explosive", "seismic": "Seismic"
+	},
+	"damage_type_colors": {
+		"ballistic": "#f2c94c", "incendiary": "#ff6a2a", "piercing": "#5fb8ff",
+		"shock": "#6ff7ff", "explosive": "#a3d65c", "seismic": "#c98b55"
+	},
+	"weak_multiplier": 1.5,
+	"resist_multiplier": 0.5,
+	"turrets": [
+		{
+			"id": "autocannon", "name": "Autocannon", "damage_type": "ballistic",
+			"role": "Rapid single-target fire. Aimed shots can be dodged.",
+			"hp": 380, "range": 11.0, "fire_rate": 6.0, "damage": 9.0, "dodgeable": true
+		},
+		{
+			"id": "flamethrower", "name": "Flamethrower", "damage_type": "incendiary",
+			"role": "Short-range cone that sets aliens burning. Chars corpses.",
+			"hp": 420, "range": 6.5, "fire_rate": 10.0, "damage": 2.5, "cone_deg": 45.0,
+			"burn_dps": 7.0, "burn_time": 2.5
+		},
+		{
+			"id": "railgun", "name": "Railgun", "damage_type": "piercing",
+			"role": "Long-range slug that punches through a line of aliens.",
+			"hp": 320, "range": 22.0, "fire_rate": 0.6, "damage": 150.0, "pierce": 5, "width": 0.8, "dodgeable": true
+		},
+		{
+			"id": "shock_grid", "name": "Shock Grid", "damage_type": "shock",
+			"role": "Pulses arcs into everything nearby and slows it.",
+			"hp": 400, "range": 5.5, "fire_rate": 1.4, "damage": 16.0, "max_targets": 14,
+			"slow_time": 1.6
+		},
+		{
+			"id": "mortar", "name": "Mortar", "damage_type": "explosive",
+			"role": "Lobbed shells with splash. Cannot fire point-blank.",
+			"hp": 300, "range": 24.0, "min_range": 6.0, "fire_rate": 0.45, "damage": 70.0, "aoe": 3.2, "shell_time": 1.3
+		},
+		{
+			"id": "seismic_spike", "name": "Seismic Spike", "damage_type": "seismic",
+			"role": "Ground slam around the spike. Hits tunnelling Burrowers and forces them up.",
+			"hp": 450, "range": 7.0, "fire_rate": 0.4, "damage": 40.0, "surface_time": 3.5
+		}
+	]
+}

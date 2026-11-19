@@ -7,7 +7,7 @@
 		"pass_fps": 60.0
 	},
 	"swarm": {
-		"start_aliens": 3000,
+		"start_aliens": 1500,
 		"max_spawn_per_frame": 600,
 		"separation": 2.2,
 		"intra_cell_spread": 2.5,
@@ -19,5 +19,12 @@
 		"width": 200,
 		"height": 140,
 		"seed": 1337
+	},
+	"combat": {
+		"corpse_cap": 4000,
+		"particle_cap": 4000,
+		"splat_cap": 2500,
+		"grid_cell": 4.0,
+		"burrow_surface_distance": 8.0
 	}
 }

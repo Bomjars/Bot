@@ -1,52 +1,68 @@
 {
-	"_comment": "Alien strain definitions. Order matters: it is the type id. Counters (weak/resists) are used from M2 on: weak = 150% damage, resists = 50%.",
+	"_comment": "Alien strain definitions. Order = type id. weak = 150% damage taken, resists = 50%. structure_dps: damage per second to walls/turrets they are blocked by; door_mult multiplies that vs blast doors. core_dps: damage to the outpost core while gnawing it. corpse_height: metres added to the corpse pile of the cell it dies in. ichor: blood colour.",
 	"aliens": [
 		{
 			"id": "stalker",
 			"name": "Stalker",
 			"trait": "Fast pack hunter, low HP. Arrives in floods.",
-			"hp": 20, "speed": 7.0, "steer": 6.0, "size": 1.0, "mass": 1, "push": 1.0,
+			"hp": 22, "speed": 7.0, "steer": 6.0, "size": 1.0, "mass": 1, "push": 1.0,
 			"spawn_weight": 55,
+			"structure_dps": 6, "core_dps": 4, "corpse_height": 0.14,
+			"ichor": "#c8e04a",
 			"weak": ["incendiary", "shock"], "resists": ["piercing"]
 		},
 		{
 			"id": "mauler",
 			"name": "Mauler",
-			"trait": "Armoured bruiser. Smashes blast doors.",
-			"hp": 220, "speed": 3.4, "steer": 3.0, "size": 1.0, "mass": 4, "push": 0.6,
+			"trait": "Armoured bruiser. Smashes blast doors (x4 damage to doors).",
+			"hp": 260, "speed": 3.4, "steer": 3.0, "size": 1.0, "mass": 4, "push": 0.6,
 			"spawn_weight": 10,
+			"structure_dps": 40, "door_mult": 4.0, "core_dps": 30, "corpse_height": 0.45,
+			"ichor": "#e0c030",
 			"weak": ["piercing"], "resists": ["ballistic"]
 		},
 		{
 			"id": "spitter",
 			"name": "Spitter",
-			"trait": "Lobs acid from range. Fragile sac.",
+			"trait": "Stops at range and lobs acid at structures. Fragile sac.",
 			"hp": 35, "speed": 4.2, "steer": 4.0, "size": 1.0, "mass": 1, "push": 1.0,
 			"spawn_weight": 12,
+			"structure_dps": 3, "core_dps": 3, "corpse_height": 0.14,
+			"ranged": { "range": 9, "cooldown": 2.4, "damage": 28 },
+			"ichor": "#7dff3a",
 			"weak": ["explosive"], "resists": ["shock"]
 		},
 		{
 			"id": "snatcher",
 			"name": "Snatcher",
-			"trait": "Fast, dodging abductor. Drags colonists away.",
-			"hp": 45, "speed": 6.6, "steer": 7.0, "size": 1.0, "mass": 1, "push": 1.2,
+			"trait": "Fast, dodges 35% of aimed shots. Abducts colonists (M4).",
+			"hp": 48, "speed": 6.6, "steer": 7.0, "size": 1.0, "mass": 1, "push": 1.2,
 			"spawn_weight": 10,
+			"structure_dps": 4, "core_dps": 6, "corpse_height": 0.15,
+			"dodge": 0.35,
+			"ichor": "#b07aff",
 			"weak": ["shock", "ballistic"], "resists": ["explosive"]
 		},
 		{
 			"id": "burrower",
 			"name": "Burrower",
-			"trait": "Tunnels beneath walls.",
-			"hp": 80, "speed": 4.6, "steer": 4.0, "size": 1.0, "mass": 2, "push": 0.8,
+			"trait": "Tunnels under walls. Only Seismic hits it underground; surfaces near the core or when shaken.",
+			"hp": 90, "speed": 4.6, "steer": 4.0, "size": 1.0, "mass": 2, "push": 0.8,
 			"spawn_weight": 10,
+			"structure_dps": 10, "core_dps": 12, "corpse_height": 0.25,
+			"burrows": true,
+			"ichor": "#ffb040",
 			"weak": ["seismic"], "resists": ["incendiary"]
 		},
 		{
 			"id": "brood_mother",
 			"name": "Brood Mother",
-			"trait": "Boss. Spawns brood, eats to grow.",
-			"hp": 2500, "speed": 2.2, "steer": 1.5, "size": 1.0, "mass": 16, "push": 0.25,
+			"trait": "Boss. Births Stalker broods every few seconds.",
+			"hp": 3000, "speed": 2.2, "steer": 1.5, "size": 1.0, "mass": 16, "push": 0.25,
 			"spawn_weight": 1,
+			"structure_dps": 80, "core_dps": 60, "corpse_height": 1.2,
+			"brood": { "interval": 7.0, "count": 4, "type": "stalker" },
+			"ichor": "#ff4aa0",
 			"weak": ["piercing", "explosive"], "resists": ["shock"]
 		}
 	]
