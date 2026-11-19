@@ -393,11 +393,11 @@ func _inspector_info(c: int) -> Dictionary:
 	var up := structures.upgrade_cost(c)
 	if structures.turrets.has(c):
 		var t: Turret = structures.turrets[c]
-		var line := "Damage %.0f   Range %.1fm   Fire %.2f/s   Crew eff. %d%%" % [t.dmg, t.rng, t.fire_rate(), int(t.crew_efficiency * 100)]
+		var line := "Damage %.0f   Range %.1fm   Fire %.2f/s   Crew eff. %d%%" % [t.dmg, t.rng, t.fire_rate(), roundi(t.crew_efficiency * 100)]
 		lines.append(line)
 		if up >= 0:
 			var nt: Dictionary = GameConfig.tiers[tier]
-			lines.append("[color=#9fd]Next: damage %.0f, range %.1fm, crew eff. %d%%[/color]" % [float(d.damage) * float(nt.damage), float(d.range) * float(nt.range), int(float(nt.crew_efficiency) * 100)])
+			lines.append("[color=#9fd]Next: damage %.0f, range %.1fm, crew eff. %d%%[/color]" % [float(d.damage) * float(nt.damage), float(d.range) * float(nt.range), roundi(float(nt.crew_efficiency) * 100)])
 		else:
 			lines.append("[color=#aaa]Specialisation at tier III: unlock in the Colony Charter (M6)[/color]")
 		lines.append("Kills: %d" % t.kills)

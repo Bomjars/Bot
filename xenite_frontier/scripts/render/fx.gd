@@ -179,8 +179,9 @@ func splat(pos: Vector3, col: Color, radius: float) -> void:
 	_sbuf[o] = c * sx; _sbuf[o + 1] = 0.0; _sbuf[o + 2] = s * sz; _sbuf[o + 3] = pos.x
 	_sbuf[o + 4] = 0.0; _sbuf[o + 5] = 1.0; _sbuf[o + 6] = 0.0; _sbuf[o + 7] = pos.y + 0.012 + rng.randf() * 0.01
 	_sbuf[o + 8] = -s * sx; _sbuf[o + 9] = 0.0; _sbuf[o + 10] = c * sz; _sbuf[o + 11] = pos.z
-	var dcol := col.darkened(0.35)
-	_sbuf[o + 12] = dcol.r; _sbuf[o + 13] = dcol.g; _sbuf[o + 14] = dcol.b; _sbuf[o + 15] = 0.15
+	# dark, saturated acid stain (no glow) so puddles read as ground decals
+	var dcol := Color.from_hsv(col.h, minf(1.0, col.s * 1.2), col.v * 0.38)
+	_sbuf[o + 12] = dcol.r; _sbuf[o + 13] = dcol.g; _sbuf[o + 14] = dcol.b; _sbuf[o + 15] = 0.0
 	_s_dirty = true
 
 
@@ -193,7 +194,7 @@ func gib(pos: Vector3, body: Color, ichor: Color, scale: float) -> void:
 	burst(pos + Vector3(0, 0.5 * scale, 0), body, n, 5.0, 0.16 * scale, 2.5, 1.0)
 	var ich := Color(ichor.r, ichor.g, ichor.b, 0.6)
 	burst(pos + Vector3(0, 0.4 * scale, 0), ich, n + 2, 4.0, 0.09 * scale, 0.9, 1.0)
-	splat(pos, ichor, 0.5 + 0.25 * scale)
+	splat(pos, ichor, 0.3 + 0.15 * scale)
 
 
 ## Rising, fading text (Biomass deposits, warnings).
