@@ -34,6 +34,15 @@
 - Sandbox free build (F11 / `--free-build`).
 - Scripted bot player for soak tests (`--bot`).
 
+### Measured (headless 3-minute soaks, swarm pressure 500, slow cloud CPU)
+| | No player | Scripted bot (`--bot`) |
+|---|---|---|
+| Core | overrun | 5708 / 6000, held |
+| Biomass collected / spent | 730 / 0 | 1,875 / 2,115 |
+| Drone trips / corpses harvested | 45 / 278 | 83 / 545 |
+| Upgrades bought | – | 11 structures to tier II (incl. both bays, 6 drones) |
+| Swarm sim / combat / fx | 0.7 / 0.03 / 0.15 ms | 1.1 / 0.06 / 0.28 ms |
+
 ### Changed
 - Build tools now use keys 1–9 and 0 (10 tools).
 - Reset outpost moved to F10, and R is now Repair.
