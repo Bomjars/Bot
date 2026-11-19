@@ -22,6 +22,21 @@ aliens** steering by a shared flow field and rendered via one MultiMesh per stra
 godot --path xenite_frontier
 ```
 
+**First run after cloning or pulling:** import the project once so Godot builds its
+script class cache (`.godot/`, not in git). Opening the project in the editor
+does this automatically. From the command line:
+
+```bash
+godot --headless --path xenite_frontier --import
+```
+
+Without this, a fresh clone fails with `Identifier "InputSetup" not declared`.
+On Windows, `run_benchmark.bat` does the import for you:
+
+```bash
+xenite_frontier\run_benchmark.bat "C:\path\to\Godot_v4.4.1-stable_win64_console.exe"
+```
+
 ### Benchmark
 
 Press **B** in game. The run ramps to 10,000 aliens over 6 s, settles for 2 s,
