@@ -205,7 +205,11 @@ xenite_frontier/
 
 See `CHANGELOG.md` for per-milestone notes.
 
-## Screenshots (M1, software-rendered)
+## Screenshots (software-rendered)
+
+![M2 combat: the swarm floods the airlocks while the demo battery fires](docs/m2_combat.png)
+![M2 breach: Maulers and Stalkers pour through the north airlock over corpse piles](docs/m2_breach.png)
+![M2 Intel panel and build card with counters](docs/m2_intel.png)
 
 ![Horde streaming into the compound](docs/m1_overview.png)
 ![Strain silhouettes](docs/m1_strains.png)
