@@ -7,6 +7,7 @@ const TURRETS_PATH := "res://data/turrets.json"
 const STRUCTURES_PATH := "res://data/structures.json"
 const CONFIG_PATH := "res://data/game_config.json"
 const ECONOMY_PATH := "res://data/economy.json"
+const COLONISTS_PATH := "res://data/colonists.json"
 
 enum Dmg { BALLISTIC, INCENDIARY, PIERCING, SHOCK, EXPLOSIVE, SEISMIC }
 const DMG_COUNT := 6
@@ -19,6 +20,8 @@ var turrets_data: Dictionary = {}
 var config: Dictionary = {}
 var economy: Dictionary = {}
 var tiers: Array = []
+var colonists: Dictionary = {}
+var feeding: Dictionary = {}
 var damage_type_ids: PackedStringArray = []
 ## damage multiplier: counter[alien_type * DMG_COUNT + damage_type]
 var counter := PackedFloat32Array()
@@ -30,7 +33,10 @@ func _ready() -> void:
 
 
 func reload() -> void:
-	alien_defs = load_json(ALIENS_PATH).get("aliens", [])
+	var ad := load_json(ALIENS_PATH)
+	alien_defs = ad.get("aliens", [])
+	feeding = ad.get("feeding", {})
+	colonists = load_json(COLONISTS_PATH)
 	turrets_data = load_json(TURRETS_PATH)
 	turret_defs = turrets_data.get("turrets", [])
 	structures = load_json(STRUCTURES_PATH)

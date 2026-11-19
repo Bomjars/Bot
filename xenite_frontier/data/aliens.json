@@ -1,69 +1,175 @@
 {
-	"_comment": "Alien strain definitions. Order = type id. weak = 150% damage taken, resists = 50%. structure_dps: damage per second to walls/turrets they are blocked by; door_mult multiplies that vs blast doors. core_dps: damage to the outpost core while gnawing it. corpse_height: metres added to the corpse pile of the cell it dies in. ichor: blood colour.",
+	"_comment": "Alien strain definitions. Order = type id. weak = 150% damage taken, resists = 50%. structure_dps: damage per second to structures they are blocked by; door_mult multiplies that vs blast doors. core_dps: damage to the outpost core while gnawing it. corpse_height: metres added to the corpse pile of the cell it dies in. ichor: blood colour. abducts: drags exposed colonists to the map edge. mauls: strikes exposed colonists for maul_damage (colonists have 100 HP; at 0 they die, leaving remains). hunts: Snatcher - senses colonists (incl. turret crews) and goes for them. feed_rate: chance per second to stop and eat a corpse it stands on.",
 	"aliens": [
 		{
 			"id": "stalker",
 			"name": "Stalker",
 			"trait": "Fast pack hunter, low HP. Arrives in floods.",
-			"hp": 22, "speed": 7.0, "steer": 6.0, "size": 1.0, "mass": 1, "push": 1.0,
+			"hp": 22,
+			"speed": 7.0,
+			"steer": 6.0,
+			"size": 1.0,
+			"mass": 1,
+			"push": 1.0,
 			"spawn_weight": 55,
-			"structure_dps": 6, "core_dps": 4, "corpse_height": 0.14,
+			"structure_dps": 6,
+			"core_dps": 4,
+			"corpse_height": 0.14,
 			"ichor": "#c8e04a",
-			"weak": ["incendiary", "shock"], "resists": ["piercing"]
+			"weak": [
+				"incendiary",
+				"shock"
+			],
+			"resists": [
+				"piercing"
+			],
+			"abducts": false,
+			"feed_rate": 0.35
 		},
 		{
 			"id": "mauler",
 			"name": "Mauler",
-			"trait": "Armoured bruiser. Smashes blast doors (x4 damage to doors).",
-			"hp": 260, "speed": 3.4, "steer": 3.0, "size": 1.0, "mass": 4, "push": 0.6,
+			"trait": "Armoured bruiser. Smashes blast doors (x4). Mauls colonists to death.",
+			"hp": 260,
+			"speed": 3.4,
+			"steer": 3.0,
+			"size": 1.0,
+			"mass": 4,
+			"push": 0.6,
 			"spawn_weight": 10,
-			"structure_dps": 40, "door_mult": 4.0, "core_dps": 30, "corpse_height": 0.45,
+			"structure_dps": 40,
+			"door_mult": 4.0,
+			"core_dps": 30,
+			"corpse_height": 0.45,
 			"ichor": "#e0c030",
-			"weak": ["piercing"], "resists": ["ballistic"]
+			"weak": [
+				"piercing"
+			],
+			"resists": [
+				"ballistic"
+			],
+			"mauls": true,
+			"feed_rate": 0.25,
+			"maul_damage": 70
 		},
 		{
 			"id": "spitter",
 			"name": "Spitter",
 			"trait": "Stops at range and lobs acid at structures. Fragile sac.",
-			"hp": 35, "speed": 4.2, "steer": 4.0, "size": 1.0, "mass": 1, "push": 1.0,
+			"hp": 35,
+			"speed": 4.2,
+			"steer": 4.0,
+			"size": 1.0,
+			"mass": 1,
+			"push": 1.0,
 			"spawn_weight": 12,
-			"structure_dps": 3, "core_dps": 3, "corpse_height": 0.14,
-			"ranged": { "range": 9, "cooldown": 2.4, "damage": 28 },
+			"structure_dps": 3,
+			"core_dps": 3,
+			"corpse_height": 0.14,
+			"ranged": {
+				"range": 9,
+				"cooldown": 2.4,
+				"damage": 28
+			},
 			"ichor": "#7dff3a",
-			"weak": ["explosive"], "resists": ["shock"]
+			"weak": [
+				"explosive"
+			],
+			"resists": [
+				"shock"
+			],
+			"feed_rate": 0.15
 		},
 		{
 			"id": "snatcher",
 			"name": "Snatcher",
-			"trait": "Fast, dodges 35% of aimed shots. Abducts colonists (M4).",
-			"hp": 48, "speed": 6.6, "steer": 7.0, "size": 1.0, "mass": 1, "push": 1.2,
+			"trait": "Fast, dodges 35% of aimed shots. Hunts colonists - even pulls crews out of turrets.",
+			"hp": 48,
+			"speed": 6.6,
+			"steer": 7.0,
+			"size": 1.0,
+			"mass": 1,
+			"push": 1.2,
 			"spawn_weight": 10,
-			"structure_dps": 4, "core_dps": 6, "corpse_height": 0.15,
+			"structure_dps": 4,
+			"core_dps": 6,
+			"corpse_height": 0.15,
 			"dodge": 0.35,
 			"ichor": "#b07aff",
-			"weak": ["shock", "ballistic"], "resists": ["explosive"]
+			"weak": [
+				"shock",
+				"ballistic"
+			],
+			"resists": [
+				"explosive"
+			],
+			"abducts": true,
+			"hunts": true,
+			"feed_rate": 0.0
 		},
 		{
 			"id": "burrower",
 			"name": "Burrower",
 			"trait": "Tunnels under walls. Only Seismic hits it underground; surfaces near the core or when shaken.",
-			"hp": 90, "speed": 4.6, "steer": 4.0, "size": 1.0, "mass": 2, "push": 0.8,
+			"hp": 90,
+			"speed": 4.6,
+			"steer": 4.0,
+			"size": 1.0,
+			"mass": 2,
+			"push": 0.8,
 			"spawn_weight": 10,
-			"structure_dps": 10, "core_dps": 12, "corpse_height": 0.25,
+			"structure_dps": 10,
+			"core_dps": 12,
+			"corpse_height": 0.25,
 			"burrows": true,
 			"ichor": "#ffb040",
-			"weak": ["seismic"], "resists": ["incendiary"]
+			"weak": [
+				"seismic"
+			],
+			"resists": [
+				"incendiary"
+			],
+			"abducts": true,
+			"feed_rate": 0.3
 		},
 		{
 			"id": "brood_mother",
 			"name": "Brood Mother",
-			"trait": "Boss. Births Stalker broods every few seconds.",
-			"hp": 3000, "speed": 2.2, "steer": 1.5, "size": 1.0, "mass": 16, "push": 0.25,
+			"trait": "Boss. Births Stalker broods; gorges on corpses to grow.",
+			"hp": 3000,
+			"speed": 2.2,
+			"steer": 1.5,
+			"size": 1.0,
+			"mass": 16,
+			"push": 0.25,
 			"spawn_weight": 1,
-			"structure_dps": 80, "core_dps": 60, "corpse_height": 1.2,
-			"brood": { "interval": 7.0, "count": 4, "type": "stalker" },
+			"structure_dps": 80,
+			"core_dps": 60,
+			"corpse_height": 1.2,
+			"brood": {
+				"interval": 7.0,
+				"count": 4,
+				"type": "stalker"
+			},
 			"ichor": "#ff4aa0",
-			"weak": ["piercing", "explosive"], "resists": ["shock"]
+			"weak": [
+				"piercing",
+				"explosive"
+			],
+			"resists": [
+				"shock"
+			],
+			"mauls": true,
+			"feed_rate": 2.5,
+			"maul_damage": 250
 		}
-	]
+	],
+	"feeding": {
+		"_comment": "Aliens that eat a corpse grow: size x(1+growth_per_meal) up to max_size, +hp_per_meal x base HP. Human remains count as human_meal_mult meals. Grown aliens leave corpses worth more Biomass (x size).",
+		"feed_time": 1.8,
+		"growth_per_meal": 0.12,
+		"max_size": 1.9,
+		"hp_per_meal": 0.35,
+		"human_meal_mult": 3.0
+	}
 }

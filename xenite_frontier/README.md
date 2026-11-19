@@ -8,13 +8,52 @@ low-poly primitives at runtime; no imported assets.
 
 ---
 
-## Current milestone: **M3 – Biomass economy, harvester drones, turret tiers**
+## Current milestone: **M4 – colonists, abduction, feeding**
 
-M3 adds the in-run economy. Every build, upgrade and repair costs
-**Biomass**. Biomass only comes from alien corpses, and only when **harvester
-drones** fly out from a **Harvester Bay** and bring it home. The swarm ramps
-up over the first 90 s, so spend fast. Waves, colonists and the meta tree
-arrive in M4 to M6.
+M4 adds the people you are defending, and the swarm's hunger.
+
+### Colonists crew your turrets
+* You start with **10 contracted colonists** sheltering in the core.
+  `data/colonists.json` has the crew size, walk speed and rates.
+* Each turret needs one crew. Colonists walk out to the most valuable uncrewed
+  turrets automatically. **Uncrewed turrets fire at 40%.** Tier upgrades raise
+  *crew efficiency* (115% / 130% fire rate while crewed).
+* Colonists path around walls with A*. **Blast Doors let colonists through
+  but not aliens.** A turret walled off without a door can't be crewed.
+* The top bar shows crew status. The event feed (left) reports every
+  abduction, rescue and loss. The Inspector shows a turret's crew, or
+  "UNCREWED – firing at 40%".
+
+### Abduction: kill the carrier
+* Anyone outside the core is **exposed**: walking to a post, bailing out of a
+  destroyed turret, or limping home.
+* **Snatchers and Burrowers** grab exposed colonists and **drag them
+  toward the nearest canyon mouth** at 70% speed, leaving a blood trail.
+  **Snatchers hunt**: they sense colonists within 14 m (their own flow field)
+  and even **rip crews out of turrets**.
+* Turrets **prioritise carriers.** Kill the carrier and the colonist drops,
+  wounded. They limp back to the core and recover for 40 s before returning to
+  duty. Colony Charter medics will shorten this in M6. If the carrier reaches
+  the map edge, the colonist is gone, and that turret loses its crew for good.
+* **Maulers and Brood Mothers** don't carry. They maul exposed colonists to
+  death, leaving remains.
+
+### Feeding: the swarm grows
+* Aliens standing on corpses stop to eat (per-strain `feed_rate` in
+  `aliens.json`; Brood Mothers gorge). Each meal grows the alien
+  **×1.12 in size** (up to ×1.9) and adds 35% of its base HP.
+* **Human remains are worth 3 meals**, and aliens eat them first.
+* Eaten corpses yield no Biomass. Eating also lowers corpse piles. Grown
+  aliens leave bigger corpses worth more Biomass (×size).
+* Harvester drones and feeding aliens compete for the same corpses. Place
+  bays so drones get there first.
+
+## The economy (M3)
+
+M3 added the in-run economy. Every build, upgrade and repair costs
+**Biomass**, and Biomass only comes from alien corpses, carried home by
+**harvester drones** from a **Harvester Bay**. The swarm ramps up over the
+first 90 s, so spend fast.
 
 ### The Biomass loop
 1. Turrets kill aliens. Each corpse holds Biomass (Stalker 2, Spitter 3,
@@ -77,7 +116,7 @@ On Windows, `run_benchmark.bat` does the import and runs the benchmark:
 xenite_frontier\run_benchmark.bat "C:\path\to\Godot_v4.4.1-stable_win64_console.exe"
 ```
 
-### Controls (M3)
+### Controls (M4)
 
 | Action | Keyboard / mouse | Gamepad |
 |---|---|---|
@@ -183,6 +222,7 @@ xenite_frontier/
     aliens.json        strain stats, traits, counters (weak/resists), spawn weights
     turrets.json       damage types, counter multipliers, turret stats
     structures.json    walls, blast doors, core HP, climb height
+    colonists.json     crew size, walk speed, uncrewed rate, recovery, carrier speed, names
     economy.json       ALL economy values: Biomass, costs, upgrades, drones, Xenite, Threat, Hazard Contracts
     game_config.json   benchmark / swarm / combat caps / map tuning
   scenes/main.tscn     root; everything else is built in code
@@ -199,6 +239,7 @@ xenite_frontier/
     world/corpses.gd      pooled corpses + pile heights + Biomass value
     econ/economy.gd       Biomass wallet, costs, refunds, deposits
     econ/harvester.gd     Harvester Bays + drone state machine
+    colony/colonists.gd   colonists: crew assignment, A* walking, abduction, rescue, recovery
     render/alien_meshes.gd   procedural predator silhouettes
     render/alien.gdshader    faceted shading, GPU gait, hit-flash channel
     render/fx.gd / fx.gdshader  pooled particles, beams, ichor splats
@@ -244,7 +285,7 @@ xenite_frontier/
 - [x] **M1** 10k aliens via flow field, perf benchmark
 - [x] **M2** Walls, turrets, damage types and counter table, death, corpse piling
 - [x] **M3** Biomass economy, harvester drones, in-run turret tiers
-- [ ] **M4** Colonists, abduction, feeding
+- [x] **M4** Colonists, abduction, feeding
 - [ ] **M5** Build/battle phases, waves, day/night, abilities, Threat Level
 - [ ] **M6** Xenite, Colony Charter, specialisations, Hazard Contracts, save/load
 - [ ] **M7** Gore/juice pass, 3 outposts, balance pass

@@ -40,12 +40,14 @@ var _node_next := PackedInt32Array()
 
 ## cost_name: which OutpostMap cost array to path over ("nav_cost" for the
 ## surface swarm, "burrow_cost" for tunnellers). Cost 0 = impassable.
-func _init(map: OutpostMap, cost_name := "nav_cost") -> void:
+## goals: cells with distance 0 (default: the outpost core). Can be changed
+## later with set_goals() (hunt field follows colonists).
+func _init(map: OutpostMap, cost_name := "nav_cost", goal_cells := PackedInt32Array()) -> void:
 	_map = map
 	_cost_name = cost_name
 	w = map.w
 	h = map.h
-	goals = map.goal_cells
+	goals = goal_cells if not goal_cells.is_empty() else map.goal_cells
 	var n := w * h
 	for a in [dist, _b_dist]:
 		a.resize(n)
@@ -57,7 +59,7 @@ func _init(map: OutpostMap, cost_name := "nav_cost") -> void:
 
 ## Blocking rebuild (startup).
 func build() -> void:
-	_compute(_costs())
+	_compute(_costs(), goals.duplicate())
 	_swap()
 
 
@@ -66,7 +68,7 @@ func request_rebuild() -> void:
 	if _task != -1:
 		_dirty = true
 		return
-	_task = WorkerThreadPool.add_task(_compute.bind(_costs()), true, "flow_field")
+	_task = WorkerThreadPool.add_task(_compute.bind(_costs(), goals.duplicate()), true, "flow_field")
 
 
 func busy() -> bool:
@@ -97,7 +99,11 @@ func _swap() -> void:
 	rebuilt.emit()
 
 
-func _compute(cst: PackedByteArray) -> void:
+func set_goals(g: PackedInt32Array) -> void:
+	goals = g
+
+
+func _compute(cst: PackedByteArray, goal_list: PackedInt32Array) -> void:
 	# impassable mask derived from cost (0 = impassable)
 	var blk := PackedByteArray()
 	blk.resize(cst.size())
@@ -119,7 +125,7 @@ func _compute(cst: PackedByteArray) -> void:
 	var nn := 0
 	var pending := 0
 
-	for g in goals:
+	for g in goal_list:
 		if blk[g] == 0:
 			d[g] = 0
 			ncell[nn] = g

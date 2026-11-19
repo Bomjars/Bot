@@ -30,6 +30,9 @@ var snav := PackedByteArray()        # structure's own nav cost (when not climba
 var pile := PackedFloat32Array()     # corpse pile height, metres
 var climb := PackedByteArray()       # 1 = structure is climbable via corpse pile
 var lit := PackedByteArray()         # number of floodlights covering the cell (M5 night)
+var colonist_at := PackedInt32Array() # exposed colonist id + 1 standing in the cell (0 = none)
+var crew_at := PackedInt32Array()     # turret cell: crew colonist id + 1 (Snatchers can pull them out)
+var corpse_count := PackedInt32Array() # corpses (alien + human) in the cell - feeding reads this
 var goal_cells := PackedInt32Array()
 var spawn_cells := PackedInt32Array()
 var core_center := Vector3.ZERO
@@ -195,6 +198,9 @@ func generate_test_range(width: int, height: int, seed_value: int) -> void:
 	for a in [shp, smax, sheight, pile]:
 		a.resize(n)
 		a.fill(0.0)
+	for a in [colonist_at, crew_at, corpse_count]:
+		a.resize(n)
+		a.fill(0)
 	var sd := GameConfig.structures
 	climb_height = float(sd.get("climb_height", climb_height))
 	max_pile = float(sd.get("max_pile_height", max_pile))

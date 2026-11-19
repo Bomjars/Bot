@@ -35,6 +35,12 @@ var _charred_yield := 0.0
 var _next_serial := 1
 var biomass_lost := 0.0     # value that decayed before harvest
 var harvested := 0
+var eaten := 0
+var humans_eaten := 0
+var _by_cell := {}          # cell -> PackedInt32Array of (type << 16 | slot)
+var _humans := {}           # cell -> Array[Node3D] human remains
+var _human_mat: StandardMaterial3D
+var _blood_mat: StandardMaterial3D
 var _mm: Array[MultiMesh] = []
 var _dirty := PackedByteArray()
 var _rng := RandomNumberGenerator.new()
@@ -94,10 +100,11 @@ func add(t: int, x: float, z: float, yaw: float, size: float, height: float, cha
 		_remove_slot(t, i)
 	var rest := map.add_pile(c, height)
 	cells[i] = c
+	_index_add(c, (t << 16) | i)
 	_height[t][i] = height
 	_x[t][i] = x
 	_z[t][i] = z
-	_value[t][i] = _biomass_of[t] * (_charred_yield if charred else 1.0)
+	_value[t][i] = _biomass_of[t] * (_charred_yield if charred else 1.0) * size
 	_claimed[t][i] = 0
 	_serial[t][i] = _next_serial
 	_next_serial += 1
@@ -123,6 +130,7 @@ func _remove_slot(t: int, i: int) -> void:
 	if c < 0:
 		return
 	map.remove_pile(c, _height[t][i])
+	_index_remove(c, (t << 16) | i)
 	_cell[t][i] = -1
 	_claimed[t][i] = 0
 	count -= 1
@@ -205,7 +213,86 @@ func harvestable_value() -> float:
 	return s
 
 
+# ------------------------------------------------------------ feeding
+
+func _index_add(c: int, code: int) -> void:
+	if not _by_cell.has(c):
+		_by_cell[c] = PackedInt32Array()
+	var a: PackedInt32Array = _by_cell[c]
+	a.append(code)
+	map.corpse_count[c] += 1
+
+
+func _index_remove(c: int, code: int) -> void:
+	if _by_cell.has(c):
+		var a: PackedInt32Array = _by_cell[c]
+		var k := a.find(code)
+		if k >= 0:
+			a.remove_at(k)
+			map.corpse_count[c] = maxi(0, map.corpse_count[c] - 1)
+		if a.is_empty():
+			_by_cell.erase(c)
+
+
+## An alien eats one corpse in `cell` (human remains first - they are
+## starving for human flesh). Returns how many meals it was worth (0 = none).
+func eat_one(cell: int) -> float:
+	if _humans.has(cell):
+		var arr: Array = _humans[cell]
+		var n: Node3D = arr.pop_back()
+		n.queue_free()
+		if arr.is_empty():
+			_humans.erase(cell)
+		map.corpse_count[cell] = maxi(0, map.corpse_count[cell] - 1)
+		humans_eaten += 1
+		return float(GameConfig.feeding.get("human_meal_mult", 3.0))
+	if not _by_cell.has(cell):
+		return 0.0
+	var a: PackedInt32Array = _by_cell[cell]
+	var code := a[a.size() - 1]
+	_remove_slot(code >> 16, code & 0xFFFF)
+	eaten += 1
+	return 1.0
+
+
+## A mauled colonist's remains: a body in a blood pool. Edible.
+func add_human(pos: Vector3) -> void:
+	var c := map.cell_of(pos)
+	if c < 0:
+		return
+	if _human_mat == null:
+		_human_mat = TurretModels.mat(Color(0.9, 0.45, 0.1), 0.0, 0.1)
+		_blood_mat = TurretModels.mat(Color(0.35, 0.02, 0.02), 0.0, 0.0)
+		_blood_mat.roughness = 0.2
+	var n := Node3D.new()
+	n.position = Vector3(pos.x, map.pile[c] * 0.85, pos.z)
+	n.rotation.y = randf() * TAU
+	add_child(n)
+	TurretModels.part(n, TurretModels.cyl(0.7, 0.02, -1.0, 10), _blood_mat, Vector3(0, 0.02, 0))
+	TurretModels.part(n, TurretModels.box(0.32, 0.18, 0.9), _human_mat, Vector3(0, 0.12, 0))
+	TurretModels.part(n, SphereMesh.new(), _human_mat, Vector3(0, 0.15, 0.58)).scale = Vector3.ONE * 0.24
+	if not _humans.has(c):
+		_humans[c] = []
+	_humans[c].append(n)
+	map.corpse_count[c] += 1
+
+
+func human_remains() -> int:
+	var n := 0
+	for a: Array in _humans.values():
+		n += a.size()
+	return n
+
+
 func clear() -> void:
+	for a: Array in _humans.values():
+		for n: Node3D in a:
+			n.queue_free()
+	_humans.clear()
+	_by_cell.clear()
+	map.corpse_count.fill(0)
+	eaten = 0
+	humans_eaten = 0
 	for t in _cap.size():
 		for i in _cap[t]:
 			_cell[t][i] = -1

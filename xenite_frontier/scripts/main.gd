@@ -1,9 +1,11 @@
 extends Node3D
-## M3 entry point: economy sandbox. Builds world, flow fields, swarm, combat,
-## structures, corpses, economy, harvesters, fx, camera, HUD and build bar,
+## M4 entry point: colony sandbox. Builds world, flow fields (surface,
+## burrow, retreat-to-edge, hunt-colonists), swarm, combat, structures,
+## corpses, economy, harvesters, colonists, fx, camera, HUD and build bar,
 ## then drives the frame:
-##   poll fields -> swarm sim (threaded) -> swarm events -> spatial grid ->
-##   turrets -> projectiles -> drones -> deaths/corpses -> spawning -> uploads.
+##   poll fields -> swarm sim (threaded) -> swarm events (feeding) ->
+##   colonist events (abductions) -> spatial grid -> turrets -> projectiles ->
+##   drones -> colonists -> deaths/corpses -> spawning -> uploads.
 ##
 ## Command line (after `--`):
 ##   --benchmark[=N]   scripted benchmark with N aliens, then quit
@@ -15,7 +17,10 @@ extends Node3D
 var map: OutpostMap
 var field: FlowField
 var bfield: FlowField
+var rfield: FlowField
+var hfield: FlowField
 var swarm: Swarm
+var colonists: ColonistSystem
 var combat: Combat
 var structures: Structures
 var corpses: Corpses
@@ -74,11 +79,14 @@ func _ready() -> void:
 
 	field = FlowField.new(map, "nav_cost")
 	bfield = FlowField.new(map, "burrow_cost")
+	rfield = FlowField.new(map, "nav_cost", map.spawn_cells)
+	hfield = FlowField.new(map, "nav_cost", PackedInt32Array([-1]))
+	hfield.set_goals(PackedInt32Array())
 
 	swarm = Swarm.new()
 	swarm.name = "Swarm"
 	add_child(swarm)
-	swarm.setup(map, field, bfield, GameConfig.alien_defs)
+	swarm.setup(map, field, bfield, rfield, hfield, GameConfig.alien_defs)
 
 	corpses = Corpses.new()
 	corpses.name = "Corpses"
@@ -96,9 +104,20 @@ func _ready() -> void:
 	structures.upgraded.connect(func(c, id, t): if id == "harvester_bay": harvester.set_tier(c, t))
 	economy.deposited.connect(func(amount, pos): fx.float_text(pos, "+%d" % int(round(amount)), Color(0.5, 1.0, 0.4)))
 
+	colonists = ColonistSystem.new()
+	colonists.name = "Colonists"
+	add_child(colonists)
+	colonists.setup(map, structures, corpses, fx, hfield)
+	structures.built.connect(colonists.on_structure_built)
+	structures.removed.connect(colonists.on_structure_removed)
+	colonists.event.connect(_on_colonist_event)
+
 	structures.reset()
+	colonists.reset()
 	field.build()
 	bfield.build()
+	rfield.build()
+	hfield.build()
 	print("[flowfield] %dx%d surface %.2f ms, burrow %.2f ms" % [map.w, map.h, field.build_usec / 1000.0, bfield.build_usec / 1000.0])
 	structures.nav_changed.connect(_on_nav_changed)
 	map.nav_changed.connect(_on_nav_changed)
@@ -109,6 +128,7 @@ func _ready() -> void:
 	combat.name = "Combat"
 	add_child(combat)
 	combat.setup(swarm, map, structures, fx, corpses)
+	combat.colonists = colonists
 
 	cam = RTSCamera.new()
 	cam.name = "CameraRig"
@@ -215,8 +235,7 @@ func _make_ghost() -> void:
 # ------------------------------------------------------------------ frame
 
 func _process(delta: float) -> void:
-	field.poll()
-	bfield.poll()
+	_poll_fields()
 	var dt := minf(delta, 1.0 / 30.0)
 	_step(dt)
 	_update_ghost()
@@ -233,14 +252,23 @@ func _process(delta: float) -> void:
 			get_tree().quit()
 
 
+func _poll_fields() -> void:
+	field.poll()
+	bfield.poll()
+	rfield.poll()
+	hfield.poll()
+
+
 func _step(dt: float) -> void:
 	swarm.simulate(dt)
 	combat.process_swarm_events()
+	colonists.process_swarm(swarm, combat)
 	combat.build_grid()
 	if not swarm.paused:
 		structures.tick(dt, combat)
 		combat.tick_projectiles(dt)
 		harvester.tick(dt)
+		colonists.tick(dt)
 	combat.flush_deaths()
 	_run_time += dt
 	var want := bench.desired_population()
@@ -400,6 +428,11 @@ func _inspector_info(c: int) -> Dictionary:
 			lines.append("[color=#9fd]Next: damage %.0f, range %.1fm, crew eff. %d%%[/color]" % [float(d.damage) * float(nt.damage), float(d.range) * float(nt.range), roundi(float(nt.crew_efficiency) * 100)])
 		else:
 			lines.append("[color=#aaa]Specialisation at tier III: unlock in the Colony Charter (M6)[/color]")
+		var crew := colonists.crew_name(c)
+		if t.crewed:
+			lines.append("Crew: %s" % crew)
+		else:
+			lines.append("[color=#ff7a6a]UNCREWED - firing at %d%%[/color]%s" % [roundi(colonists.uncrewed_rate * 100), ("   (%s)" % crew) if crew != "" else ""])
 		lines.append("Kills: %d" % t.kills)
 	elif id == "harvester_bay":
 		var drones := 0
@@ -471,12 +504,18 @@ func _range_of(id: String, tier: int, c: int) -> float:
 func _on_nav_changed() -> void:
 	field.request_rebuild()
 	bfield.request_rebuild()
+	rfield.request_rebuild()
 	structures._visual_dirty = true
 
 
 func _on_field_rebuilt() -> void:
 	if _heat_on:
 		map.show_heatmap(field, true)
+
+
+func _on_colonist_event(text: String, col: Color, pos: Vector3) -> void:
+	hud.log_event(text, col)
+	fx.float_text(pos + Vector3(0, 2.0, 0), "!", col)
 
 
 func _on_core_destroyed() -> void:
@@ -493,6 +532,7 @@ func reset_outpost() -> void:
 	combat.reset_stats()
 	economy.reset()
 	structures.reset()
+	colonists.reset()
 	_run_time = 0.0
 	overrun = false
 	hud.show_banner("")
@@ -579,6 +619,14 @@ func _print_test_report() -> void:
 	lines.append("core %d/%d  structures lost %d  overrun %s" % [structures.core_hp, structures.core_max, structures.destroyed_count, overrun])
 	lines.append("biomass %d  collected %d  spent %d  drone trips %d  corpses harvested %d  value lost to decay %d  still on field %d  drones %d" % [
 		economy.biomass, economy.collected, economy.spent, harvester.trips, corpses.harvested, corpses.biomass_lost, corpses.harvestable_value(), harvester.drone_count()])
+	lines.append("colonists alive %d/%d  crewing %d  reserve %d  recovering %d  abductions %d  rescued %d  taken %d  mauled %d" % [
+		colonists.alive(), colonists.colonists.size(), colonists.count_state(ColonistSystem.S.CREWING), colonists.count_state(ColonistSystem.S.RESERVE),
+		colonists.count_state(ColonistSystem.S.RECOVERING), colonists.abductions, colonists.rescued, colonists.taken, colonists.killed])
+	var crewed := 0
+	for t: Turret in structures.turrets.values():
+		if t.crewed:
+			crewed += 1
+	lines.append("turrets crewed %d/%d  meals %d (human %d)  biggest alien x%.2f  remains on field %d" % [crewed, structures.turrets.size(), combat.meals, corpses.humans_eaten, combat.biggest, corpses.human_remains()])
 	lines.append("sim %.2f ms  combat %.2f ms  fx %.2f ms  fps %d" % [swarm.sim_usec / 1000.0, combat.combat_usec / 1000.0, fx.update_usec / 1000.0, Engine.get_frames_per_second()])
 	print("\n".join(lines))
 
@@ -590,8 +638,7 @@ func _screenshot_after(path: String) -> void:
 		if arg.begins_with("--warm="):
 			warm = int(arg.split("=")[1])
 	for k in warm:
-		field.poll()
-		bfield.poll()
+		_poll_fields()
 		_step(1.0 / 60.0)
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--cam="):

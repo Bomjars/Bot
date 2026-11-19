@@ -5,7 +5,10 @@ extends Node3D
 ##  1. burning / slow timers
 ##  2. sample the surface flow field, or the burrow field when tunnelling
 ##  3. strain traits: bash blocking structures, spitters shell structures
-##     from range, burrowers surface near the core, brood mothers give birth
+##     from range, burrowers surface near the core, brood mothers give birth,
+##     abductors grab exposed colonists (Snatchers hunt them, even out of
+##     turrets) and carriers drag them to the map edge, aliens stop to eat
+##     corpses they stand on
 ##  4. crowd separation from a coarse density grid (previous frame), O(1)
 ##  5. steer, integrate, slide along solid cells (climb walls over corpse piles)
 ##  6. gnaw the core, splat density, bucket for the spatial grid, write the
@@ -20,6 +23,8 @@ const MASK := (1 << 17) - 1
 var map: OutpostMap
 var field: FlowField          # surface swarm
 var bfield: FlowField         # tunnellers
+var rfield: FlowField         # carriers: to the map edge (canyon mouths)
+var hfield: FlowField         # Snatchers: toward exposed colonists / crews
 var pools: Array[AlienPool] = []
 var rng := RandomNumberGenerator.new()
 var paused := false
@@ -44,6 +49,10 @@ var out_hit_cell := PackedInt32Array()   # structure cells being bashed
 var out_hit_dmg := PackedFloat32Array()
 var out_spit := PackedFloat32Array()     # [x, z, target_cell, damage]...
 var out_brood := PackedFloat32Array()    # [x, z, mother_type]...
+var out_grab := PackedInt32Array()       # [handle, colonist_id, mauls(0/1)]...
+var out_eat := PackedInt32Array()        # [handle, cell]...
+var out_escape := PackedInt32Array()     # [handle, colonist_id]...
+var out_carried := PackedFloat32Array()  # [colonist_id, x, z]...
 var core_damage := 0.0
 
 var grid_w := 0
@@ -64,6 +73,13 @@ var _c_hit_c: Array[PackedInt32Array] = []
 var _c_hit_d: Array[PackedFloat32Array] = []
 var _c_spit: Array[PackedFloat32Array] = []
 var _c_brood: Array[PackedFloat32Array] = []
+var _c_grab: Array[PackedInt32Array] = []
+var _c_eat: Array[PackedInt32Array] = []
+var _c_escape: Array[PackedInt32Array] = []
+var _c_carried: Array[PackedFloat32Array] = []
+var carrier_mult := 0.7
+var hunt_sense := 140
+var feed_time := 1.8
 var _f_dt := 0.0
 var _f_time := 0.0
 var _weights := PackedFloat32Array()
@@ -71,10 +87,16 @@ var _weight_total := 0.0
 var _burn_dps := 7.0
 
 
-func setup(m: OutpostMap, f: FlowField, bf: FlowField, defs: Array) -> void:
+func setup(m: OutpostMap, f: FlowField, bf: FlowField, rf: FlowField, hf: FlowField, defs: Array) -> void:
 	map = m
 	field = f
 	bfield = bf
+	rfield = rf
+	hfield = hf
+	var col := GameConfig.colonists
+	carrier_mult = float(col.get("carrier_speed_mult", carrier_mult))
+	hunt_sense = int(float(col.get("hunt_sense_range", 14.0)) * FlowField.ORTHO)
+	feed_time = float(GameConfig.feeding.get("feed_time", feed_time))
 	var cfg := GameConfig.section("swarm")
 	separation = cfg.get("separation", separation)
 	spread = cfg.get("intra_cell_spread", spread)
@@ -173,6 +195,10 @@ func simulate(dt: float) -> void:
 	out_hit_dmg.clear()
 	out_spit.clear()
 	out_brood.clear()
+	out_grab.clear()
+	out_eat.clear()
+	out_escape.clear()
+	out_carried.clear()
 	core_damage = 0.0
 	if paused:
 		sim_usec = 0
@@ -196,6 +222,10 @@ func simulate(dt: float) -> void:
 		_c_hit_d.append(PackedFloat32Array())
 		_c_spit.append(PackedFloat32Array())
 		_c_brood.append(PackedFloat32Array())
+		_c_grab.append(PackedInt32Array())
+		_c_eat.append(PackedInt32Array())
+		_c_escape.append(PackedInt32Array())
+		_c_carried.append(PackedFloat32Array())
 	_c_reached.resize(nchunks)
 	_c_core.resize(nchunks)
 	if nchunks > 0:
@@ -213,6 +243,10 @@ func simulate(dt: float) -> void:
 		out_hit_dmg.append_array(_c_hit_d[ci])
 		out_spit.append_array(_c_spit[ci])
 		out_brood.append_array(_c_brood[ci])
+		out_grab.append_array(_c_grab[ci])
+		out_eat.append_array(_c_eat[ci])
+		out_escape.append_array(_c_escape[ci])
+		out_carried.append_array(_c_carried[ci])
 	var tmp := _dens
 	_dens = _dens_next
 	_dens_next = tmp
@@ -235,6 +269,15 @@ func _sim_chunk(ci: int) -> void:
 	var bdx := bfield.dir_x
 	var bdz := bfield.dir_z
 	var bdist := bfield.dist
+	var rdx := rfield.dir_x
+	var rdz := rfield.dir_z
+	var rdist := rfield.dist
+	var hdx := hfield.dir_x
+	var hdz := hfield.dir_z
+	var hdist := hfield.dist
+	var cat := map.colonist_at
+	var crew_at := map.crew_at
+	var ccount := map.corpse_count
 	var solid := map.blocked
 	var kind := map.kind
 	var climb := map.climb
@@ -262,7 +305,12 @@ func _sim_chunk(ci: int) -> void:
 	var hit_d: PackedFloat32Array = _c_hit_d[ci]
 	var spit: PackedFloat32Array = _c_spit[ci]
 	var brood: PackedFloat32Array = _c_brood[ci]
+	var grab: PackedInt32Array = _c_grab[ci]
+	var eat: PackedInt32Array = _c_eat[ci]
+	var escape: PackedInt32Array = _c_escape[ci]
+	var carried: PackedFloat32Array = _c_carried[ci]
 	dead.clear(); hit_c.clear(); hit_d.clear(); spit.clear(); brood.clear()
+	grab.clear(); eat.clear(); escape.clear(); carried.clear()
 	var reached := 0
 	var core_dmg := 0.0
 
@@ -296,6 +344,16 @@ func _sim_chunk(ci: int) -> void:
 	var rcd := pool.ranged_cd
 	var rdmg := pool.ranged_dmg
 	var bint := pool.brood_interval
+	var carry := pool.carry
+	var feed := pool.feed
+	var abducts := pool.abducts
+	var mauls := pool.mauls
+	var hunts := pool.hunts
+	var grabs := abducts or mauls
+	var feed_chance := int(pool.feed_rate * dt * 100000.0)
+	var ftime := feed_time
+	var cmult := carrier_mult
+	var sense := hunt_sense
 
 	for i in range(i0, i1):
 		var o := i * 16
@@ -330,11 +388,21 @@ func _sim_chunk(ci: int) -> void:
 			elif not burrowed and tm <= 0.0 and bdist[c] >= surf and kind[c] != OutpostMap.Kind.ROCK:
 				aux[i] = 1.0
 				burrowed = true
+		var cid := carry[i]
+		var carrying := cid >= 0
 		var fdx: float
 		var fdz: float
-		if burrowed:
+		if carrying:
+			# dragging a colonist to the map edge
+			fdx = rdx[c]
+			fdz = rdz[c]
+			s *= cmult
+		elif burrowed:
 			fdx = bdx[c]
 			fdz = bdz[c]
+		elif hunts and hdist[c] < sense:
+			fdx = hdx[c]
+			fdz = hdz[c]
 		else:
 			fdx = gdx[c]
 			fdz = gdz[c]
@@ -344,9 +412,29 @@ func _sim_chunk(ci: int) -> void:
 		var tz := fdz * s + fdx * wv
 
 		# ---- strain behaviour
+		var fd := feed[i]
 		if not burrowed:
 			var ac := int(gz + fdz * 0.8) * w + int(gx + fdx * 0.8)
-			if ac != c and kind[ac] == OutpostMap.Kind.STRUCT and climb[ac] == 0:
+			if grabs and not carrying and fd <= 0.0:
+				var col := cat[c]
+				if col == 0:
+					col = cat[ac]
+				if col > 0:
+					grab.append(hbase | i); grab.append(col - 1); grab.append(1 if mauls else 0)
+				elif hunts and crew_at[ac] > 0:
+					# Snatcher rips the crew out of a turret
+					grab.append(hbase | i); grab.append(crew_at[ac] - 1); grab.append(0)
+			if fd > 0.0:
+				# eating: stand still until the meal is done
+				fd -= dt
+				tx = 0.0
+				tz = 0.0
+				if fd <= 0.0:
+					eat.append(hbase | i); eat.append(c)
+			elif feed_chance > 0 and not carrying and ccount[c] > 0 \
+					and ((seed_base + i * 7919) % 100000) < feed_chance:
+				fd = ftime
+			elif ac != c and kind[ac] == OutpostMap.Kind.STRUCT and climb[ac] == 0:
 				# blocked by a structure the field wants us through: bash it
 				hit_c.append(ac)
 				hit_d.append(sdps * (door_mult if stype[ac] == OutpostMap.SType.DOOR else 1.0))
@@ -378,6 +466,7 @@ func _sim_chunk(ci: int) -> void:
 							tm = rcd
 							spit.append(px[i]); spit.append(pz[i])
 							spit.append(float(tg)); spit.append(rdmg)
+		feed[i] = fd
 		if bint > 0.0 and tm <= 0.0:
 			tm = bint
 			brood.append(px[i]); brood.append(pz[i]); brood.append(float(t))
@@ -437,7 +526,11 @@ func _sim_chunk(ci: int) -> void:
 				cvz *= -0.2
 
 		var ncell := int(nz) * w + int(nx)
-		if not burrowed and gdist[ncell] == 0:
+		if carrying:
+			carried.append(float(cid)); carried.append(nx + ox); carried.append(nz + oz)
+			if rdist[ncell] == 0:
+				escape.append(hbase | i); escape.append(cid)
+		elif not burrowed and gdist[ncell] == 0:
 			if recycle:
 				reached += 1
 				var hsh := (seed_base + i * 2654435761) & 0x7fffffff

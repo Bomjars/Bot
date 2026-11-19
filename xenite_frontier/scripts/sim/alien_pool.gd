@@ -22,6 +22,10 @@ var brood_interval := 0.0
 var brood_count := 0
 var brood_type := 0
 var ichor := Color.WHITE
+var abducts := false
+var mauls := false
+var hunts := false
+var feed_rate := 0.0
 
 var px := PackedFloat32Array()
 var pz := PackedFloat32Array()
@@ -35,6 +39,8 @@ var slow := PackedFloat32Array()   # seconds of shock slow left
 var burn := PackedFloat32Array()   # seconds of burning left
 var aux := PackedFloat32Array()    # burrowers: 1 = underground
 var tgt := PackedInt32Array()      # spitters: structure cell being shelled
+var carry := PackedInt32Array()    # colonist id being dragged off, -1 none
+var feed := PackedFloat32Array()   # seconds left eating a corpse
 var bucket := PackedInt32Array()   # spatial grid bucket (written by sim)
 var lnext := PackedInt32Array()    # spatial grid linked list
 var buf := PackedFloat32Array()
@@ -57,6 +63,10 @@ func _init(id: int, d: Dictionary, mesh: Mesh, material: Material) -> void:
 	brood_count = int(b.get("count", 0))
 	brood_type = maxi(0, GameConfig.alien_index(b.get("type", "stalker")))
 	ichor = Color(d.get("ichor", "#c8e04a"))
+	abducts = bool(d.get("abducts", false))
+	mauls = bool(d.get("mauls", false))
+	hunts = bool(d.get("hunts", false))
+	feed_rate = float(d.get("feed_rate", 0.0))
 
 	multimesh = MultiMesh.new()
 	multimesh.transform_format = MultiMesh.TRANSFORM_3D
@@ -74,9 +84,9 @@ func _init(id: int, d: Dictionary, mesh: Mesh, material: Material) -> void:
 
 func _grow(new_cap: int) -> void:
 	capacity = new_cap
-	for a: PackedFloat32Array in [px, pz, vx, vz, hp, speed, size, timer, slow, burn, aux]:
+	for a: PackedFloat32Array in [px, pz, vx, vz, hp, speed, size, timer, slow, burn, aux, feed]:
 		a.resize(capacity)
-	for a: PackedInt32Array in [tgt, bucket, lnext]:
+	for a: PackedInt32Array in [tgt, bucket, lnext, carry]:
 		a.resize(capacity)
 	buf.resize(capacity * STRIDE)
 	multimesh.instance_count = capacity
@@ -101,6 +111,8 @@ func spawn(x: float, z: float, rng: RandomNumberGenerator) -> int:
 	burn[i] = 0.0
 	aux[i] = 1.0 if burrows else 0.0
 	tgt[i] = -1
+	carry[i] = -1
+	feed[i] = 0.0
 	bucket[i] = 0
 	var o := i * STRIDE
 	buf[o] = s; buf[o + 1] = 0.0; buf[o + 2] = 0.0; buf[o + 3] = x
@@ -118,6 +130,7 @@ func remove(i: int) -> void:
 		hp[i] = hp[last]; speed[i] = speed[last]; size[i] = size[last]
 		timer[i] = timer[last]; slow[i] = slow[last]; burn[i] = burn[last]
 		aux[i] = aux[last]; tgt[i] = tgt[last]; bucket[i] = bucket[last]
+		carry[i] = carry[last]; feed[i] = feed[last]
 		var o := i * STRIDE
 		var ol := last * STRIDE
 		for k in STRIDE:

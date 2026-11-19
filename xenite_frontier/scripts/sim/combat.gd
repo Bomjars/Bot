@@ -19,18 +19,25 @@ var map: OutpostMap
 var structures: Structures
 var fx: Fx
 var corpses: Corpses
+var colonists: ColonistSystem
 var rng := RandomNumberGenerator.new()
 
 var kills := 0
 var kills_by_alien := PackedInt32Array()
 var damage_by_type := PackedFloat32Array()   # feeds Hive adaptation (M5)
 var dodges := 0
+var meals := 0
+var biggest := 1.0
 var combat_usec := 0
 
 var _head := PackedInt32Array()
 var _q := PackedInt32Array()
 var _dead := PackedInt32Array()
 var _dead_cause := PackedByteArray()
+var _despawn := PackedInt32Array()
+var _growth := 0.12
+var _max_size := 1.9
+var _hp_per_meal := 0.35
 var _shells: Array[Dictionary] = []
 var _acid: Array[Dictionary] = []
 var _body_colors: Array[Color] = []
@@ -47,6 +54,10 @@ func setup(s: Swarm, m: OutpostMap, st: Structures, effects: Fx, c: Corpses) -> 
 	kills_by_alien.fill(0)
 	damage_by_type.resize(GameConfig.DMG_COUNT)
 	damage_by_type.fill(0.0)
+	var fd := GameConfig.feeding
+	_growth = float(fd.get("growth_per_meal", _growth))
+	_max_size = float(fd.get("max_size", _max_size))
+	_hp_per_meal = float(fd.get("hp_per_meal", _hp_per_meal))
 	var cols := {"stalker": Color(0.86, 0.78, 0.46), "mauler": Color(0.7, 0.14, 0.06), "spitter": Color(0.38, 0.36, 0.42),
 		"snatcher": Color(0.5, 0.22, 0.82), "burrower": Color(0.92, 0.55, 0.14), "brood_mother": Color(0.82, 0.1, 0.42)}
 	for p in swarm.pools:
@@ -56,6 +67,9 @@ func setup(s: Swarm, m: OutpostMap, st: Structures, effects: Fx, c: Corpses) -> 
 func reset_stats() -> void:
 	kills = 0
 	dodges = 0
+	meals = 0
+	biggest = 1.0
+	_despawn.clear()
 	kills_by_alien.fill(0)
 	damage_by_type.fill(0.0)
 	_shells.clear()
@@ -79,6 +93,11 @@ func process_swarm_events() -> void:
 		var cell := int(sp[k + 2])
 		var to := map.cell_center(cell) + Vector3(0, map.sheight[cell] * 0.7, 0)
 		_acid.append({"from": from, "to": to, "t": 0.0, "T": 0.6 + from.distance_to(to) * 0.05, "cell": cell, "dmg": sp[k + 3]})
+	var ev := swarm.out_eat
+	for k in range(0, ev.size(), 2):
+		var m := corpses.eat_one(ev[k + 1])
+		if m > 0.0:
+			_grow(ev[k], m)
 	var br := swarm.out_brood
 	for k in range(0, br.size(), 3):
 		var mother: AlienPool = swarm.pools[int(br[k + 2])]
@@ -140,44 +159,82 @@ func tick_projectiles(dt: float) -> void:
 		i += 1
 
 
-## Removes everything that died this frame: gibs, splat, corpse, counters.
+## Feeding: the alien grows in size and HP (aliens.json "feeding").
+func _grow(h: int, meals_eaten: float) -> void:
+	var p := swarm.pools[h >> SHIFT]
+	var i := h & MASK
+	if i >= p.count or p.hp[i] <= 0.0:
+		return
+	meals += 1
+	var base := float(p.def.size)
+	var old := p.size[i]
+	var ns := minf(base * _max_size, old * pow(1.0 + _growth, meals_eaten))
+	p.size[i] = ns
+	p.hp[i] += float(p.def.hp) * _hp_per_meal * meals_eaten
+	biggest = maxf(biggest, ns / base)
+	var r := ns / old
+	var o := i * AlienPool.STRIDE
+	for k in [0, 2, 5, 8, 10]:
+		p.buf[o + k] *= r
+	fx.burst(Vector3(p.px[i], 0.3, p.pz[i]), Color(0.55, 0.05, 0.05, 0.0), 4, 2.0, 0.08, 0.5, 1.0)
+
+
+## Removes an alien without a corpse (carrier escaped off the map).
+func despawn(h: int) -> void:
+	_despawn.append(h)
+
+
+## Removes everything that died or despawned this frame, in one pass per
+## strain in descending index order (swap-remove never moves a pending slot).
+## Deaths leave gibs, a splat and a corpse; despawns (carriers escaping off
+## the map) leave nothing. A carrier that dies drops its colonist.
 func flush_deaths() -> void:
-	if _dead.is_empty():
+	if _dead.is_empty() and _despawn.is_empty():
 		return
 	var t0 := Time.get_ticks_usec()
 	var per_type: Array[PackedInt32Array] = []
-	var cause_of := {}
 	for t in swarm.pools.size():
 		per_type.append(PackedInt32Array())
+	var cause_of := {}
 	for k in _dead.size():
 		var h := _dead[k]
-		per_type[h >> SHIFT].append(h & MASK)
+		per_type[h >> SHIFT].append((h & MASK) << 1)
 		cause_of[h] = _dead_cause[k]
+	for h in _despawn:
+		per_type[h >> SHIFT].append(((h & MASK) << 1) | 1)
 	for t in per_type.size():
-		var idxs := per_type[t]
-		if idxs.is_empty():
+		var codes := per_type[t]
+		if codes.is_empty():
 			continue
-		idxs.sort()
+		codes.sort()
 		var p := swarm.pools[t]
 		var height := float(p.def.get("corpse_height", 0.15))
 		var last := -1
-		for k in range(idxs.size() - 1, -1, -1):
-			var i := idxs[k]
+		for k in range(codes.size() - 1, -1, -1):
+			var i := codes[k] >> 1
 			if i == last or i >= p.count:
 				continue
 			last = i
+			if codes[k] & 1:
+				p.carry[i] = -1
+				p.remove(i)
+				continue
 			var x := p.px[i]
 			var z := p.pz[i]
 			var sz := p.size[i]
 			var big := sz * (3.0 if p.brood_interval > 0.0 else (1.6 if p.def.mass >= 4 else 1.0))
 			var charred: bool = cause_of.get((t << SHIFT) | i, -1) == GameConfig.Dmg.INCENDIARY
+			if p.carry[i] >= 0 and colonists:
+				colonists.drop(p.carry[i], Vector3(x, 0.0, z))
+				p.carry[i] = -1
 			fx.gib(Vector3(x, 0.0, z), _body_colors[t], p.ichor, big)
-			corpses.add(t, x, z, p.yaw(i), sz, height, charred)
+			corpses.add(t, x, z, p.yaw(i), sz, height * sz, charred)
 			kills += 1
 			kills_by_alien[t] += 1
 			p.remove(i)
 	_dead.clear()
 	_dead_cause.clear()
+	_despawn.clear()
 	combat_usec += Time.get_ticks_usec() - t0
 
 
@@ -233,6 +290,8 @@ func find_target(x: float, z: float, r: float, min_r: float) -> int:
 			continue
 		var c := map.cell_of(Vector3(p.px[i], 0, p.pz[i]))
 		var d := dist[c] if c >= 0 else FlowField.UNREACHABLE
+		if p.carry[i] >= 0:
+			d = -1  # carrying a colonist: kill it first
 		if d < best_d:
 			best_d = d
 			best = h
