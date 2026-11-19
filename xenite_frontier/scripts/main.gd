@@ -43,6 +43,7 @@ var _ramp_seconds := 90.0
 var _bot := false
 var _bot_timer := 0.0
 var _bot_plan: Array = []
+var _bot_planned := false
 var _test_seconds := 0.0
 var _test_t := 0.0
 
@@ -519,7 +520,8 @@ func _bot_tick(dt: float) -> void:
 		return
 	_bot_timer = 1.0
 	var core := map.world_to_cell(map.core_center)
-	if _bot_plan.is_empty():
+	if not _bot_planned:
+		_bot_planned = true
 		_bot_plan = [
 			[0, -11, "railgun"], [-14, 3, "shock_grid"], [14, -3, "shock_grid"], [-3, 4, "seismic_spike"],
 			[-6, -11, "harvester_bay"], [6, -11, "autocannon"], [-15, -2, "flamethrower"], [15, 2, "mortar"],
@@ -602,6 +604,12 @@ func _screenshot_after(path: String) -> void:
 			build.toggle_intel()
 		elif arg.begins_with("--tool="):
 			build.select(arg.split("=")[1])
+		elif arg == "--inspect":
+			var best := -1
+			for c: int in structures.turrets:
+				if best < 0 or structures.tier_at(c) > structures.tier_at(best):
+					best = c
+			_select(best)
 	await get_tree().create_timer(3.0).timeout
 	if _heat_shot:
 		_heat_on = true
