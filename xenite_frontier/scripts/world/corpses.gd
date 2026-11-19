@@ -7,8 +7,10 @@ extends Node3D
 ## Corpses pile up physically: each corpse adds its corpse_height to the
 ## cell's pile and rests on top of what is already there. A pile next to a
 ## wall that reaches climb_height makes the wall climbable (see OutpostMap).
-## Corpses remember whether they were charred (incendiary kill) - burned
-## corpses yield no Biomass from M3 on.
+## Corpses hold Biomass (economy.json per strain). Charred corpses
+## (incendiary kills) hold none. Harvester drones claim a corpse, then
+## harvest it: the corpse is removed, which also lowers its pile. Each slot
+## carries a serial so a drone can tell if its target decayed and was reused.
 
 const STRIDE := 16
 
@@ -23,6 +25,16 @@ var _cell: Array[PackedInt32Array] = []
 var _height: Array[PackedFloat32Array] = []
 var _charred: Array[PackedByteArray] = []
 var _buf: Array[PackedFloat32Array] = []
+var _x: Array[PackedFloat32Array] = []
+var _z: Array[PackedFloat32Array] = []
+var _value: Array[PackedFloat32Array] = []
+var _claimed: Array[PackedByteArray] = []
+var _serial: Array[PackedInt32Array] = []
+var _biomass_of := PackedFloat32Array()
+var _charred_yield := 0.0
+var _next_serial := 1
+var biomass_lost := 0.0     # value that decayed before harvest
+var harvested := 0
 var _mm: Array[MultiMesh] = []
 var _dirty := PackedByteArray()
 var _rng := RandomNumberGenerator.new()
@@ -31,6 +43,7 @@ var _rng := RandomNumberGenerator.new()
 func setup(m: OutpostMap, pools: Array[AlienPool], material: Material) -> void:
 	map = m
 	total_cap = int(GameConfig.section("combat").get("corpse_cap", total_cap))
+	_charred_yield = float(GameConfig.econ("biomass").get("charred_yield", 0.0))
 	var wsum := 0.0
 	for p in pools:
 		wsum += float(p.def.get("spawn_weight", 1))
@@ -45,6 +58,14 @@ func setup(m: OutpostMap, pools: Array[AlienPool], material: Material) -> void:
 		var ch := PackedByteArray(); ch.resize(c); ch.fill(0)
 		var b := PackedFloat32Array(); b.resize(c * STRIDE); b.fill(0.0)
 		_cell.append(cell); _height.append(hh); _charred.append(ch); _buf.append(b)
+		for arr in [_x, _z, _value]:
+			var f := PackedFloat32Array(); f.resize(c); f.fill(0.0)
+			arr.append(f)
+		var cl := PackedByteArray(); cl.resize(c); cl.fill(0)
+		_claimed.append(cl)
+		var se := PackedInt32Array(); se.resize(c); se.fill(0)
+		_serial.append(se)
+		_biomass_of.append(GameConfig.corpse_biomass(p.def.id))
 		var mm := MultiMesh.new()
 		mm.transform_format = MultiMesh.TRANSFORM_3D
 		mm.use_custom_data = true
@@ -69,10 +90,17 @@ func add(t: int, x: float, z: float, yaw: float, size: float, height: float, cha
 	_next[t] = (i + 1) % _cap[t]
 	var cells := _cell[t]
 	if cells[i] >= 0:
+		biomass_lost += _value[t][i]
 		_remove_slot(t, i)
 	var rest := map.add_pile(c, height)
 	cells[i] = c
 	_height[t][i] = height
+	_x[t][i] = x
+	_z[t][i] = z
+	_value[t][i] = _biomass_of[t] * (_charred_yield if charred else 1.0)
+	_claimed[t][i] = 0
+	_serial[t][i] = _next_serial
+	_next_serial += 1
 	_charred[t][i] = 1 if charred else 0
 	count += 1
 	if charred:
@@ -96,6 +124,7 @@ func _remove_slot(t: int, i: int) -> void:
 		return
 	map.remove_pile(c, _height[t][i])
 	_cell[t][i] = -1
+	_claimed[t][i] = 0
 	count -= 1
 	if _charred[t][i]:
 		charred_count -= 1
@@ -106,14 +135,87 @@ func _remove_slot(t: int, i: int) -> void:
 	_dirty[t] = 1
 
 
+# ------------------------------------------------------------ harvesting
+
+## Nearest unclaimed corpse with Biomass within `radius` of `center`, closest
+## to `from`. Returns [type, slot, serial] or [] if none.
+func find_harvestable(center: Vector3, radius: float, from: Vector3) -> Array:
+	var r2 := radius * radius
+	var best: Array = []
+	var best_d := INF
+	for t in _cap.size():
+		var cells := _cell[t]
+		var xs := _x[t]
+		var zs := _z[t]
+		var vals := _value[t]
+		var cl := _claimed[t]
+		for i in _cap[t]:
+			if cells[i] < 0 or vals[i] <= 0.0 or cl[i]:
+				continue
+			var dx := xs[i] - center.x
+			var dz := zs[i] - center.z
+			if dx * dx + dz * dz > r2:
+				continue
+			var fx := xs[i] - from.x
+			var fz := zs[i] - from.z
+			var d := fx * fx + fz * fz
+			if d < best_d:
+				best_d = d
+				best = [t, i, _serial[t][i]]
+	return best
+
+
+func is_valid(ref: Array) -> bool:
+	return not ref.is_empty() and _cell[ref[0]][ref[1]] >= 0 and _serial[ref[0]][ref[1]] == ref[2]
+
+
+func claim(ref: Array, on: bool) -> void:
+	if is_valid(ref):
+		_claimed[ref[0]][ref[1]] = 1 if on else 0
+
+
+func position_of(ref: Array) -> Vector3:
+	var t: int = ref[0]
+	var i: int = ref[1]
+	return Vector3(_x[t][i], _buf[t][i * STRIDE + 7], _z[t][i])
+
+
+## Removes the corpse and returns its Biomass (0 if it already decayed).
+func harvest(ref: Array) -> float:
+	if not is_valid(ref):
+		return 0.0
+	var v := _value[ref[0]][ref[1]]
+	_remove_slot(ref[0], ref[1])
+	harvested += 1
+	return v
+
+
+## Removes a corpse without yield (eaten by aliens, M4 / cremated, M6).
+func destroy(ref: Array) -> void:
+	if is_valid(ref):
+		_remove_slot(ref[0], ref[1])
+
+
+func harvestable_value() -> float:
+	var s := 0.0
+	for t in _cap.size():
+		for i in _cap[t]:
+			if _cell[t][i] >= 0:
+				s += _value[t][i]
+	return s
+
+
 func clear() -> void:
 	for t in _cap.size():
 		for i in _cap[t]:
 			_cell[t][i] = -1
+			_claimed[t][i] = 0
 		_buf[t].fill(0.0)
 		_dirty[t] = 1
 	count = 0
 	charred_count = 0
+	biomass_lost = 0.0
+	harvested = 0
 	map.reset_piles()
 
 

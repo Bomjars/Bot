@@ -1,22 +1,33 @@
 class_name Structures
 extends Node3D
-## Everything the colonists build: walls, blast doors and turrets. One cell
-## each. HP lives in OutpostMap arrays so the threaded swarm can read it;
-## damage is applied here on the main thread. Destroying or placing anything
-## emits `nav_changed`, which triggers an async flow-field rebuild.
+## Everything the colonists build: walls, blast doors, floodlights, Harvester
+## Bays and turrets. One cell each. HP lives in OutpostMap arrays so the
+## threaded swarm can read it; damage is applied here on the main thread.
+## Costs, upgrades, refunds and repairs go through the Economy.
+## Placing, destroying or selling anything emits `nav_changed`, which triggers
+## an async flow-field rebuild.
 
 signal nav_changed
 signal core_destroyed
+signal built(cell: int, id: String)
+signal removed(cell: int, id: String)
+signal upgraded(cell: int, id: String, tier: int)
 
 var map: OutpostMap
 var fx: Fx
+var economy: Economy
 var turrets := {}            # cell -> Turret
-var defs := {}               # id -> def (structures and turrets)
+var nodes := {}              # cell -> Node3D (turrets, bays, floodlights)
+var ids := {}                # cell -> id
+var tiers := {}              # cell -> tier (1-based)
+var invested := {}           # cell -> Biomass spent on it (refund basis)
+var defs := {}               # id -> def
 var core_hp := 6000.0
 var core_max := 6000.0
 var core_invulnerable := false
 var built_count := 0
 var destroyed_count := 0
+var light_radius_mult := 1.0  # Colony Charter: Engineering (M6)
 
 var _wall_mmi: MultiMeshInstance3D
 var _door_mmi: MultiMeshInstance3D
@@ -24,11 +35,13 @@ var _visual_dirty := true
 var _visual_timer := 0.0
 var _turret_nav := 28
 var _turret_height := 1.6
+var _node_mats := {}         # cell -> base material (damage tint)
 
 
-func setup(m: OutpostMap, effects: Fx) -> void:
+func setup(m: OutpostMap, effects: Fx, econ: Economy) -> void:
 	map = m
 	fx = effects
+	economy = econ
 	for d in GameConfig.structure_defs:
 		defs[d.id] = d
 	for d in GameConfig.turret_defs:
@@ -39,7 +52,6 @@ func setup(m: OutpostMap, effects: Fx) -> void:
 	core_hp = core_max
 	_wall_mmi = _make_mmi(Color(0.5, 0.56, 0.62))
 	_door_mmi = _make_mmi(Color(0.75, 0.62, 0.2))
-	reset()
 
 
 func _make_mmi(col: Color) -> MultiMeshInstance3D:
@@ -63,16 +75,29 @@ func is_turret(id: String) -> bool:
 	return defs.has(id) and defs[id].has("damage_type")
 
 
+func id_at(c: int) -> String:
+	return ids.get(c, "")
+
+
+func tier_at(c: int) -> int:
+	return tiers.get(c, 1)
+
+
+func light_radius() -> float:
+	return float(defs.get("floodlight", {}).get("light_radius", 11.0)) * light_radius_mult
+
+
 ## Rebuilds the starting compound and refills the core.
 func reset() -> void:
-	for c in turrets.keys():
-		turrets[c].queue_free()
-	turrets.clear()
+	for c in ids.keys():
+		_remove(c)
 	for c in map.kind.size():
 		if map.kind[c] == OutpostMap.Kind.STRUCT:
 			map.clear_structure(c)
+	map.lit.fill(0)
 	for entry in map.initial_structures:
-		place(entry[0], entry[1], false)
+		if place(entry[0], entry[1], false):
+			invested[entry[0]] = float(GameConfig.build_cost(entry[1]))
 	core_hp = core_max
 	built_count = 0
 	destroyed_count = 0
@@ -80,43 +105,157 @@ func reset() -> void:
 	nav_changed.emit()
 
 
+# ------------------------------------------------------------ build / sell
+
+## Player build: checks placement and Biomass. Returns "" or a reason.
+func try_build(c: int, id: String) -> String:
+	if not defs.has(id):
+		return "Unknown structure"
+	if not map.can_build(c):
+		return "Can't build there"
+	var cost := GameConfig.build_cost(id)
+	if not economy.can_afford(cost):
+		return "Need %d Biomass" % cost
+	economy.spend(cost)
+	place(c, id)
+	invested[c] = float(cost)
+	return ""
+
+
+## Places without cost (starting layout, sandbox).
 func place(c: int, id: String, emit := true) -> bool:
 	if not defs.has(id) or not map.can_build(c):
 		return false
 	var d: Dictionary = defs[id]
+	var pos := map.cell_center(c)
 	if is_turret(id):
 		map.put_structure(c, OutpostMap.SType.TURRET, float(d.hp), _turret_height, _turret_nav)
 		var t := Turret.new()
 		t.name = "Turret_%s_%d" % [id, c]
 		add_child(t)
-		t.setup(d, c, map.cell_center(c))
+		t.setup(d, c, pos)
 		turrets[c] = t
+		nodes[c] = t
+		_node_mats[c] = t.base_mat
 	else:
-		var st := OutpostMap.SType.DOOR if id == "blast_door" else OutpostMap.SType.WALL
+		var st := OutpostMap.SType.WALL
+		match id:
+			"blast_door": st = OutpostMap.SType.DOOR
+			"harvester_bay": st = OutpostMap.SType.BAY
+			"floodlight": st = OutpostMap.SType.LIGHT
 		map.put_structure(c, st, float(d.hp), float(d.height), int(d.nav_cost))
+		if id == "harvester_bay" or id == "floodlight":
+			var n := Node3D.new()
+			n.name = "%s_%d" % [id, c]
+			n.position = pos
+			add_child(n)
+			nodes[c] = n
+			if id == "harvester_bay":
+				_node_mats[c] = TurretModels.build_bay(n)
+			else:
+				_node_mats[c] = TurretModels.build_floodlight(n, light_radius())
+				map.add_light(c, light_radius(), 1)
+	ids[c] = id
+	tiers[c] = 1
+	invested[c] = 0.0
 	built_count += 1
 	_visual_dirty = true
+	built.emit(c, id)
 	if emit:
 		nav_changed.emit()
 	return true
 
 
-## Player removal (no debris, refund in M3).
-func demolish(c: int) -> bool:
-	if c < 0 or map.kind[c] != OutpostMap.Kind.STRUCT:
+func sell_value(c: int) -> int:
+	return int(floor(invested.get(c, 0.0) * economy.refund_ratio))
+
+
+## Player removal: refunds part of everything invested in it.
+func sell(c: int) -> bool:
+	if c < 0 or not ids.has(c):
 		return false
+	economy.refund(sell_value(c))
+	fx.burst(map.cell_center(c) + Vector3(0, 0.8, 0), Color(0.4, 0.9, 1.0, 1.0), 8, 3.0, 0.08, 0.4, 0.2)
 	_remove(c)
 	nav_changed.emit()
 	return true
 
 
 func _remove(c: int) -> void:
-	if turrets.has(c):
-		turrets[c].queue_free()
-		turrets.erase(c)
+	var id: String = ids.get(c, "")
+	if id == "floodlight":
+		map.add_light(c, light_radius(), -1)
+	if nodes.has(c):
+		nodes[c].queue_free()
+		nodes.erase(c)
+	turrets.erase(c)
+	_node_mats.erase(c)
+	ids.erase(c)
+	tiers.erase(c)
+	invested.erase(c)
 	map.clear_structure(c)
 	_visual_dirty = true
+	if id != "":
+		removed.emit(c, id)
 
+
+# ------------------------------------------------------------ upgrade / repair
+
+func upgrade_cost(c: int) -> int:
+	if not ids.has(c):
+		return -1
+	return GameConfig.upgrade_cost(ids[c], tier_at(c))
+
+
+## Raises a turret / Harvester Bay one tier. Returns "" or a reason.
+func upgrade(c: int) -> String:
+	var cost := upgrade_cost(c)
+	if cost < 0:
+		return "Already at max tier" if ids.has(c) else "Nothing to upgrade"
+	if not economy.can_afford(cost):
+		return "Need %d Biomass" % cost
+	economy.spend(cost)
+	var id: String = ids[c]
+	var tier := tier_at(c) + 1
+	tiers[c] = tier
+	invested[c] = invested.get(c, 0.0) + cost
+	# HP grows with the tier, keeping the current damage ratio
+	var td: Dictionary = GameConfig.tiers[clampi(tier - 1, 0, GameConfig.tiers.size() - 1)]
+	var new_max := float(defs[id].hp) * float(td.get("hp", 1.0))
+	var ratio := map.shp[c] / maxf(1.0, map.smax[c])
+	map.smax[c] = new_max
+	map.shp[c] = new_max * ratio
+	if turrets.has(c):
+		turrets[c].set_tier(tier)
+	elif nodes.has(c):
+		TurretModels.set_tier_pips(nodes[c], tier, Color(0.4, 1.0, 0.35))
+	fx.burst(map.cell_center(c) + Vector3(0, 1.0, 0), Color(1.0, 0.9, 0.4, 1.0), 14, 4.0, 0.1, 0.6, 0.0)
+	upgraded.emit(c, id, tier)
+	_visual_dirty = true
+	return ""
+
+
+func repair_cost(c: int) -> int:
+	if not ids.has(c):
+		return 0
+	return int(ceil((map.smax[c] - map.shp[c]) * economy.repair_per_hp))
+
+
+func repair(c: int) -> String:
+	var cost := repair_cost(c)
+	if cost <= 0:
+		return "Undamaged"
+	if not economy.can_afford(cost):
+		return "Need %d Biomass" % cost
+	economy.spend(cost)
+	map.shp[c] = map.smax[c]
+	invested[c] = invested.get(c, 0.0)
+	fx.burst(map.cell_center(c) + Vector3(0, 1.0, 0), Color(0.4, 0.8, 1.0, 1.0), 8, 2.5, 0.08, 0.5, 0.0)
+	_visual_dirty = true
+	return ""
+
+
+# ------------------------------------------------------------ damage
 
 func damage(c: int, amount: float) -> void:
 	if map.kind[c] != OutpostMap.Kind.STRUCT:
@@ -168,15 +307,13 @@ func tick(dt: float, combat: Combat) -> void:
 func _refresh_visuals() -> void:
 	var walls: Array[int] = []
 	var doors: Array[int] = []
-	for c in map.kind.size():
-		if map.kind[c] != OutpostMap.Kind.STRUCT:
-			continue
+	for c: int in ids:
 		match map.stype[c]:
 			OutpostMap.SType.WALL: walls.append(c)
 			OutpostMap.SType.DOOR: doors.append(c)
-			OutpostMap.SType.TURRET:
-				if turrets.has(c):
-					turrets[c].set_health_ratio(map.shp[c] / maxf(1.0, map.smax[c]))
+		if _node_mats.has(c):
+			var r := map.shp[c] / maxf(1.0, map.smax[c])
+			_node_mats[c].albedo_color = Color(0.42, 0.45, 0.48).lerp(Color(0.5, 0.12, 0.05), 1.0 - r)
 	_fill(_wall_mmi.multimesh, walls)
 	_fill(_door_mmi.multimesh, doors)
 

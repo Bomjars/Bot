@@ -1,0 +1,90 @@
+{
+	"_comment": "ALL economy values live here so you can balance without code edits. Sections tagged (M5)/(M6) are read by later milestones; values are final-format already.",
+
+	"biomass": {
+		"_comment": "In-run currency. Alien corpses hold Biomass; harvester drones collect it within range of a Harvester Bay. Charred (incendiary-killed) and eaten corpses yield nothing.",
+		"starting": 350,
+		"per_corpse": {
+			"stalker": 2,
+			"mauler": 14,
+			"spitter": 3,
+			"snatcher": 4,
+			"burrower": 6,
+			"brood_mother": 80
+		},
+		"charred_yield": 0.0,
+		"refund_ratio": 0.5,
+		"repair_cost_per_hp": 0.04,
+		"night_bonus": 0.5,
+		"early_call_bonus_per_second": 3.0
+	},
+
+	"build_costs": {
+		"wall": 8,
+		"blast_door": 30,
+		"floodlight": 35,
+		"harvester_bay": 120,
+		"autocannon": 60,
+		"flamethrower": 70,
+		"railgun": 120,
+		"shock_grid": 90,
+		"mortar": 110,
+		"seismic_spike": 85
+	},
+
+	"upgrade_costs": {
+		"_comment": "[cost to tier II, cost to tier III]",
+		"autocannon": [80, 150],
+		"flamethrower": [90, 170],
+		"railgun": [150, 280],
+		"shock_grid": [120, 220],
+		"mortar": [140, 260],
+		"seismic_spike": [110, 200],
+		"harvester_bay": [140, 240]
+	},
+
+	"harvester": {
+		"_comment": "Per Harvester Bay tier (I, II, III). capacity = Biomass a drone carries before flying home.",
+		"drones_per_tier": [2, 3, 4],
+		"range_per_tier": [16.0, 19.0, 22.0],
+		"drone_speed": 10.0,
+		"drone_altitude": 3.5,
+		"harvest_time": 0.45,
+		"capacity": 24,
+		"deposit_time": 0.3
+	},
+
+	"xenite": {
+		"_comment": "(M6) Persistent ore paid out at the end of every run, win or lose.",
+		"base_yield_per_outpost": {
+			"mining_camp": 40,
+			"research_station": 70,
+			"colony_hub": 110
+		},
+		"per_wave_survived": 6,
+		"per_kill": 0.02,
+		"survivor_bonus_per_colonist": 4,
+		"outpost_held_bonus": 100
+	},
+
+	"threat": {
+		"_comment": "(M5) Threat Level multiplier rises each wave and multiplies the Xenite payout.",
+		"start": 1.0,
+		"per_wave": 0.25,
+		"max": 6.0
+	},
+
+	"hazard_contracts": {
+		"_comment": "(M6) Optional modifiers chosen before a run. xenite_bonus is additive (+0.25 = +25%).",
+		"base_slots": 1,
+		"contracts": [
+			{ "id": "dense_swarm", "name": "Dense Swarm", "desc": "+50% aliens per wave.", "xenite_bonus": 0.35 },
+			{ "id": "lights_out", "name": "Lights Out", "desc": "Floodlights cannot be built.", "xenite_bonus": 0.25 },
+			{ "id": "double_brood", "name": "Double Brood", "desc": "Twice as many Brood Mothers.", "xenite_bonus": 0.5 },
+			{ "id": "starving", "name": "Starving Hive", "desc": "Aliens feed twice as fast.", "xenite_bonus": 0.3 },
+			{ "id": "skeleton_crew", "name": "Skeleton Crew", "desc": "Start with half the colonists.", "xenite_bonus": 0.6 },
+			{ "id": "acid_rain", "name": "Acid Rain", "desc": "Spitters deal double damage.", "xenite_bonus": 0.4 },
+			{ "id": "no_quarter", "name": "No Quarter", "desc": "Hive adaptation doubled.", "xenite_bonus": 1.0 }
+		]
+	}
+}

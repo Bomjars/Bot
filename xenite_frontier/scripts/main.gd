@@ -1,13 +1,15 @@
 extends Node3D
-## M2 entry point: combat range. Builds world, flow fields, swarm, combat,
-## structures, corpses, fx, camera, HUD and build bar, then drives the frame:
+## M3 entry point: economy sandbox. Builds world, flow fields, swarm, combat,
+## structures, corpses, economy, harvesters, fx, camera, HUD and build bar,
+## then drives the frame:
 ##   poll fields -> swarm sim (threaded) -> swarm events -> spatial grid ->
-##   turrets -> projectiles -> deaths/corpses -> spawning -> uploads.
+##   turrets -> projectiles -> drones -> deaths/corpses -> spawning -> uploads.
 ##
 ## Command line (after `--`):
 ##   --benchmark[=N]   scripted benchmark with N aliens, then quit
 ##   --aliens=N        start swarm pressure at N
 ##   --combat-test[=S] headless combat soak for S seconds, prints stats, quits
+##   --free-build      sandbox: building costs nothing (toggle in game: F11)
 ##   --screenshot=PATH dev: warm up, save a frame, quit (with --cam=x,z,dist)
 
 var map: OutpostMap
@@ -18,6 +20,8 @@ var combat: Combat
 var structures: Structures
 var corpses: Corpses
 var fx: Fx
+var economy: Economy
+var harvester: HarvesterSystem
 var cam: RTSCamera
 var hud: Hud
 var build: BuildBar
@@ -32,6 +36,13 @@ var _ghost: MeshInstance3D
 var _ghost_mat: StandardMaterial3D
 var _ring: MeshInstance3D
 var _last_paint := -1
+var _selected := -1
+var _insp_timer := 0.0
+var _run_time := 0.0
+var _ramp_seconds := 90.0
+var _bot := false
+var _bot_timer := 0.0
+var _bot_plan: Array = []
 var _test_seconds := 0.0
 var _test_t := 0.0
 
@@ -50,20 +61,18 @@ func _ready() -> void:
 	add_child(fx)
 	fx.setup()
 
+	economy = Economy.new()
+	economy.name = "Economy"
+	add_child(economy)
+	economy.setup()
+
 	structures = Structures.new()
 	structures.name = "Structures"
 	add_child(structures)
-	structures.setup(map, fx)
+	structures.setup(map, fx, economy)
 
 	field = FlowField.new(map, "nav_cost")
 	bfield = FlowField.new(map, "burrow_cost")
-	field.build()
-	bfield.build()
-	print("[flowfield] %dx%d surface %.2f ms, burrow %.2f ms" % [map.w, map.h, field.build_usec / 1000.0, bfield.build_usec / 1000.0])
-	structures.nav_changed.connect(_on_nav_changed)
-	map.nav_changed.connect(_on_nav_changed)
-	field.rebuilt.connect(_on_field_rebuilt)
-	structures.core_destroyed.connect(_on_core_destroyed)
 
 	swarm = Swarm.new()
 	swarm.name = "Swarm"
@@ -74,6 +83,26 @@ func _ready() -> void:
 	corpses.name = "Corpses"
 	add_child(corpses)
 	corpses.setup(map, swarm.pools, swarm.pools[0].instance.material_override)
+
+	harvester = HarvesterSystem.new()
+	harvester.name = "Harvesters"
+	add_child(harvester)
+	harvester.setup(map, corpses, economy, fx)
+	structures.built.connect(func(c, id): if id == "harvester_bay": harvester.add_bay(c, structures.tier_at(c)))
+	structures.removed.connect(func(c, id):
+		if id == "harvester_bay": harvester.remove_bay(c)
+		if c == _selected: _select(-1))
+	structures.upgraded.connect(func(c, id, t): if id == "harvester_bay": harvester.set_tier(c, t))
+	economy.deposited.connect(func(amount, pos): fx.float_text(pos, "+%d" % int(round(amount)), Color(0.5, 1.0, 0.4)))
+
+	structures.reset()
+	field.build()
+	bfield.build()
+	print("[flowfield] %dx%d surface %.2f ms, burrow %.2f ms" % [map.w, map.h, field.build_usec / 1000.0, bfield.build_usec / 1000.0])
+	structures.nav_changed.connect(_on_nav_changed)
+	map.nav_changed.connect(_on_nav_changed)
+	field.rebuilt.connect(_on_field_rebuilt)
+	structures.core_destroyed.connect(_on_core_destroyed)
 
 	combat = Combat.new()
 	combat.name = "Combat"
@@ -100,13 +129,18 @@ func _ready() -> void:
 	hud.main = self
 	add_child(hud)
 	build = BuildBar.new()
+	build.economy = economy
 	add_child(build)
-	build.tool_changed.connect(func(_id): _last_paint = -1)
+	build.tool_changed.connect(func(id):
+		_last_paint = -1
+		if id != "": _select(-1))
+	build.inspector_action.connect(_inspector_action)
 
 	_make_ghost()
 	RenderingServer.viewport_set_measure_render_time(get_viewport().get_viewport_rid(), true)
 
-	target_count = int(GameConfig.section("swarm").get("start_aliens", 1500))
+	target_count = int(GameConfig.section("swarm").get("start_aliens", 500))
+	_ramp_seconds = float(GameConfig.section("swarm").get("ramp_seconds", 90.0))
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--benchmark"):
 			bench.quit_when_done = true
@@ -114,6 +148,10 @@ func _ready() -> void:
 			_start_benchmark(int(parts[1]) if parts.size() > 1 else -1)
 		elif arg.begins_with("--aliens="):
 			target_count = int(arg.split("=")[1])
+		elif arg == "--bot":
+			_bot = true
+		elif arg == "--free-build":
+			economy.free_build = true
 		elif arg.begins_with("--combat-test"):
 			var parts := arg.split("=")
 			_test_seconds = float(parts[1]) if parts.size() > 1 else 40.0
@@ -181,6 +219,12 @@ func _process(delta: float) -> void:
 	var dt := minf(delta, 1.0 / 30.0)
 	_step(dt)
 	_update_ghost()
+	_insp_timer -= delta
+	if _insp_timer <= 0.0:
+		_insp_timer = 0.25
+		build.refresh_affordability()
+		if _selected >= 0:
+			build.show_inspector(_inspector_info(_selected))
 	if _test_seconds > 0.0:
 		_test_t += delta
 		if _test_t >= _test_seconds:
@@ -195,10 +239,17 @@ func _step(dt: float) -> void:
 	if not swarm.paused:
 		structures.tick(dt, combat)
 		combat.tick_projectiles(dt)
+		harvester.tick(dt)
 	combat.flush_deaths()
+	_run_time += dt
 	var want := bench.desired_population()
+	if want < 0:
+		# sandbox: the swarm builds up over the first minute and a half
+		want = int(target_count * clampf(_run_time / maxf(_ramp_seconds, 0.01), 0.05, 1.0))
 	if not overrun:
-		swarm.approach_population(want if want >= 0 else target_count)
+		swarm.approach_population(want)
+	if _bot:
+		_bot_tick(dt)
 	swarm.upload()
 	corpses.upload()
 	fx.update(dt)
@@ -231,7 +282,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if bench.running():
 		return
-	for k in 8:
+	for k in 10:
 		if event.is_action_pressed("tool_%d" % (k + 1)):
 			build.select_index(k)
 			return
@@ -241,13 +292,28 @@ func _unhandled_input(event: InputEvent) -> void:
 		build.cycle(-1)
 	elif event.is_action_pressed("cancel"):
 		build.select("")
+		_select(-1)
 	elif event.is_action_pressed("intel"):
 		build.toggle_intel()
 	elif event.is_action_pressed("primary"):
 		_last_paint = -1
-		_try_build()
+		if build.selected != "":
+			_try_build(true)
+		else:
+			var c := _hover_cell()
+			_select(c if structures.ids.has(c) else -1)
 	elif event.is_action_pressed("demolish"):
-		structures.demolish(_hover_cell())
+		if build.selected == "" and _selected >= 0 and not _pad_mode and _hover_cell() != _selected:
+			_select(-1)
+		else:
+			structures.sell(_hover_cell())
+	elif event.is_action_pressed("upgrade"):
+		_inspector_action("upgrade")
+	elif event.is_action_pressed("repair"):
+		_inspector_action("repair")
+	elif event.is_action_pressed("free_build"):
+		economy.free_build = not economy.free_build
+		build.toast("Sandbox free build: %s" % ("ON" if economy.free_build else "OFF"))
 	elif event.is_action_pressed("bench_more"):
 		target_count += 500
 	elif event.is_action_pressed("bench_less"):
@@ -273,12 +339,90 @@ func _unhandled_input(event: InputEvent) -> void:
 		reset_outpost()
 
 
-func _try_build() -> void:
+func _try_build(report := false) -> void:
 	var c := _hover_cell()
 	if c < 0 or c == _last_paint or build.selected == "":
 		return
 	_last_paint = c
-	structures.place(c, build.selected)
+	var err := structures.try_build(c, build.selected)
+	if err != "" and report:
+		build.toast(err)
+
+
+func _select(c: int) -> void:
+	_selected = c
+	_insp_timer = 0.0
+	build.show_inspector(_inspector_info(c) if c >= 0 else {})
+
+
+func _inspector_action(action: String) -> void:
+	if _selected < 0:
+		return
+	var err := ""
+	match action:
+		"upgrade": err = structures.upgrade(_selected)
+		"repair": err = structures.repair(_selected)
+		"sell":
+			structures.sell(_selected)
+			_select(-1)
+			return
+	if err != "":
+		build.toast(err)
+	_select(_selected)
+
+
+## Text + button state for the Inspector panel.
+func _inspector_info(c: int) -> Dictionary:
+	if not structures.ids.has(c):
+		return {}
+	var id: String = structures.ids[c]
+	var d: Dictionary = structures.defs[id]
+	var tier := structures.tier_at(c)
+	var tname: String = GameConfig.tiers[clampi(tier - 1, 0, GameConfig.tiers.size() - 1)].get("name", str(tier))
+	var lines: PackedStringArray = []
+	var maxt := GameConfig.max_tier(id)
+	var head := "[b]%s[/b]" % d.name
+	if maxt > 1:
+		head += "   Tier %s" % tname
+	if d.has("damage_type"):
+		var di := GameConfig.damage_index(d.damage_type)
+		head += "   [color=#%s]%s[/color]" % [GameConfig.damage_color(di).to_html(false), GameConfig.damage_name(di)]
+	lines.append(head)
+	lines.append("HP %d / %d" % [int(map.shp[c]), int(map.smax[c])])
+	var up := structures.upgrade_cost(c)
+	if structures.turrets.has(c):
+		var t: Turret = structures.turrets[c]
+		var line := "Damage %.0f   Range %.1fm   Fire %.2f/s   Crew eff. %d%%" % [t.dmg, t.rng, t.fire_rate(), int(t.crew_efficiency * 100)]
+		lines.append(line)
+		if up >= 0:
+			var nt: Dictionary = GameConfig.tiers[tier]
+			lines.append("[color=#9fd]Next: damage %.0f, range %.1fm, crew eff. %d%%[/color]" % [float(d.damage) * float(nt.damage), float(d.range) * float(nt.range), int(float(nt.crew_efficiency) * 100)])
+		else:
+			lines.append("[color=#aaa]Specialisation at tier III: unlock in the Colony Charter (M6)[/color]")
+		lines.append("Kills: %d" % t.kills)
+	elif id == "harvester_bay":
+		var drones := 0
+		var cargo := 0.0
+		if harvester.bays.has(c):
+			drones = harvester.bays[c].drones.size()
+			for dr in harvester.bays[c].drones:
+				cargo += dr.cargo
+		lines.append("Drones %d   range %.0fm   carrying %d" % [drones, harvester.bay_range(tier), int(cargo)])
+		if up >= 0:
+			lines.append("[color=#9fd]Next: %d drones, range %.0fm[/color]" % [int(harvester.drones_per_tier[tier]), harvester.bay_range(tier + 1)])
+	elif id == "floodlight":
+		lines.append("Light radius %.0fm   (turrets need light at night - M5)" % structures.light_radius())
+	elif map.climb[c]:
+		lines.append("[color=#bf8]Corpse pile alongside: the swarm can climb this![/color]")
+	var rc := structures.repair_cost(c)
+	return {
+		"text": "\n".join(lines),
+		"upgrade_label": ("Upgrade [U/X]  %d" % up) if up >= 0 else ("Max tier" if maxt > 1 else ""),
+		"can_upgrade": up >= 0 and economy.can_afford(up),
+		"repair_label": ("Repair [R/Y]  %d" % rc) if rc > 0 else "Repair",
+		"can_repair": rc > 0 and economy.can_afford(rc),
+		"sell_label": "Sell [RMB/B]  +%d" % structures.sell_value(c),
+	}
 
 
 func _update_ghost() -> void:
@@ -286,27 +430,39 @@ func _update_ghost() -> void:
 	if not bench.running():
 		if Input.is_action_pressed("primary") and build.selected in ["wall", "blast_door"]:
 			_try_build()
-		elif Input.is_action_pressed("demolish"):
-			structures.demolish(_hover_cell())
+		elif Input.is_action_pressed("demolish") and build.selected != "":
+			structures.sell(_hover_cell())
 	var c := _hover_cell()
 	var show_range := 0.0
 	if build.selected != "" and c >= 0:
-		var ok := map.can_build(c)
+		var ok := map.can_build(c) and economy.can_afford(GameConfig.build_cost(build.selected))
 		var d: Dictionary = structures.defs[build.selected]
 		var hgt := float(d.get("height", 1.4))
 		_ghost.visible = true
 		_ghost.scale = Vector3(0.98, hgt, 0.98)
 		_ghost.position = map.cell_center(c) + Vector3(0, hgt * 0.5, 0)
 		_ghost_mat.albedo_color = Color(0.3, 1.0, 0.5, 0.35) if ok else Color(1.0, 0.25, 0.2, 0.35)
-		show_range = float(d.get("range", 0.0))
+		show_range = _range_of(build.selected, 1, -1)
 	else:
 		_ghost.visible = false
-		if c >= 0 and structures.turrets.has(c):
-			show_range = structures.turrets[c].range_m()
+		if _selected >= 0:
+			c = _selected
+			show_range = _range_of(structures.id_at(c), structures.tier_at(c), c)
+		elif c >= 0 and structures.ids.has(c):
+			show_range = _range_of(structures.id_at(c), structures.tier_at(c), c)
 	_ring.visible = show_range > 0.0
 	if _ring.visible:
 		_ring.position = map.cell_center(c) + Vector3(0, 0.05, 0)
 		_ring.scale = Vector3(show_range, 1.0, show_range)
+
+
+func _range_of(id: String, tier: int, c: int) -> float:
+	if c >= 0 and structures.turrets.has(c):
+		return structures.turrets[c].range_m()
+	match id:
+		"harvester_bay": return harvester.bay_range(tier)
+		"floodlight": return structures.light_radius()
+	return float(structures.defs.get(id, {}).get("range", 0.0))
 
 
 # ------------------------------------------------------------------ events
@@ -324,15 +480,19 @@ func _on_field_rebuilt() -> void:
 
 func _on_core_destroyed() -> void:
 	overrun = true
-	hud.show_banner("OUTPOST OVERRUN\nThe swarm has gutted the core.\nPress R to rebuild")
+	hud.show_banner("OUTPOST OVERRUN\nThe swarm has gutted the core.\nPress F10 to rebuild")
 
 
 func reset_outpost() -> void:
+	_select(-1)
 	swarm.clear()
+	harvester.clear()
 	corpses.clear()
 	fx.clear()
 	combat.reset_stats()
+	economy.reset()
 	structures.reset()
+	_run_time = 0.0
 	overrun = false
 	hud.show_banner("")
 
@@ -350,6 +510,46 @@ func _on_bench_finished(report: String) -> void:
 
 
 # ------------------------------------------------------------------ dev
+
+## Scripted player for soak tests (`--bot`): spends Biomass on a fixed build
+## order, then upgrades and repairs, exercising the whole economy loop.
+func _bot_tick(dt: float) -> void:
+	_bot_timer -= dt
+	if _bot_timer > 0.0:
+		return
+	_bot_timer = 1.0
+	var core := map.world_to_cell(map.core_center)
+	if _bot_plan.is_empty():
+		_bot_plan = [
+			[0, -11, "railgun"], [-14, 3, "shock_grid"], [14, -3, "shock_grid"], [-3, 4, "seismic_spike"],
+			[-6, -11, "harvester_bay"], [6, -11, "autocannon"], [-15, -2, "flamethrower"], [15, 2, "mortar"],
+			[0, 11, "railgun"], [3, -3, "seismic_spike"],
+		]
+	# build next planned item if affordable
+	if not _bot_plan.is_empty():
+		var e: Array = _bot_plan[0]
+		var c := map.idx(core.x + e[0], core.y + e[1])
+		if not map.can_build(c):
+			_bot_plan.pop_front()
+		elif economy.can_afford(GameConfig.build_cost(e[2])):
+			structures.try_build(c, e[2])
+			_bot_plan.pop_front()
+		return
+	# then repair the most damaged, then upgrade the cheapest
+	for c: int in structures.ids:
+		if structures.repair_cost(c) > 25 and economy.can_afford(structures.repair_cost(c)):
+			structures.repair(c)
+			return
+	var best := -1
+	var best_cost := 1 << 30
+	for c: int in structures.ids:
+		var u := structures.upgrade_cost(c)
+		if u >= 0 and u < best_cost:
+			best_cost = u
+			best = c
+	if best >= 0 and economy.can_afford(best_cost):
+		structures.upgrade(best)
+
 
 func _print_test_report() -> void:
 	var lines := PackedStringArray(["=== combat test (%.0fs, pressure %d) ===" % [_test_seconds, target_count]])
@@ -369,7 +569,14 @@ func _print_test_report() -> void:
 	for t: Turret in structures.turrets.values():
 		tk.append("%s %d" % [t.def.id, t.kills])
 	lines.append("turret kills: " + ", ".join(tk))
+	var tiers_txt: PackedStringArray = []
+	for c: int in structures.ids:
+		if structures.tier_at(c) > 1:
+			tiers_txt.append("%s T%d" % [structures.ids[c], structures.tier_at(c)])
+	lines.append("upgraded: " + (", ".join(tiers_txt) if not tiers_txt.is_empty() else "none"))
 	lines.append("core %d/%d  structures lost %d  overrun %s" % [structures.core_hp, structures.core_max, structures.destroyed_count, overrun])
+	lines.append("biomass %d  collected %d  spent %d  drone trips %d  corpses harvested %d  value lost to decay %d  still on field %d  drones %d" % [
+		economy.biomass, economy.collected, economy.spent, harvester.trips, corpses.harvested, corpses.biomass_lost, corpses.harvestable_value(), harvester.drone_count()])
 	lines.append("sim %.2f ms  combat %.2f ms  fx %.2f ms  fps %d" % [swarm.sim_usec / 1000.0, combat.combat_usec / 1000.0, fx.update_usec / 1000.0, Engine.get_frames_per_second()])
 	print("\n".join(lines))
 

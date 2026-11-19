@@ -93,3 +93,49 @@ static func build(root: Node3D, id: String, accent: Color) -> Array:
 			part(head, cyl(0.26, 0.3), acc, Vector3(0, 1.2, 0))
 			muzzle.position = Vector3(0, 0.0, 0)
 	return [base_mat, head, muzzle]
+
+
+## Harvester Bay: landing pad with a glowing biomass tank.
+static func build_bay(root: Node3D) -> StandardMaterial3D:
+	var base_mat := mat(Color(0.42, 0.45, 0.48), 0.0, 0.5)
+	var green := mat(Color(0.4, 1.0, 0.35), 1.4, 0.0)
+	var dark := mat(Color(0.15, 0.16, 0.17), 0.0, 0.6)
+	part(root, cyl(0.62, 0.5, 0.56, 8), base_mat, Vector3(0, 0.25, 0))
+	part(root, cyl(0.66, 0.05, -1.0, 8), green, Vector3(0, 0.5, 0))
+	part(root, cyl(0.22, 0.9, -1.0, 8), dark, Vector3(0.0, 0.95, 0.0))
+	part(root, cyl(0.18, 0.7, -1.0, 8), green, Vector3(0.0, 1.0, 0.0))
+	for k in 4:
+		var a := k * PI * 0.5 + PI * 0.25
+		part(root, box(0.1, 0.9, 0.1), dark, Vector3(cos(a) * 0.45, 0.9, sin(a) * 0.45))
+	return base_mat
+
+
+## Floodlight: mast with a lamp head and a real light.
+static func build_floodlight(root: Node3D, radius: float) -> StandardMaterial3D:
+	var base_mat := mat(Color(0.42, 0.45, 0.48), 0.0, 0.5)
+	var lamp := mat(Color(1.0, 0.95, 0.8), 3.0, 0.0)
+	part(root, box(0.6, 0.3, 0.6), base_mat, Vector3(0, 0.15, 0))
+	part(root, cyl(0.07, 3.0, -1.0, 6), base_mat, Vector3(0, 1.6, 0))
+	part(root, box(0.55, 0.22, 0.35), base_mat, Vector3(0, 3.1, 0))
+	part(root, box(0.48, 0.05, 0.28), lamp, Vector3(0, 2.98, 0))
+	var light := OmniLight3D.new()
+	light.position = Vector3(0, 3.0, 0)
+	light.omni_range = radius * 1.15
+	light.light_energy = 1.6
+	light.light_color = Color(1.0, 0.93, 0.8)
+	light.omni_attenuation = 0.7
+	root.add_child(light)
+	return base_mat
+
+
+## Tier pips on a turret base: one bar per tier above I.
+static func set_tier_pips(root: Node3D, tier: int, accent: Color) -> void:
+	var old := root.get_node_or_null("Pips")
+	if old:
+		old.queue_free()
+	var pips := Node3D.new()
+	pips.name = "Pips"
+	root.add_child(pips)
+	var m := mat(accent, 2.0, 0.0)
+	for k in tier - 1:
+		part(pips, box(0.7, 0.05, 0.08), m, Vector3(0, 0.47, -0.3 + k * 0.14))

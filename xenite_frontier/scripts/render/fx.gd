@@ -39,6 +39,10 @@ var _s_next := 0
 var _s_dirty := false
 var _s_mm: MultiMesh
 
+var _texts: Array[Label3D] = []
+var _text_life := PackedFloat32Array()
+var _text_next := 0
+
 var gore := true
 var rng := RandomNumberGenerator.new()
 var update_usec := 0
@@ -76,6 +80,20 @@ func setup() -> void:
 	_s_mm = _make_mm(disc, s_cap, mat)
 	_sbuf.resize(s_cap * STRIDE)
 	_sbuf.fill(0.0)
+
+	for k in 24:
+		var l := Label3D.new()
+		l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		l.no_depth_test = true
+		l.fixed_size = true
+		l.pixel_size = 0.0015
+		l.font_size = 30
+		l.outline_size = 10
+		l.visible = false
+		add_child(l)
+		_texts.append(l)
+	_text_life.resize(24)
+	_text_life.fill(0.0)
 
 
 func _make_mm(mesh: Mesh, n: int, mat: Material) -> MultiMesh:
@@ -178,6 +196,18 @@ func gib(pos: Vector3, body: Color, ichor: Color, scale: float) -> void:
 	splat(pos, ichor, 0.5 + 0.25 * scale)
 
 
+## Rising, fading text (Biomass deposits, warnings).
+func float_text(pos: Vector3, text: String, col: Color) -> void:
+	var k := _text_next
+	_text_next = (_text_next + 1) % _texts.size()
+	var l := _texts[k]
+	l.text = text
+	l.modulate = col
+	l.position = pos
+	l.visible = true
+	_text_life[k] = 1.4
+
+
 # ---------------------------------------------------------------- update
 
 func update(dt: float) -> void:
@@ -188,6 +218,14 @@ func update(dt: float) -> void:
 	if _s_dirty:
 		RenderingServer.multimesh_set_buffer(_s_mm.get_rid(), _sbuf)
 		_s_dirty = false
+	for k in _texts.size():
+		if _text_life[k] > 0.0:
+			_text_life[k] -= dt
+			var l := _texts[k]
+			l.position.y += dt * 1.5
+			l.modulate.a = clampf(_text_life[k], 0.0, 1.0)
+			if _text_life[k] <= 0.0:
+				l.visible = false
 	update_usec = Time.get_ticks_usec() - t0
 
 

@@ -1,5 +1,5 @@
 {
-	"_comment": "General tuning. Economy values arrive in data/economy.json in M3.",
+	"_comment": "General tuning. Economy values live in data/economy.json.",
 	"benchmark": {
 		"target_aliens": 10000,
 		"ramp_seconds": 6.0,
@@ -7,13 +7,14 @@
 		"pass_fps": 60.0
 	},
 	"swarm": {
-		"start_aliens": 1500,
+		"start_aliens": 500,
 		"max_spawn_per_frame": 600,
 		"separation": 2.2,
 		"intra_cell_spread": 2.5,
 		"density_cell_size": 0.5,
 		"threaded": true,
-		"wander": 0.45
+		"wander": 0.45,
+		"ramp_seconds": 90.0
 	},
 	"test_range": {
 		"width": 200,

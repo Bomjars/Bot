@@ -8,6 +8,7 @@ var _stats: Label
 var _legend: RichTextLabel
 var _core_bar: ProgressBar
 var _core_label: Label
+var _bio_label: Label
 var _banner: Label
 var _report: Label
 var _help: Label
@@ -33,7 +34,7 @@ func _ready() -> void:
 	_help = _panel_label(col, Vector2.ZERO)
 	_help.add_theme_font_size_override("font_size", 14)
 	_help.add_theme_color_override("font_color", Color(0.75, 0.8, 0.85))
-	_help.text = "1-8 / LB RB build tool    LMB (A) build    RMB (B) demolish\nI intel: counter table    F flow field    G gore\n+/- (D-pad) swarm pressure    F5-F8 1k/5k/10k/20k\nB (Y) benchmark    Space (Start) pause    R reset outpost\nPan WASD/stick/edge/MMB    Zoom wheel/Q,E/triggers\nF1 (Back) toggle details + help"
+	_help.text = "1-9,0 / LB RB build tool    LMB (A) build / select    RMB (B) sell\nU (X) upgrade selected    R (Y) repair selected    I intel\n+/- (D-pad) swarm pressure    F5-F8 1k/5k/10k/20k\nB benchmark   Space (Start) pause   F10 reset   F11 free build\nPan WASD/stick/edge/MMB    Zoom wheel/Q,E/triggers\nF flow field   G gore   F1 (Back) toggle details + help"
 	_report = _panel_label(col, Vector2.ZERO)
 	_report.get_parent().visible = false
 
@@ -55,6 +56,11 @@ func _ready() -> void:
 	fill.bg_color = Color(0.2, 0.85, 1.0)
 	_core_bar.add_theme_stylebox_override("fill", fill)
 	cv.add_child(_core_bar)
+	_bio_label = Label.new()
+	_bio_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_bio_label.add_theme_color_override("font_color", Color(0.55, 1.0, 0.45))
+	_bio_label.add_theme_font_size_override("font_size", 19)
+	cv.add_child(_bio_label)
 
 	var lp := PanelContainer.new()
 	lp.set_anchors_preset(Control.PRESET_TOP_RIGHT)
@@ -117,6 +123,8 @@ func _process(delta: float) -> void:
 	_core_bar.max_value = st.core_max
 	_core_bar.value = st.core_hp
 	_core_label.text = "OUTPOST CORE  %d / %d%s" % [int(st.core_hp), int(st.core_max), "   (benchmark: invulnerable)" if st.core_invulnerable else ""]
+	var eco: Economy = main.economy
+	_bio_label.text = ("BIOMASS  %d" % int(eco.biomass)) + ("   [FREE BUILD]" if eco.free_build else "") + ("   +%d/min   drones %d" % [int(eco.income_per_min()), main.harvester.drone_count()])
 	_accum += delta
 	if _accum < 0.25:
 		return
@@ -125,12 +133,13 @@ func _process(delta: float) -> void:
 	var combat: Combat = main.combat
 	var rid := get_viewport().get_viewport_rid()
 	var fps := Engine.get_frames_per_second()
-	var txt := "XENITE FRONTIER  -  M2 combat range\n"
+	var txt := "XENITE FRONTIER  -  M3 economy sandbox\n"
 	txt += "FPS %d   (%.1f ms)\n" % [fps, 1000.0 / maxf(fps, 1)]
 	txt += "Aliens: %d   swarm pressure %d\n" % [swarm.total(), main.target_count]
 	txt += "Kills: %d   dodged shots: %d\n" % [combat.kills, combat.dodges]
 	txt += "Corpses: %d (%d charred)   climbable walls: %d\n" % [main.corpses.count, main.corpses.charred_count, main.map.climbable_count()]
 	txt += "Structures lost: %d   turrets: %d\n" % [st.destroyed_count, st.turrets.size()]
+	txt += "Biomass collected %d   spent %d   lost to decay %d\n" % [int(main.economy.collected), int(main.economy.spent), int(main.corpses.biomass_lost)]
 	if detailed:
 		txt += "Swarm sim %.2f ms   combat %.2f ms   fx %.2f ms\n" % [swarm.sim_usec / 1000.0, combat.combat_usec / 1000.0, main.fx.update_usec / 1000.0]
 		txt += "Render CPU %.2f ms   GPU %.2f ms   draws %d\n" % [

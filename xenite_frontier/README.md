@@ -8,20 +8,58 @@ low-poly primitives at runtime; no imported assets.
 
 ---
 
-## Current milestone: **M2 – walls, turrets, counters, death, corpse piles**
+## Current milestone: **M3 – Biomass economy, harvester drones, turret tiers**
 
-M2 turns the test range into a combat sandbox. The swarm flows endlessly from
-three canyon mouths toward the outpost core. You hold it with walls, blast
-doors and the six turret types. Economy (Biomass), colonists, waves and the
-meta progression arrive in M3 to M6, so building is free for now.
+M3 adds the in-run economy. Every build, upgrade and repair costs
+**Biomass**. Biomass only comes from alien corpses, and only when **harvester
+drones** fly out from a **Harvester Bay** and bring it home. The swarm ramps
+up over the first 90 s, so spend fast. Waves, colonists and the meta tree
+arrive in M4 to M6.
+
+### The Biomass loop
+1. Turrets kill aliens. Each corpse holds Biomass (Stalker 2, Spitter 3,
+   Snatcher 4, Burrower 6, Mauler 14, Brood Mother 80).
+2. **Charred corpses hold nothing.** Anything killed by Incendiary damage,
+   including burning to death, is burned. Flamethrowers are strong but cost
+   you income.
+3. Each Harvester Bay launches drones (2/3/4 by tier) that collect corpses
+   inside its range (16/19/22 m). A drone strips a corpse, keeps collecting
+   until it carries 24 Biomass, then flies home and deposits it. A "+N" pops
+   up over the bay.
+4. **Harvesting removes the corpse**, which also lowers its pile. A bay near
+   your walls stops the swarm piling up and climbing over.
+5. Corpses outside every bay's range eventually decay (corpse cap) and that
+   Biomass is lost. The debug panel shows "lost to decay".
+
+### Spending
+| | Cost |
+|---|---|
+| Wall / Blast Door / Floodlight | 8 / 30 / 35 |
+| Harvester Bay | 120 (tiers II/III: 140/240) |
+| Autocannon / Flamethrower / Railgun | 60 / 70 / 120 |
+| Shock Grid / Mortar / Seismic Spike | 90 / 110 / 85 |
+| Turret tier II / III | 80–150 / 150–280 by turret |
+| Sell | refunds 50% of everything invested |
+| Repair | 0.04 Biomass per missing HP |
+
+**Turret tiers.** Each turret has 3 linear tiers bought in-run. They raise
+damage (×1.45 / ×2.0), range (×1.12 / ×1.25), crew efficiency, which is fire
+rate while crewed (115% / 130%), and HP. Tier pips light up on the base. At
+tier III the Inspector notes that specialisations unlock in the Colony
+Charter (M6).
+
+**Floodlights** light a radius of 11 m. At night (M5) turrets can only see
+lit targets. Build them now so you're ready.
+
+**Every economy number is in `data/economy.json`**, including the values
+later milestones use: night bonus, early-call bonus, Xenite payouts, Threat
+Level and Hazard Contracts. Balance there without touching code.
 
 ### Running
 
 1. Install Godot **4.4.x** (standard build, not .NET).
-2. **First run after cloning or pulling:** import the project once so Godot
-   builds its script class cache (`.godot/`, not in git). Opening the project
-   in the editor does this automatically. Without it a fresh clone fails with
-   `Identifier "InputSetup" not declared`.
+2. **After cloning or pulling:** import once so Godot builds its script class
+   cache (`.godot/`, not in git). Opening the project in the editor also does it.
 
 ```bash
 godot --headless --path xenite_frontier --import
@@ -39,29 +77,35 @@ On Windows, `run_benchmark.bat` does the import and runs the benchmark:
 xenite_frontier\run_benchmark.bat "C:\path\to\Godot_v4.4.1-stable_win64_console.exe"
 ```
 
-### Controls (M2)
+### Controls (M3)
 
 | Action | Keyboard / mouse | Gamepad |
 |---|---|---|
-| Pick build tool | 1-8 (Tab cycles) | LB / RB |
+| Pick build tool | 1-9, 0 (Tab cycles) | LB / RB |
 | Build (drag to paint walls/doors) | Left click | A (at screen-centre crosshair) |
-| Demolish (drag) | Right click | B |
-| Deselect tool | Esc | – |
+| Select a structure (no tool) | Left click | A |
+| Upgrade selected | U or Inspector button | X |
+| Repair selected | R or Inspector button | Y |
+| Sell (50% refund) | Right click (drag with a tool) | B |
+| Deselect | Esc / right click elsewhere | – |
 | Intel: counter table | I | D-pad right |
 | Swarm pressure ±500 | + / − | D-pad up / down |
 | Swarm pressure 1k / 5k / 10k / 20k | F5 / F6 / F7 / F8 | – |
 | Pan camera | WASD / arrows / screen edge / middle-drag | Left stick |
 | Fast pan | Shift | L3 |
 | Zoom | Mouse wheel / Q, E | LT / RT |
-| Flow-field heatmap | F | X |
-| Gore on/off | G | – |
 | Pause simulation | Space | Start |
-| Reset outpost | R | – |
-| Run benchmark | B | Y |
-| Detailed perf HUD | F1 | Back |
+| Reset outpost | F10 | – |
+| Sandbox free build | F11 | – |
+| Run benchmark | B / F9 | – |
+| Flow-field heatmap | F | – |
+| Gore on/off | G | – |
+| Detailed HUD + help | F1 | Back |
 
-Hovering a turret, or holding a turret tool, shows its range ring. The
-build bar's info card lists every tool's counters, so you never need to hover.
+Selecting a structure opens the **Inspector** (bottom right). It shows HP,
+current and next-tier stats, kills, and the bay's drones and range, with
+Upgrade / Repair / Sell buttons and their costs. Range rings show for the
+selected or hovered turret, bay or floodlight.
 
 ### Damage types and counters
 
@@ -122,10 +166,10 @@ godot --path xenite_frontier -- --benchmark=20000
 Exit code 0 = pass, 2 = 1% low below 60 fps. Add `--headless` to measure the
 simulation alone, without rendering.
 
-Headless combat soak (prints kills by strain and turret, damage share, core HP):
+Headless soak (prints kills by strain and turret, damage share, core HP and the Biomass flow). `--bot` adds a scripted player that builds, upgrades and repairs:
 
 ```bash
-godot --headless --path xenite_frontier -- --aliens=3000 --combat-test=60
+godot --headless --path xenite_frontier -- --bot --combat-test=180
 ```
 
 ---
@@ -139,6 +183,7 @@ xenite_frontier/
     aliens.json        strain stats, traits, counters (weak/resists), spawn weights
     turrets.json       damage types, counter multipliers, turret stats
     structures.json    walls, blast doors, core HP, climb height
+    economy.json       ALL economy values: Biomass, costs, upgrades, drones, Xenite, Threat, Hazard Contracts
     game_config.json   benchmark / swarm / combat caps / map tuning
   scenes/main.tscn     root; everything else is built in code
   scripts/
@@ -151,7 +196,9 @@ xenite_frontier/
     turrets/turret.gd     six turret behaviours
     turrets/turret_models.gd  primitive turret models
     world/structures.gd   walls/doors/turrets: HP, placement, destruction
-    world/corpses.gd      pooled corpses + pile heights
+    world/corpses.gd      pooled corpses + pile heights + Biomass value
+    econ/economy.gd       Biomass wallet, costs, refunds, deposits
+    econ/harvester.gd     Harvester Bays + drone state machine
     render/alien_meshes.gd   procedural predator silhouettes
     render/alien.gdshader    faceted shading, GPU gait, hit-flash channel
     render/fx.gd / fx.gdshader  pooled particles, beams, ichor splats
@@ -196,7 +243,7 @@ xenite_frontier/
 ## Roadmap
 - [x] **M1** 10k aliens via flow field, perf benchmark
 - [x] **M2** Walls, turrets, damage types and counter table, death, corpse piling
-- [ ] **M3** Biomass economy, harvester drones, in-run turret tiers
+- [x] **M3** Biomass economy, harvester drones, in-run turret tiers
 - [ ] **M4** Colonists, abduction, feeding
 - [ ] **M5** Build/battle phases, waves, day/night, abilities, Threat Level
 - [ ] **M6** Xenite, Colony Charter, specialisations, Hazard Contracts, save/load

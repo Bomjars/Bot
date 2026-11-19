@@ -5,8 +5,42 @@
 	"turret_nav_cost": 28,
 	"turret_height": 1.6,
 	"structures": [
-		{ "id": "wall", "name": "Wall", "role": "Cheap barrier. The swarm paths around it, or bashes through.", "hp": 600, "height": 2.2, "nav_cost": 24 },
-		{ "id": "blast_door", "name": "Blast Door", "role": "Heavy armoured door. Maulers deal x4 damage to doors.", "hp": 1500, "height": 2.4, "nav_cost": 24 }
+		{
+			"id": "wall",
+			"name": "Wall",
+			"role": "Cheap barrier. The swarm paths around it, or bashes through.",
+			"hp": 600,
+			"height": 2.2,
+			"nav_cost": 24
+		},
+		{
+			"id": "blast_door",
+			"name": "Blast Door",
+			"role": "Heavy armoured door. Maulers deal x4 damage to doors.",
+			"hp": 1500,
+			"height": 2.4,
+			"nav_cost": 24
+		},
+		{
+			"id": "floodlight",
+			"name": "Floodlight",
+			"role": "Lights the ground around it. Turrets cannot see unlit targets at night (M5).",
+			"hp": 250,
+			"height": 3.4,
+			"nav_cost": 20,
+			"light_radius": 11.0
+		},
+		{
+			"id": "harvester_bay",
+			"name": "Harvester Bay",
+			"role": "Launches harvester drones that collect Biomass from corpses in range. Drones also clear corpse piles off your walls.",
+			"hp": 700,
+			"height": 1.8,
+			"nav_cost": 28
+		}
 	],
-	"core": { "name": "Outpost Core", "hp": 6000 }
+	"core": {
+		"name": "Outpost Core",
+		"hp": 6000
+	}
 }

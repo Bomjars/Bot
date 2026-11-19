@@ -11,7 +11,7 @@ extends Node3D
 ##   burrow_cost tunnellers: rock 0, everything else 1
 
 enum Kind { GROUND = 0, ROCK = 1, STRUCT = 2 }
-enum SType { NONE = 0, WALL = 1, DOOR = 2, TURRET = 3 }
+enum SType { NONE = 0, WALL = 1, DOOR = 2, TURRET = 3, BAY = 4, LIGHT = 5 }
 
 signal nav_changed
 
@@ -29,6 +29,7 @@ var sheight := PackedFloat32Array()  # structure height (aliens on top stand her
 var snav := PackedByteArray()        # structure's own nav cost (when not climbable)
 var pile := PackedFloat32Array()     # corpse pile height, metres
 var climb := PackedByteArray()       # 1 = structure is climbable via corpse pile
+var lit := PackedByteArray()         # number of floodlights covering the cell (M5 night)
 var goal_cells := PackedInt32Array()
 var spawn_cells := PackedInt32Array()
 var core_center := Vector3.ZERO
@@ -104,6 +105,18 @@ func can_build(c: int) -> bool:
 	return c >= 0 and kind[c] == Kind.GROUND and not is_goal(c)
 
 
+## Adds (+1) or removes (-1) a floodlight's coverage.
+func add_light(center: int, radius: float, sign_: int) -> void:
+	var cx := center % w
+	var cz := center / w
+	var r := int(ceil(radius))
+	for z in range(maxi(0, cz - r), mini(h, cz + r + 1)):
+		for x in range(maxi(0, cx - r), mini(w, cx + r + 1)):
+			if Vector2(x - cx, z - cz).length() <= radius:
+				var c := idx(x, z)
+				lit[c] = clampi(lit[c] + sign_, 0, 255)
+
+
 # ------------------------------------------------------------- corpse piles
 
 ## Adds corpse height to a cell, returns the height the corpse rests at.
@@ -176,7 +189,7 @@ func generate_test_range(width: int, height: int, seed_value: int) -> void:
 	h = height
 	origin = Vector2(-w * 0.5, -h * 0.5)
 	var n := w * h
-	for a in [kind, blocked, nav_cost, burrow_cost, stype, climb, snav]:
+	for a in [kind, blocked, nav_cost, burrow_cost, stype, climb, snav, lit]:
 		a.resize(n)
 		a.fill(0)
 	for a in [shp, smax, sheight, pile]:
@@ -277,13 +290,14 @@ func _plan_compound(core: Vector2i) -> void:
 		put.call(x, core.y - 6, "wall")
 	for x in range(core.x + 3, core.x + 10):
 		put.call(x, core.y + 6, "wall")
-	# demo battery: one of each turret so the counters are visible at once
+	# starting kit: a Harvester Bay, a small battery and two floodlights.
+	# Everything else is bought with Biomass.
+	put.call(core.x + 3, core.y - 2, "harvester_bay")
 	put.call(core.x - 4, core.y - 7, "autocannon")
 	put.call(core.x + 4, core.y - 7, "flamethrower")
-	put.call(core.x - 2, core.y - 2, "railgun")
-	put.call(core.x + 9, core.y - 3, "shock_grid")
 	put.call(core.x + 2, core.y + 2, "mortar")
-	put.call(core.x - 9, core.y + 3, "seismic_spike")
+	put.call(core.x - 9, core.y - 3, "floodlight")
+	put.call(core.x + 9, core.y + 3, "floodlight")
 	for c in planned:
 		initial_structures.append([c, planned[c]])
 

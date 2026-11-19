@@ -1,5 +1,53 @@
 # Changelog
 
+## M3 – Biomass economy, harvester drones, in-run turret tiers
+
+### Added
+- **`data/economy.json`**: every economy value in one file.
+  - Used now: starting Biomass, per-corpse Biomass by strain, charred yield, build costs, upgrade costs, refund ratio, repair cost, harvester stats.
+  - Ready for later milestones, already in final format: night bonus, early-call bonus, Xenite payouts, Threat Level and Hazard Contracts.
+- **Biomass economy** (`econ/economy.gd`).
+  - Building, upgrading and repairing cost Biomass.
+  - Selling refunds 50% of everything invested.
+  - The top bar shows income per minute.
+  - Tools you can't afford are greyed out, and the ghost turns red.
+- **Corpses hold Biomass.** Incendiary kills (including burn deaths) leave charred corpses worth 0.
+  Corpses that decay before harvest are counted as lost.
+- **Harvester Bay + drones** (`econ/harvester.gd`).
+  - Drones (2/3/4 by bay tier) fly to the nearest unclaimed corpse in range (16/19/22 m).
+  - Each drone strips corpses with a beam until it carries 24, then flies home and deposits; a "+N" pops up.
+  - Harvesting removes the corpse and lowers its pile, so bays near walls stop the swarm climbing over.
+  - Drones crash if their bay is destroyed.
+- **Turret tiers I/II/III** (multipliers in `turrets.json`, costs in `economy.json`).
+  - Tiers raise damage, range, crew efficiency (fire rate) and HP.
+  - Tier pips light up on the base and the turret head grows.
+  - Harvester Bays have tiers too: more drones, more range.
+- **Floodlights.**
+  - A real light plus a per-cell lit-coverage grid, ready for M5 nights.
+- **Inspector panel.**
+  - Select any structure to see HP, current and next-tier stats, kills, and drones and range.
+  - It has Upgrade (U / X), Repair (R / Y) and Sell (B) buttons.
+  - Range rings show for the selected or hovered structure.
+- Floating text for Biomass deposits, and toasts for build errors ("Need 120 Biomass").
+- The swarm ramps up over 90 s (`swarm.ramp_seconds`) so there is time to spend the starting Biomass.
+- Starting kit: Harvester Bay, Autocannon, Flamethrower, Mortar, 2 Floodlights and 350 Biomass.
+- Sandbox free build (F11 / `--free-build`).
+- Scripted bot player for soak tests (`--bot`).
+
+### Changed
+- Build tools now use keys 1–9 and 0 (10 tools).
+- Reset outpost moved to F10, and R is now Repair.
+- Benchmark moved to B / F9 (keyboard only). Gamepad X / Y are now Upgrade / Repair.
+- The flow-field heatmap is keyboard only (F).
+
+### Known limitations
+- Drones can't be attacked yet.
+- Floodlights have no gameplay effect until night arrives in M5.
+- Specialisations (tier III choice) unlock in M6.
+- Colonists crewing turrets, and the 40% uncrewed rate, arrive in M4.
+  `Turret.crew_factor` is already wired in.
+
+
 ## M2 – Walls, turrets, damage types, death, corpse piling
 
 ### Added

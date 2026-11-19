@@ -18,7 +18,12 @@ var accent := Color.WHITE
 var head: Node3D
 var muzzle: Node3D
 var base_mat: StandardMaterial3D
-var crew_efficiency := 1.0   # M4: uncrewed turrets fire at 40%
+var tier := 1
+## effective stats for the current tier
+var dmg := 0.0
+var rng := 0.0
+var crew_efficiency := 1.0   # raised by tiers; crewed turrets fire at full rate
+var crew_factor := 1.0       # M4: 1.0 crewed, 0.4 uncrewed
 var _slam := 0.0
 
 
@@ -33,14 +38,27 @@ func setup(d: Dictionary, c: int, pos: Vector3) -> void:
 	head = parts[1]
 	muzzle = parts[2]
 	cooldown = randf() * 0.5
+	set_tier(1)
 
 
-func set_health_ratio(r: float) -> void:
-	base_mat.albedo_color = Color(0.42, 0.45, 0.48).lerp(Color(0.5, 0.12, 0.05), 1.0 - r)
+## Tier upgrades raise damage, range and crew efficiency (turrets.json tiers).
+func set_tier(t: int) -> void:
+	tier = t
+	var td: Dictionary = GameConfig.tiers[clampi(t - 1, 0, GameConfig.tiers.size() - 1)]
+	dmg = float(def.damage) * float(td.get("damage", 1.0))
+	rng = float(def.range) * float(td.get("range", 1.0))
+	crew_efficiency = float(td.get("crew_efficiency", 1.0))
+	head.scale = Vector3.ONE * (1.0 + 0.1 * (t - 1))
+	if t > 1:
+		TurretModels.set_tier_pips(self, t, accent)
+
+
+func fire_rate() -> float:
+	return float(def.fire_rate) * crew_efficiency * crew_factor
 
 
 func range_m() -> float:
-	return float(def.range)
+	return rng
 
 
 func tick(dt: float, combat: Combat) -> void:
@@ -50,7 +68,7 @@ func tick(dt: float, combat: Combat) -> void:
 	cooldown -= dt
 	if cooldown > 0.0:
 		return
-	var rate := float(def.fire_rate) * crew_efficiency
+	var rate := fire_rate()
 	var fired := false
 	match def.id:
 		"autocannon": fired = _fire_single(combat, Color(1.0, 0.85, 0.35, 0.9), 0.06, 0.05)
@@ -72,14 +90,14 @@ func _aim(at: Vector3) -> Vector3:
 
 func _fire_single(combat: Combat, col: Color, width: float, life: float) -> bool:
 	var p := global_position
-	var h := combat.find_target(p.x, p.z, float(def.range), 0.0)
+	var h := combat.find_target(p.x, p.z, rng, 0.0)
 	if h < 0:
 		return false
 	var tp := combat.pos_of(h) + Vector3(0, 0.5, 0)
 	_aim(tp)
 	var from := muzzle.global_position
 	combat.fx.beam(from, tp, col, width, life)
-	if combat.damage(h, float(def.damage), dtype, bool(def.get("dodgeable", false)), self):
+	if combat.damage(h, dmg, dtype, bool(def.get("dodgeable", false)), self):
 		pass
 	combat.fx.burst(tp, Color(1.0, 0.8, 0.3, 1.0), 2, 3.0, 0.06, 0.15, 0.5)
 	return true
@@ -87,13 +105,13 @@ func _fire_single(combat: Combat, col: Color, width: float, life: float) -> bool
 
 func _fire_rail(combat: Combat) -> bool:
 	var p := global_position
-	var h := combat.find_target(p.x, p.z, float(def.range), 0.0)
+	var h := combat.find_target(p.x, p.z, rng, 0.0)
 	if h < 0:
 		return false
 	var dir := _aim(combat.pos_of(h))
 	var from := muzzle.global_position
-	var to := from + dir * float(def.range)
-	combat.damage_line(p, dir, float(def.range), float(def.width), int(def.pierce), float(def.damage), dtype, bool(def.get("dodgeable", false)), self)
+	var to := from + dir * rng
+	combat.damage_line(p, dir, rng, float(def.width), int(def.pierce), dmg, dtype, bool(def.get("dodgeable", false)), self)
 	combat.fx.beam(from, Vector3(to.x, 0.5, to.z), Color(0.45, 0.8, 1.0, 1.0), 0.22, 0.3)
 	combat.fx.burst(from, Color(0.6, 0.9, 1.0, 1.0), 6, 4.0, 0.08, 0.25, 0.0)
 	return true
@@ -101,25 +119,25 @@ func _fire_rail(combat: Combat) -> bool:
 
 func _fire_flame(combat: Combat) -> bool:
 	var p := global_position
-	var h := combat.find_target(p.x, p.z, float(def.range), 0.0)
+	var h := combat.find_target(p.x, p.z, rng, 0.0)
 	if h < 0:
 		return false
 	var dir := _aim(combat.pos_of(h))
 	var half := deg_to_rad(float(def.cone_deg) * 0.5)
-	combat.damage_cone(p, dir, float(def.range), cos(half), float(def.damage), dtype, float(def.burn_time), self)
+	combat.damage_cone(p, dir, rng, cos(half), dmg, dtype, float(def.burn_time), self)
 	var from := muzzle.global_position
 	var fx := combat.fx
 	for k in 4:
 		var a := fx.rng.randf_range(-half, half)
 		var d := dir.rotated(Vector3.UP, a)
 		var col := Color(1.0, fx.rng.randf_range(0.3, 0.7), 0.1, 1.0)
-		fx.particle(from, d * float(def.range) * fx.rng.randf_range(1.4, 2.0) + Vector3(0, 0.6, 0), col, 0.3, 0.45, -0.15)
+		fx.particle(from, d * rng * fx.rng.randf_range(1.4, 2.0) + Vector3(0, 0.6, 0), col, 0.3, 0.45, -0.15)
 	return true
 
 
 func _fire_shock(combat: Combat) -> bool:
 	var p := global_position
-	var hits := combat.query_circle(p.x, p.z, float(def.range), false)
+	var hits := combat.query_circle(p.x, p.z, rng, false)
 	if hits.is_empty():
 		return false
 	var n := mini(hits.size(), int(def.max_targets))
@@ -131,34 +149,34 @@ func _fire_shock(combat: Combat) -> bool:
 		if k < 8:
 			combat.fx.arc(top, combat.pos_of(hdl) + Vector3(0, 0.5, 0), col)
 		combat.slow(hdl, float(def.slow_time))
-		combat.damage(hdl, float(def.damage), dtype, false, self)
+		combat.damage(hdl, dmg, dtype, false, self)
 	return true
 
 
 func _fire_mortar(combat: Combat) -> bool:
 	var p := global_position
-	var h := combat.find_target(p.x, p.z, float(def.range), float(def.get("min_range", 0.0)))
+	var h := combat.find_target(p.x, p.z, rng, float(def.get("min_range", 0.0)))
 	if h < 0:
 		return false
 	var tp := combat.pos_of(h)
 	_aim(tp)
-	combat.launch_shell(muzzle.global_position, tp, float(def.shell_time), float(def.damage), float(def.aoe), dtype, self)
+	combat.launch_shell(muzzle.global_position, tp, float(def.shell_time), dmg, float(def.aoe), dtype, self)
 	combat.fx.burst(muzzle.global_position, Color(1.0, 0.8, 0.4, 1.0), 5, 3.0, 0.1, 0.25, 0.0)
 	return true
 
 
 func _fire_seismic(combat: Combat) -> bool:
 	var p := global_position
-	var hits := combat.query_circle(p.x, p.z, float(def.range), true)
+	var hits := combat.query_circle(p.x, p.z, rng, true)
 	if hits.is_empty():
 		return false
 	var victims := hits.duplicate()
 	for hdl in victims:
 		combat.surface(hdl, float(def.surface_time))
-		combat.damage(hdl, float(def.damage), dtype, false, self)
+		combat.damage(hdl, dmg, dtype, false, self)
 	_slam = 0.5
 	var fx := combat.fx
-	var r := float(def.range)
+	var r := rng
 	for k in 28:
 		var a := TAU * k / 28.0
 		var d := Vector3(cos(a), 0, sin(a))

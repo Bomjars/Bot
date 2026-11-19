@@ -6,6 +6,7 @@ const ALIENS_PATH := "res://data/aliens.json"
 const TURRETS_PATH := "res://data/turrets.json"
 const STRUCTURES_PATH := "res://data/structures.json"
 const CONFIG_PATH := "res://data/game_config.json"
+const ECONOMY_PATH := "res://data/economy.json"
 
 enum Dmg { BALLISTIC, INCENDIARY, PIERCING, SHOCK, EXPLOSIVE, SEISMIC }
 const DMG_COUNT := 6
@@ -16,6 +17,8 @@ var structure_defs: Array = []
 var structures: Dictionary = {}
 var turrets_data: Dictionary = {}
 var config: Dictionary = {}
+var economy: Dictionary = {}
+var tiers: Array = []
 var damage_type_ids: PackedStringArray = []
 ## damage multiplier: counter[alien_type * DMG_COUNT + damage_type]
 var counter := PackedFloat32Array()
@@ -33,6 +36,8 @@ func reload() -> void:
 	structures = load_json(STRUCTURES_PATH)
 	structure_defs = structures.get("structures", [])
 	config = load_json(CONFIG_PATH)
+	economy = load_json(ECONOMY_PATH)
+	tiers = turrets_data.get("tiers", [{"name": "I", "damage": 1.0, "range": 1.0, "crew_efficiency": 1.0, "hp": 1.0}])
 	damage_type_ids = PackedStringArray(turrets_data.get("damage_types", []))
 	_build_counter()
 
@@ -53,6 +58,31 @@ func _build_counter() -> void:
 
 func section(name: String) -> Dictionary:
 	return config.get(name, {})
+
+
+func econ(name: String) -> Dictionary:
+	return economy.get(name, {})
+
+
+## Biomass cost to build `id` (structure or turret).
+func build_cost(id: String) -> int:
+	return int(economy.get("build_costs", {}).get(id, 0))
+
+
+## Biomass cost to raise `id` from `tier` (1-based) to tier + 1, or -1 if maxed.
+func upgrade_cost(id: String, tier: int) -> int:
+	var arr: Array = economy.get("upgrade_costs", {}).get(id, [])
+	if tier - 1 < arr.size():
+		return int(arr[tier - 1])
+	return -1
+
+
+func max_tier(id: String) -> int:
+	return economy.get("upgrade_costs", {}).get(id, []).size() + 1
+
+
+func corpse_biomass(alien_id: String) -> float:
+	return float(econ("biomass").get("per_corpse", {}).get(alien_id, 0))
 
 
 func alien_index(id: String) -> int:
