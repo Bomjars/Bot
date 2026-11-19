@@ -39,8 +39,16 @@
 | 10,000 | 145 | 144 | 4.8 ms / 7.8 ms |
 | 20,000 | 142 | 90 | 6.4 ms / 9.9 ms |
 
+Measured on a desktop with full rendering (Ryzen 7 9800X3D, RTX 5080, Windows, Vulkan):
+| Aliens | Avg FPS | 1% low | Swarm sim avg / p99 | GPU |
+|---|---|---|---|---|
+| 10,000 | 515 | 238 | 1.29 ms / 1.75 ms | 0.47 ms |
+
 Flow field rebuild (200x140 cells): ~54 ms on a worker thread, with no frame hitch.
 GPU cost depends on your card. Run `B` in a windowed build to measure it.
+
+### Fixed
+- Fresh clones failed with `Identifier "InputSetup" not declared` because the script class cache (`.godot/`) is not in git. The README now documents the one-time `--import`, and `run_benchmark.bat` runs it automatically.
 
 ### Known limitations (by design for M1)
 - Aliens that reach the core are recycled to a canyon mouth; there is no damage or death yet (M2).
