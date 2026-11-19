@@ -254,6 +254,8 @@ See `CHANGELOG.md` for per-milestone notes.
 
 ## Screenshots (software-rendered)
 
+![M3: Biomass HUD, harvester drones, tier II Autocannon in the Inspector, unaffordable tools greyed](docs/m3_economy.png)
+
 ![M2 combat: the swarm floods the airlocks while the demo battery fires](docs/m2_combat.png)
 ![M2 breach: Maulers and Stalkers pour through the north airlock over corpse piles](docs/m2_breach.png)
 ![M2 Intel panel and build card with counters](docs/m2_intel.png)
