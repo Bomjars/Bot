@@ -28,6 +28,7 @@ var hfield: FlowField         # Snatchers: toward exposed colonists / crews
 var pools: Array[AlienPool] = []
 var rng := RandomNumberGenerator.new()
 var paused := false
+var hp_mult := 1.0            # waves toughen the swarm (waves.json hp_growth_per_wave)
 var threaded := true
 ## benchmark mode: aliens reaching the core are recycled to a canyon mouth
 var recycle_at_core := false
@@ -199,14 +200,28 @@ func _spawn_point() -> Vector2:
 
 
 func spawn_at(type_id: int, x: float, z: float) -> void:
-	pools[type_id].spawn(x, z, rng)
+	pools[type_id].spawn(x, z, rng, hp_mult)
+
+
+## A wave pack: all leave the same canyon mouth together and share a lane.
+func spawn_pack(types: PackedInt32Array, mouth: int) -> void:
+	var cells: PackedInt32Array = map.mouth_cells[mouth] if mouth < map.mouth_cells.size() else map.spawn_cells
+	var lane_base := rng.randf_range(-0.8, 0.8)
+	var anchor := cells[rng.randi() % cells.size()]
+	for t in types:
+		var c := cells[rng.randi() % cells.size()]
+		if rng.randf() < 0.6:
+			c = anchor
+		var x := map.origin.x + (c % map.w) + rng.randf()
+		var z := map.origin.y + (c / map.w) + rng.randf()
+		pools[t].spawn(x, z, rng, hp_mult, clampf(lane_base + rng.randf_range(-0.25, 0.25), -1.0, 1.0))
 
 
 ## Spawns n aliens of random strains (spawn weights) at the canyon mouths.
 func spawn_random(n: int) -> void:
 	for k in n:
 		var p := _spawn_point()
-		pools[_random_type()].spawn(p.x, p.y, rng)
+		pools[_random_type()].spawn(p.x, p.y, rng, hp_mult)
 
 
 ## Spawns/despawns gradually toward `target` (spawning is rate limited so the
@@ -216,7 +231,7 @@ func approach_population(target: int) -> void:
 	if diff > 0:
 		for k in mini(diff, max_spawn_per_frame):
 			var p := _spawn_point()
-			pools[_random_type()].spawn(p.x, p.y, rng)
+			pools[_random_type()].spawn(p.x, p.y, rng, hp_mult)
 	elif diff < 0:
 		var remove := mini(-diff, max_spawn_per_frame * 4)
 		while remove > 0:
@@ -405,9 +420,13 @@ func _sim_chunk(ci: int) -> void:
 	var grabs := abducts or mauls
 	var feed_chance := int(pool.feed_rate * dt * 100000.0)
 	var ftime := feed_time
+	var sniff_chance := int(0.07 * dt * 100000.0)
 	var cmult := carrier_mult
 	var sense := hunt_sense
 	var stk := pool.stuck
+	var lane := pool.lane
+	var gait := pool.gait
+	var stride := float(AlienMeshes.rig(def.id).gait_freq) / maxf(0.5, float(def.speed))
 
 	for i in range(i0, i1):
 		var o := i * 16
@@ -461,7 +480,8 @@ func _sim_chunk(ci: int) -> void:
 			fdx = gdx[c]
 			fdz = gdz[c]
 
-		var wv := sin(time * 1.7 + float(i) * 0.6180339) * s * wander
+		# persistent lane across the flow (packs share one) + slow weave
+		var wv := (lane[i] * 0.6 + sin(time * 0.55 + float(i) * 0.6180339) * 0.3) * s * wander
 		var tx := fdx * s - fdz * wv
 		var tz := fdz * s + fdx * wv
 
@@ -480,7 +500,14 @@ func _sim_chunk(ci: int) -> void:
 				elif hunts and crew_at[ac] > 0:
 					# Snatcher rips the crew out of a turret
 					grab.append(hbase | i); grab.append(crew_at[ac] - 1); grab.append(0)
-			if fd > 0.0:
+			if fd < 0.0:
+				# sniffing the air / ground for prey: a short pause in the open
+				fd = minf(0.0, fd + dt)
+				tx *= 0.05
+				tz *= 0.05
+				legit = true
+				pose = -1.0
+			elif fd > 0.0:
 				# eating: stand still until the meal is done
 				fd -= dt
 				tx = 0.0
@@ -492,6 +519,8 @@ func _sim_chunk(ci: int) -> void:
 			elif feed_chance > 0 and not carrying and ccount[c] > 0 \
 					and ((seed_base + i * 7919) % 100000) < feed_chance:
 				fd = ftime
+			elif not carrying and gdist[c] > 350 and ((seed_base + i * 104723) % 100000) < sniff_chance:
+				fd = -(0.6 + float((i * 31) % 10) * 0.1)
 			elif ac != c and kind[ac] == OutpostMap.Kind.STRUCT and climb[ac] == 0:
 				# blocked by a structure the field wants us through: bash it
 				hit_c.append(ac)
@@ -653,5 +682,11 @@ func _sim_chunk(ci: int) -> void:
 		if fl > 0.0:
 			buf[o + 12] = maxf(0.0, fl - dt * 7.0)
 		buf[o + 15] = pose if pose < 0.0 else minf(sqrt(sp2) / maxf(s, 0.1), 1.2)
+		# stride phase follows the distance actually covered: no foot sliding
+		var gp := gait[i] + sqrt(mvx * mvx + mvz * mvz) * stride
+		if gp > 12.566371:
+			gp -= 12.566371
+		gait[i] = gp
+		buf[o + 14] = gp
 	_c_reached[ci] = reached
 	_c_core[ci] = core_dmg

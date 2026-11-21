@@ -61,5 +61,14 @@
 		"Mwangi"
 	],
 	"hp": 100.0,
-	"grab_immunity_seconds": 1.5
+	"grab_immunity_seconds": 1.5,
+	"soldier": {
+		"_comment": "Soldier rifles (ballistic).",
+		"hp": 130,
+		"range": 9.0,
+		"damage": 7.0,
+		"fire_rate": 2.2,
+		"armor": 0.7
+	},
+	"worker_hp": 100.0
 }

@@ -1,9 +1,8 @@
 {
 	"_comment": "ALL economy values live here so you can balance without code edits. Sections tagged (M5)/(M6) are read by later milestones; values are final-format already.",
-
 	"biomass": {
 		"_comment": "In-run currency. Alien corpses hold Biomass; harvester drones collect it within range of a Harvester Bay. Charred (incendiary-killed) and eaten corpses yield nothing.",
-		"starting": 350,
+		"starting": 450,
 		"per_corpse": {
 			"stalker": 2,
 			"mauler": 14,
@@ -18,7 +17,6 @@
 		"night_bonus": 0.5,
 		"early_call_bonus_per_second": 3.0
 	},
-
 	"build_costs": {
 		"wall": 8,
 		"blast_door": 30,
@@ -29,31 +27,65 @@
 		"railgun": 120,
 		"shock_grid": 90,
 		"mortar": 110,
-		"seismic_spike": 85
+		"seismic_spike": 85,
+		"guard_post": 50,
+		"mining_rig": 90,
+		"hab_module": 70,
+		"barracks": 110,
+		"bio_refinery": 120,
+		"fabricator": 140,
+		"armory": 160,
+		"medbay": 100
 	},
-
 	"upgrade_costs": {
 		"_comment": "[cost to tier II, cost to tier III]",
-		"autocannon": [80, 150],
-		"flamethrower": [90, 170],
-		"railgun": [150, 280],
-		"shock_grid": [120, 220],
-		"mortar": [140, 260],
-		"seismic_spike": [110, 200],
-		"harvester_bay": [140, 240]
+		"autocannon": [
+			80,
+			150
+		],
+		"flamethrower": [
+			90,
+			170
+		],
+		"railgun": [
+			150,
+			280
+		],
+		"shock_grid": [
+			120,
+			220
+		],
+		"mortar": [
+			140,
+			260
+		],
+		"seismic_spike": [
+			110,
+			200
+		],
+		"harvester_bay": [
+			140,
+			240
+		]
 	},
-
 	"harvester": {
 		"_comment": "Per Harvester Bay tier (I, II, III). capacity = Biomass a drone carries before flying home.",
-		"drones_per_tier": [2, 3, 4],
-		"range_per_tier": [16.0, 19.0, 22.0],
+		"drones_per_tier": [
+			2,
+			3,
+			4
+		],
+		"range_per_tier": [
+			16.0,
+			19.0,
+			22.0
+		],
 		"drone_speed": 10.0,
 		"drone_altitude": 3.5,
 		"harvest_time": 0.45,
 		"capacity": 24,
 		"deposit_time": 0.3
 	},
-
 	"xenite": {
 		"_comment": "(M6) Persistent ore paid out at the end of every run, win or lose.",
 		"base_yield_per_outpost": {
@@ -66,25 +98,99 @@
 		"survivor_bonus_per_colonist": 4,
 		"outpost_held_bonus": 100
 	},
-
 	"threat": {
 		"_comment": "(M5) Threat Level multiplier rises each wave and multiplies the Xenite payout.",
 		"start": 1.0,
 		"per_wave": 0.25,
 		"max": 6.0
 	},
-
 	"hazard_contracts": {
 		"_comment": "(M6) Optional modifiers chosen before a run. xenite_bonus is additive (+0.25 = +25%).",
 		"base_slots": 1,
 		"contracts": [
-			{ "id": "dense_swarm", "name": "Dense Swarm", "desc": "+50% aliens per wave.", "xenite_bonus": 0.35 },
-			{ "id": "lights_out", "name": "Lights Out", "desc": "Floodlights cannot be built.", "xenite_bonus": 0.25 },
-			{ "id": "double_brood", "name": "Double Brood", "desc": "Twice as many Brood Mothers.", "xenite_bonus": 0.5 },
-			{ "id": "starving", "name": "Starving Hive", "desc": "Aliens feed twice as fast.", "xenite_bonus": 0.3 },
-			{ "id": "skeleton_crew", "name": "Skeleton Crew", "desc": "Start with half the colonists.", "xenite_bonus": 0.6 },
-			{ "id": "acid_rain", "name": "Acid Rain", "desc": "Spitters deal double damage.", "xenite_bonus": 0.4 },
-			{ "id": "no_quarter", "name": "No Quarter", "desc": "Hive adaptation doubled.", "xenite_bonus": 1.0 }
+			{
+				"id": "dense_swarm",
+				"name": "Dense Swarm",
+				"desc": "+50% aliens per wave.",
+				"xenite_bonus": 0.35
+			},
+			{
+				"id": "lights_out",
+				"name": "Lights Out",
+				"desc": "Floodlights cannot be built.",
+				"xenite_bonus": 0.25
+			},
+			{
+				"id": "double_brood",
+				"name": "Double Brood",
+				"desc": "Twice as many Brood Mothers.",
+				"xenite_bonus": 0.5
+			},
+			{
+				"id": "starving",
+				"name": "Starving Hive",
+				"desc": "Aliens feed twice as fast.",
+				"xenite_bonus": 0.3
+			},
+			{
+				"id": "skeleton_crew",
+				"name": "Skeleton Crew",
+				"desc": "Start with half the colonists.",
+				"xenite_bonus": 0.6
+			},
+			{
+				"id": "acid_rain",
+				"name": "Acid Rain",
+				"desc": "Spitters deal double damage.",
+				"xenite_bonus": 0.4
+			},
+			{
+				"id": "no_quarter",
+				"name": "No Quarter",
+				"desc": "Hive adaptation doubled.",
+				"xenite_bonus": 1.0
+			}
 		]
+	},
+	"recruit": {
+		"_comment": "Workers are recruited at the Command Hab, soldiers trained at a Barracks.",
+		"worker": {
+			"cost": 40,
+			"seconds": 6
+		},
+		"soldier": {
+			"cost": 60,
+			"seconds": 10
+		}
+	},
+	"population": {
+		"starting_workers": 6,
+		"starting_soldiers": 4,
+		"base_cap": 12,
+		"per_hab_module": 4
+	},
+	"wages_per_wave": {
+		"_comment": "Paid after every wave. Unpaid wages drop morale: crews and soldiers fire 20% slower next wave.",
+		"worker": 3,
+		"soldier": 5,
+		"unpaid_fire_rate": 0.8
+	},
+	"wave_bounty": {
+		"_comment": "Company resupply after every wave survived, x Threat Level.",
+		"base": 60,
+		"per_wave": 12
+	},
+	"xenite_sale": {
+		"_comment": "Mined Xenite is bought by the company after every wave: Biomass per unit; contract_share is banked for the Colony Charter (M6).",
+		"biomass_per_xenite": 3.0,
+		"contract_share": 0.25
+	},
+	"repair": {
+		"_comment": "Worker repair rate (HP per second per worker). Costs repair_cost_per_hp Biomass per HP.",
+		"hp_per_second": 30
+	},
+	"construction": {
+		"_comment": "Worker build speed (work-seconds per second per worker).",
+		"work_rate": 1.0
 	}
 }

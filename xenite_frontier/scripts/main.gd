@@ -21,6 +21,7 @@ var rfield: FlowField
 var hfield: FlowField
 var swarm: Swarm
 var colonists: ColonistSystem
+var waves: WaveDirector
 var combat: Combat
 var structures: Structures
 var corpses: Corpses
@@ -57,6 +58,11 @@ var _bot_planned := false
 var _test_seconds := 0.0
 var _showcase_on := false
 var _stuck_report := false
+var _sandbox := false
+var _auto_land := false
+var _classic := false
+var _drag_from := Vector2.ZERO
+var _dragging_box := false
 var _test_t := 0.0
 
 
@@ -116,16 +122,13 @@ func _ready() -> void:
 	colonists = ColonistSystem.new()
 	colonists.name = "Colonists"
 	add_child(colonists)
-	colonists.setup(map, structures, corpses, fx, hfield)
+	colonists.setup(map, structures, corpses, fx, hfield, economy)
 	structures.built.connect(colonists.on_structure_built)
 	structures.removed.connect(colonists.on_structure_removed)
 	colonists.event.connect(_on_colonist_event)
 
 	structures.reset()
 	colonists.reset()
-	field.build()
-	bfield.build()
-	rfield.build()
 	hfield.build()
 	print("[flowfield] %dx%d surface %.2f ms, burrow %.2f ms" % [map.w, map.h, field.build_usec / 1000.0, bfield.build_usec / 1000.0])
 	structures.nav_changed.connect(_on_nav_changed)
@@ -138,11 +141,20 @@ func _ready() -> void:
 	add_child(combat)
 	combat.setup(swarm, map, structures, fx, corpses)
 	combat.colonists = colonists
+	colonists.combat = combat
+
+	waves = WaveDirector.new()
+	waves.name = "Waves"
+	add_child(waves)
+	waves.setup(swarm, economy, structures, colonists, map)
+	waves.report.connect(func(text):
+		hud.show_report_popup(text, 7.0 if text.begins_with("WAVE") and text.contains("SURVIVED") else 4.0)
+		hud.log_event(text.split("\n")[0], Color(0.95, 0.85, 0.3)))
 
 	cam = RTSCamera.new()
 	cam.name = "CameraRig"
 	add_child(cam)
-	cam.position = map.core_center + Vector3(0, 0, -14)
+	cam.position = map.core_center + Vector3(0, 0, -10)
 	cam.bounds = Rect2(map.origin, Vector2(map.w, map.h))
 	cam.distance = 55.0
 	cam._target_distance = 55.0
@@ -160,6 +172,7 @@ func _ready() -> void:
 	add_child(hud)
 	build = BuildBar.new()
 	build.economy = economy
+	build.structures = structures
 	add_child(build)
 	build.tool_changed.connect(func(id):
 		_last_paint = -1
@@ -173,15 +186,33 @@ func _ready() -> void:
 	target_count = int(GameConfig.section("swarm").get("spawn_per_minute", 240))
 	max_alive = int(GameConfig.section("swarm").get("max_alive", 20000))
 	_ramp_seconds = float(GameConfig.section("swarm").get("ramp_seconds", 90.0))
-	for arg in OS.get_cmdline_user_args():
+	var args := OS.get_cmdline_user_args()
+	var bench_n := -2
+	for arg in args:
 		if arg.begins_with("--benchmark"):
 			bench.quit_when_done = true
 			var parts := arg.split("=")
-			_start_benchmark(int(parts[1]) if parts.size() > 1 else -1)
+			bench_n = int(parts[1]) if parts.size() > 1 else -1
+			_auto_land = true
+			_classic = true
 		elif arg.begins_with("--aliens="):
 			target_count = int(arg.split("=")[1])
 		elif arg == "--bot":
 			_bot = true
+			_auto_land = true
+			_classic = true
+		elif arg == "--sandbox":
+			_sandbox = true
+			_auto_land = true
+			_classic = true
+		elif arg == "--fast-waves":
+			GameConfig.waves["first_build_seconds"] = 15
+			GameConfig.waves["build_seconds"] = 8
+		elif arg == "--auto-land":
+			_auto_land = true
+		elif arg == "--classic":
+			_auto_land = true
+			_classic = true
 		elif arg == "--free-build":
 			economy.free_build = true
 		elif arg == "--stuck-report":
@@ -189,10 +220,64 @@ func _ready() -> void:
 		elif arg.begins_with("--combat-test"):
 			var parts := arg.split("=")
 			_test_seconds = float(parts[1]) if parts.size() > 1 else 40.0
+			_auto_land = true
 		elif arg == "--showcase":
+			_auto_land = true
 			_showcase.call_deferred()
 		elif arg.begins_with("--screenshot="):
+			_auto_land = true
+	if _auto_land:
+		land(map.default_site, _classic)
+	else:
+		_begin_landing()
+	if bench_n != -2:
+		_start_benchmark(bench_n)
+	for arg in args:
+		if arg.begins_with("--screenshot="):
 			_screenshot_after(arg.split("=")[1])
+
+
+# ------------------------------------------------------------------ run flow
+
+func _begin_landing() -> void:
+	waves.reset()
+	hud.show_banner("")
+	hud.show_report_popup("CHOOSE YOUR LANDING SITE\nClick open, flat ground away from the canyon mouths.\nThe Command Hab lands there; build your outpost around it.", 9.0)
+	cam.position = map.core_center
+	cam._target_distance = 95.0
+
+
+## Founds the outpost at `cell` and starts the build phase.
+func land(cell: Vector2i, classic := false) -> void:
+	map.set_base(cell)
+	if classic:
+		map.classic_layout()
+	else:
+		map.initial_structures.clear()
+	field.set_goals(map.goal_cells)
+	bfield.set_goals(map.goal_cells)
+	structures.instant_build = true
+	structures.reset()
+	structures.instant_build = false
+	field.build()
+	bfield.build()
+	rfield.build()
+	colonists.reset()
+	colonists.spawn_starting_crew()
+	waves.reset()
+	if not _sandbox:
+		waves.begin_after_landing()
+	else:
+		waves.phase = WaveDirector.Phase.BUILD
+		waves.timer = 1e9
+	cam.position = map.core_center + Vector3(0, 0, -6)
+	cam._target_distance = 55.0
+	_run_time = 0.0
+	map.show_heatmap(field, _heat_on)
+
+
+func call_wave_early() -> void:
+	waves.call_early()
 
 
 func _build_environment() -> void:
@@ -321,6 +406,8 @@ func _step(dt: float) -> void:
 	if want >= 0:
 		# benchmark: hold a fixed population
 		swarm.approach_population(want)
+	elif not overrun and not swarm.paused and not _sandbox:
+		waves.tick(dt)
 	elif not overrun and not swarm.paused:
 		# sandbox: spawn at a rate (aliens per minute) that ramps up over the
 		# first 90 s. Killing fast genuinely thins the swarm.
@@ -359,10 +446,33 @@ func _unhandled_input(event: InputEvent) -> void:
 			_pad_mode = false
 			hud.set_crosshair(false)
 
+	if waves.phase == WaveDirector.Phase.LANDING:
+		if event.is_action_pressed("primary"):
+			var c := _hover_cell()
+			if c >= 0:
+				var v := Vector2i(c % map.w, c / map.w)
+				var why := map.landing_problem(v)
+				if why == "":
+					land(v)
+				else:
+					build.toast(why)
+		return
 	if event.is_action_pressed("bench_run") and not bench.running():
 		_start_benchmark(-1)
 		return
 	if bench.running():
+		return
+	if event.is_action_pressed("call_wave"):
+		call_wave_early()
+		return
+	if event.is_action_pressed("category_next"):
+		build.next_category()
+		return
+	if event.is_action_pressed("release_squad"):
+		colonists.release_orders(colonists.selected_count() == 0)
+		return
+	if event.is_action_released("primary") and build.selected == "" and not _pad_mode:
+		_finish_click_or_box(event)
 		return
 	for k in 10:
 		if event.is_action_pressed("tool_%d" % (k + 1)):
@@ -381,11 +491,18 @@ func _unhandled_input(event: InputEvent) -> void:
 		_last_paint = -1
 		if build.selected != "":
 			_try_build(true)
+		elif _pad_mode:
+			_click_select(false)
 		else:
-			var c := _hover_cell()
-			_select(c if structures.ids.has(c) else -1)
+			_drag_from = get_viewport().get_mouse_position()
+			_dragging_box = true
 	elif event.is_action_pressed("demolish"):
-		if build.selected == "" and _selected >= 0 and not _pad_mode and _hover_cell() != _selected:
+		if build.selected == "" and colonists.selected_count() > 0:
+			var hit: Variant = cam.ground_point(_cursor_pos())
+			if hit != null:
+				var n := colonists.order_move(hit)
+				fx.float_text(hit + Vector3(0, 1.5, 0), "MOVE (%d)" % n, Color(0.4, 1.0, 0.5))
+		elif build.selected == "" and _selected != -1 and not _pad_mode and _hover_cell() != _selected:
 			_select(-1)
 		else:
 			structures.sell(_hover_cell())
@@ -421,6 +538,49 @@ func _unhandled_input(event: InputEvent) -> void:
 		reset_outpost()
 
 
+func _cursor_pos() -> Vector2:
+	if _pad_mode:
+		return get_viewport().get_visible_rect().size * 0.5
+	return get_viewport().get_mouse_position()
+
+
+## LMB released with no build tool: a click selects a soldier / structure /
+## the Command Hab; a drag selects every soldier in the box.
+func _finish_click_or_box(event: InputEvent) -> void:
+	if not _dragging_box:
+		return
+	_dragging_box = false
+	hud.set_drag_rect(Rect2())
+	var to := get_viewport().get_mouse_position()
+	var additive := Input.is_key_pressed(KEY_SHIFT)
+	if _drag_from.distance_to(to) > 10.0:
+		if not additive:
+			colonists.select_none()
+		colonists.select_in_rect(Rect2(_drag_from, to - _drag_from).abs(), cam.camera)
+		if colonists.selected_count() > 0:
+			_select(-1)
+		return
+	_click_select(additive)
+
+
+func _click_select(additive: bool) -> void:
+	var hit: Variant = cam.ground_point(_cursor_pos())
+	if hit != null:
+		var sol := colonists.soldier_at(hit)
+		if sol:
+			if not additive:
+				colonists.select_none()
+			colonists.set_selected(sol, not sol.selected if additive else true)
+			_select(-1)
+			return
+	colonists.select_none()
+	var c := _hover_cell()
+	if c >= 0 and map.is_goal(c):
+		_select(-2)
+	else:
+		_select(c if structures.ids.has(c) else -1)
+
+
 func _try_build(report := false) -> void:
 	var c := _hover_cell()
 	if c < 0 or c == _last_paint or build.selected == "":
@@ -438,10 +598,12 @@ func _select(c: int) -> void:
 
 
 func _inspector_action(action: String) -> void:
-	if _selected < 0:
+	if _selected == -1:
 		return
 	var err := ""
 	match action:
+		"recruit_worker": err = colonists.recruit(ColonistSystem.Role.WORKER)
+		"train_soldier": err = colonists.recruit(ColonistSystem.Role.SOLDIER)
 		"upgrade": err = structures.upgrade(_selected)
 		"repair": err = structures.repair(_selected)
 		"sell":
@@ -453,8 +615,15 @@ func _inspector_action(action: String) -> void:
 	_select(_selected)
 
 
-## Text + button state for the Inspector panel.
+## Text + buttons for the Inspector panel.
 func _inspector_info(c: int) -> Dictionary:
+	if c == -2:
+		var rc: Dictionary = GameConfig.econ("recruit").get("worker", {})
+		var t := "[b]Command Hab[/b]\nHP %d / %d\nColonists %d / %d   workers %d   soldiers %d\nWages %d Biomass per wave%s" % [
+			int(structures.core_hp), int(structures.core_max), colonists.alive(), colonists.pop_cap(),
+			colonists.count_role(ColonistSystem.Role.WORKER), colonists.count_role(ColonistSystem.Role.SOLDIER), colonists.wages_due(),
+			("\nTraining: %d" % colonists.training.size()) if not colonists.training.is_empty() else ""]
+		return {"text": t, "buttons": [{"label": "Recruit worker  %d" % int(rc.get("cost", 40)), "action": "recruit_worker", "enabled": economy.can_afford(int(rc.get("cost", 40)))}]}
 	if not structures.ids.has(c):
 		return {}
 	var id: String = structures.ids[c]
@@ -462,24 +631,30 @@ func _inspector_info(c: int) -> Dictionary:
 	var tier := structures.tier_at(c)
 	var tname: String = GameConfig.tiers[clampi(tier - 1, 0, GameConfig.tiers.size() - 1)].get("name", str(tier))
 	var lines: PackedStringArray = []
+	var buttons: Array = []
 	var maxt := GameConfig.max_tier(id)
 	var head := "[b]%s[/b]" % d.name
-	if maxt > 1:
+	if maxt > 1 and not structures.is_site(c):
 		head += "   Tier %s" % tname
 	if d.has("damage_type"):
 		var di := GameConfig.damage_index(d.damage_type)
 		head += "   [color=#%s]%s[/color]" % [GameConfig.damage_color(di).to_html(false), GameConfig.damage_name(di)]
 	lines.append(head)
 	lines.append("HP %d / %d" % [int(map.shp[c]), int(map.smax[c])])
+	if structures.is_site(c):
+		var builders := colonists.names_at(c, ColonistSystem.Job.BUILD)
+		lines.append("[color=#ffd21a]UNDER CONSTRUCTION  %d%%[/color]" % int(structures.site_progress(c) * 100))
+		lines.append(("Builders: " + ", ".join(builders)) if not builders.is_empty() else "[color=#ff7a6a]Waiting for a free worker[/color]")
+		buttons.append({"label": "Cancel  +%d" % structures.sell_value(c), "action": "sell"})
+		return {"text": "\n".join(lines), "buttons": buttons}
 	var up := structures.upgrade_cost(c)
 	if structures.turrets.has(c):
 		var t: Turret = structures.turrets[c]
-		var line := "Damage %.0f   Range %.1fm   Fire %.2f/s   Crew eff. %d%%" % [t.dmg, t.rng, t.fire_rate(), roundi(t.crew_efficiency * 100)]
-		lines.append(line)
+		lines.append("Damage %.0f   Range %.1fm   Fire %.2f/s   Crew eff. %d%%" % [t.dmg, t.rng, t.fire_rate(), roundi(t.crew_efficiency * 100)])
 		if up >= 0:
 			var nt: Dictionary = GameConfig.tiers[tier]
 			lines.append("[color=#9fd]Next: damage %.0f, range %.1fm, crew eff. %d%%[/color]" % [float(d.damage) * float(nt.damage), float(d.range) * float(nt.range), roundi(float(nt.crew_efficiency) * 100)])
-		else:
+		elif tier >= maxt:
 			lines.append("[color=#aaa]Specialisation at tier III: unlock in the Colony Charter (M6)[/color]")
 		var crew := colonists.crew_name(c)
 		if t.crewed:
@@ -498,21 +673,53 @@ func _inspector_info(c: int) -> Dictionary:
 		if up >= 0:
 			lines.append("[color=#9fd]Next: %d drones, range %.0fm[/color]" % [int(harvester.drones_per_tier[tier]), harvester.bay_range(tier + 1)])
 	elif id == "floodlight":
-		lines.append("Light radius %.0fm   (turrets need light at night - M5)" % structures.light_radius())
+		lines.append("Light radius %.0fm   (turrets need light at night - M5b)" % structures.light_radius())
+	elif id == "guard_post":
+		var g := colonists.names_at(c, ColonistSystem.Job.GARRISON)
+		lines.append("Garrison %d/%d: %s" % [g.size(), int(d.get("garrison", 2)), ", ".join(g) if not g.is_empty() else "none - train soldiers at a Barracks"])
+	elif id == "barracks":
+		var rc: Dictionary = GameConfig.econ("recruit").get("soldier", {})
+		lines.append("Soldiers %d   colonists %d/%d" % [colonists.count_role(ColonistSystem.Role.SOLDIER), colonists.alive(), colonists.pop_cap()])
+		buttons.append({"label": "Train soldier  %d" % int(rc.get("cost", 60)), "action": "train_soldier", "enabled": economy.can_afford(int(rc.get("cost", 60)))})
+	elif id == "hab_module":
+		lines.append("+%d colonist capacity   (now %d/%d)" % [int(d.get("pop_cap", 4)), colonists.alive(), colonists.pop_cap()])
 	elif map.climb[c]:
 		lines.append("[color=#bf8]Corpse pile alongside: the swarm can climb this![/color]")
-	var rc := structures.repair_cost(c)
-	return {
-		"text": "\n".join(lines),
-		"upgrade_label": ("Upgrade [U/X]  %d" % up) if up >= 0 else ("Max tier" if maxt > 1 else ""),
-		"can_upgrade": up >= 0 and economy.can_afford(up),
-		"repair_label": ("Repair [R/Y]  %d" % rc) if rc > 0 else "Repair",
-		"can_repair": rc > 0 and economy.can_afford(rc),
-		"sell_label": "Sell [RMB/B]  +%d" % structures.sell_value(c),
-	}
+	if not structures.turrets.has(c) and id not in ["harvester_bay", "wall", "blast_door"]:
+		lines.append(d.get("role", ""))
+	if int(d.get("staff", 0)) > 0:
+		var st := colonists.names_at(c, ColonistSystem.Job.STAFF)
+		lines.append(("Staff: " + ", ".join(st)) if not st.is_empty() else "[color=#ff7a6a]UNSTAFFED - inactive (needs a free worker)[/color]")
+	if id == "mining_rig":
+		lines.append("Mining %d Xenite/min while staffed" % int(d.get("xenite_per_minute", 14)))
+	var rc2 := structures.repair_cost(c)
+	if up >= 0:
+		var blk := structures.upgrade_block(c)
+		buttons.append({"label": ("Upgrade [U]  %d" % up) if blk == "" else blk, "action": "upgrade", "enabled": blk == "" and economy.can_afford(up)})
+	if rc2 > 0:
+		buttons.append({"label": "Repair [R]  %d" % rc2, "action": "repair", "enabled": economy.can_afford(rc2)})
+	buttons.append({"label": "Sell  +%d" % structures.sell_value(c), "action": "sell"})
+	return {"text": "\n".join(lines), "buttons": buttons}
 
 
 func _update_ghost() -> void:
+	if waves.phase == WaveDirector.Phase.LANDING:
+		var c0 := _hover_cell()
+		_ring.visible = false
+		if c0 < 0:
+			_ghost.visible = false
+			return
+		var v := Vector2i(c0 % map.w, c0 / map.w)
+		var ok := map.landing_problem(v) == ""
+		_ghost.visible = true
+		_ghost.scale = Vector3(7.0, 0.4, 7.0)
+		_ghost.position = map.cell_ground(c0) + Vector3(0, 0.2, 0)
+		_ghost_mat.albedo_color = Color(0.3, 1.0, 0.5, 0.35) if ok else Color(1.0, 0.25, 0.2, 0.35)
+		return
+	if _dragging_box and Input.is_action_pressed("primary"):
+		var to := get_viewport().get_mouse_position()
+		if _drag_from.distance_to(to) > 10.0:
+			hud.set_drag_rect(Rect2(_drag_from, to - _drag_from).abs())
 	# drag-painting walls/doors, drag-demolish
 	if not bench.running():
 		if Input.is_action_pressed("primary") and build.selected in ["wall", "blast_door"]:
@@ -522,7 +729,9 @@ func _update_ghost() -> void:
 	var c := _hover_cell()
 	var show_range := 0.0
 	if build.selected != "" and c >= 0:
-		var ok := map.can_build(c) and economy.can_afford(GameConfig.build_cost(build.selected))
+		var ok := map.can_build(c) and economy.can_afford(structures.cost_of(build.selected))
+		if structures.defs[build.selected].get("needs_deposit", false):
+			ok = ok and map.deposit[c] == 1
 		var d: Dictionary = structures.defs[build.selected]
 		var hgt := float(d.get("height", 1.4))
 		_ghost.visible = true
@@ -532,7 +741,9 @@ func _update_ghost() -> void:
 		show_range = _range_of(build.selected, 1, -1)
 	else:
 		_ghost.visible = false
-		if _selected >= 0:
+		if _selected == -2:
+			c = -1
+		elif _selected >= 0:
 			c = _selected
 			show_range = _range_of(structures.id_at(c), structures.tier_at(c), c)
 		elif c >= 0 and structures.ids.has(c):
@@ -573,19 +784,28 @@ func _on_colonist_event(text: String, col: Color, pos: Vector3) -> void:
 
 func _on_core_destroyed() -> void:
 	overrun = true
-	hud.show_banner("OUTPOST OVERRUN\nThe swarm has gutted the core.\nPress F10 to rebuild")
+	hud.show_banner("OUTPOST OVERRUN - wave %d\nThe swarm has gutted the Command Hab.\nPress F10 for a new run" % waves.wave)
+	waves.phase = WaveDirector.Phase.OVER
 
 
 func reset_outpost() -> void:
 	_select(-1)
+	colonists.select_none()
 	swarm.clear()
 	harvester.clear()
 	corpses.clear()
 	fx.clear()
 	combat.reset_stats()
 	economy.reset()
-	structures.reset()
-	colonists.reset()
+	overrun = false
+	hud.show_banner("")
+	if _auto_land:
+		land(map.default_site, _classic)
+	else:
+		map.initial_structures.clear()
+		structures.reset()
+		colonists.reset()
+		_begin_landing()
 	_run_time = 0.0
 	_spawn_acc = 0.0
 	overrun = false
@@ -625,9 +845,21 @@ func _bot_tick(dt: float) -> void:
 			_bot_plan.append([13, o, "wall"])
 		_bot_plan.append_array([
 			[-2, -7, "shock_grid"], [2, -5, "seismic_spike"], [0, -3, "railgun"],
-			[-3, -2, "harvester_bay"], [3, -8, "shock_grid"], [-10, 0, "mortar"],
+			[-9, 2, "barracks"], [-5, -8, "guard_post"], [5, -8, "guard_post"],
+			[-3, -2, "harvester_bay"], [10, -5, "bio_refinery"], [-9, 5, "hab_module"],
+			[3, -8, "shock_grid"], [-10, 0, "mortar"], [-11, 5, "armory"],
 			[8, -2, "autocannon"], [-2, -3, "flamethrower"], [10, 0, "railgun"],
 		])
+		# a Mining Rig on the deposit nearest the outpost
+		var best_d := INF
+		var best_dc := Vector2i(-1, -1)
+		for dc in map.deposit_centers:
+			var dd := Vector2(dc).distance_to(Vector2(core))
+			if dd < best_d:
+				best_d = dd
+				best_dc = dc
+		if best_dc.x >= 0:
+			_bot_plan.insert(9, [best_dc.x - core.x, best_dc.y - core.y, "mining_rig"])
 	# build next planned item if affordable
 	if not _bot_plan.is_empty():
 		var e: Array = _bot_plan[0]
@@ -637,6 +869,10 @@ func _bot_tick(dt: float) -> void:
 		elif economy.can_afford(GameConfig.build_cost(e[2])):
 			structures.try_build(c, e[2])
 			_bot_plan.pop_front()
+		return
+	# keep the garrisons topped up
+	if structures.count_built("barracks") > 0 and economy.biomass > 160 and colonists.alive() + colonists.training.size() < colonists.pop_cap():
+		colonists.recruit(ColonistSystem.Role.SOLDIER)
 		return
 	# then repair the most damaged, then upgrade the cheapest
 	for c: int in structures.ids:
@@ -680,9 +916,16 @@ func _print_test_report() -> void:
 	lines.append("core %d/%d  structures lost %d  overrun %s" % [structures.core_hp, structures.core_max, structures.destroyed_count, overrun])
 	lines.append("biomass %d  collected %d  spent %d  drone trips %d  corpses harvested %d  value lost to decay %d  still on field %d  drones %d" % [
 		economy.biomass, economy.collected, economy.spent, harvester.trips, corpses.harvested, corpses.biomass_lost, corpses.harvestable_value(), harvester.drone_count()])
-	lines.append("colonists alive %d/%d  crewing %d  reserve %d  recovering %d  abductions %d  rescued %d  taken %d  mauled %d" % [
-		colonists.alive(), colonists.colonists.size(), colonists.count_state(ColonistSystem.S.CREWING), colonists.count_state(ColonistSystem.S.RESERVE),
-		colonists.count_state(ColonistSystem.S.RECOVERING), colonists.abductions, colonists.rescued, colonists.taken, colonists.killed])
+	lines.append("wave %d (phase %d)  threat x%.2f  bounties %d  ore sales %d  wages %d  xenite banked %d  morale low %s" % [
+		waves.wave, waves.phase, waves.threat, economy.bounties, economy.ore_sales, economy.wages_paid, waves.xenite_banked, waves.morale_low])
+	lines.append("colonists alive %d/%d (cap %d)  workers %d  soldiers %d  recruited %d  abductions %d  rescued %d  taken %d  mauled %d" % [
+		colonists.alive(), colonists.colonists.size(), colonists.pop_cap(), colonists.count_role(ColonistSystem.Role.WORKER), colonists.count_role(ColonistSystem.Role.SOLDIER),
+		colonists.recruited, colonists.abductions, colonists.rescued, colonists.taken, colonists.killed])
+	var built_txt: PackedStringArray = []
+	for bid in ["guard_post", "mining_rig", "hab_module", "barracks", "bio_refinery", "fabricator", "armory", "medbay"]:
+		if structures.count_built(bid) > 0:
+			built_txt.append("%s %d/%d active" % [bid, structures.count_active(bid), structures.count_built(bid)])
+	lines.append("buildings: " + (", ".join(built_txt) if not built_txt.is_empty() else "none") + "   sites open %d" % structures.sites.size())
 	var crewed := 0
 	for t: Turret in structures.turrets.values():
 		if t.crewed:

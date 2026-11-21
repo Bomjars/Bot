@@ -11,7 +11,7 @@ extends Node3D
 ##   burrow_cost tunnellers: rock 0, everything else 1
 
 enum Kind { GROUND = 0, ROCK = 1, STRUCT = 2 }
-enum SType { NONE = 0, WALL = 1, DOOR = 2, TURRET = 3, BAY = 4, LIGHT = 5 }
+enum SType { NONE = 0, WALL = 1, DOOR = 2, TURRET = 3, BAY = 4, LIGHT = 5, BUILDING = 6 }
 
 signal nav_changed
 
@@ -35,8 +35,14 @@ var crew_at := PackedInt32Array()     # turret cell: crew colonist id + 1 (Snatc
 var corpse_count := PackedInt32Array() # corpses (alien + human) in the cell - feeding reads this
 var goal_cells := PackedInt32Array()
 var spawn_cells := PackedInt32Array()
+var mouth_cells: Array[PackedInt32Array] = []   # spawn cells per canyon mouth
 var core_center := Vector3.ZERO
-var initial_structures: Array = []   # [cell, "wall"|"blast_door"|turret id]
+var initial_structures: Array = []   # [cell, id] - classic layout (tests / --auto-land)
+var default_site := Vector2i.ZERO    # suggested landing site (and the classic compound)
+var base_cell := Vector2i(-1, -1)    # where the Command Hab landed (-1 = not yet)
+var deposit := PackedByteArray()     # 1 = Xenite deposit (Mining Rigs build here)
+var deposit_centers: Array[Vector2i] = []
+var hbase := PackedFloat32Array()    # terrain before the landing pad was levelled
 
 var climb_height := 1.6
 var max_pile := 2.6
@@ -44,6 +50,7 @@ var max_pile := 2.6
 var _ground: MeshInstance3D
 var _heat: MeshInstance3D
 var _terrain: MeshInstance3D
+var _dressing: Node3D
 var terrain_material: ShaderMaterial
 
 ## Terrain heightfield at half-cell resolution: vertex (i, j) sits at world
@@ -114,6 +121,10 @@ func clear_structure(c: int) -> void:
 
 func can_build(c: int) -> bool:
 	return c >= 0 and kind[c] == Kind.GROUND and not is_goal(c)
+
+
+func has_base() -> bool:
+	return base_cell.x >= 0
 
 
 ## Adds (+1) or removes (-1) a floodlight's coverage.
@@ -255,23 +266,31 @@ func generate_test_range(width: int, height: int, seed_value: int) -> void:
 				if in_bounds(m.x + ox, m.y + oz):
 					_set_terrain(m.x + ox, m.y + oz, Kind.GROUND)
 
-	_plan_compound(core)
+	default_site = core
+	core_center = cell_center(idx(core.x, core.y))
+	goal_cells = PackedInt32Array()
 	_build_heights(seed_value, core)
+	_place_deposits(seed_value, mouths)
 
 	spawn_cells = PackedInt32Array()
+	mouth_cells.clear()
 	for m: Vector2i in mouths:
+		var mc := PackedInt32Array()
 		for oz in range(-4, 5):
 			for ox in range(-4, 5):
 				var cx := clampi(m.x + ox, 0, w - 1)
 				var cz := clampi(m.y + oz, 0, h - 1)
 				if kind[idx(cx, cz)] == Kind.GROUND:
 					spawn_cells.append(idx(cx, cz))
+					mc.append(idx(cx, cz))
+		mouth_cells.append(mc)
 	_build_visuals()
 
 
-## Records the starting compound (walls, doors, a demo turret battery). The
-## Structures node instantiates them so they get HP, visuals and turret logic.
-func _plan_compound(core: Vector2i) -> void:
+## The classic walled compound (tests, benchmark, `--auto-land`): walls,
+## doors, a small battery. Normal runs start empty after the landing.
+func classic_layout() -> void:
+	var core := base_cell
 	initial_structures.clear()
 	var planned := {}
 	var put := func(x: int, z: int, t: String) -> void:
@@ -316,11 +335,93 @@ func _plan_compound(core: Vector2i) -> void:
 	for c in planned:
 		initial_structures.append([c, planned[c]])
 
+
+# ---------------------------------------------------------------- landing
+
+## Why the Command Hab can't land on `cell` ("" = it can). Needs a 7x7 patch
+## of open ground, well away from the canyon mouths, reachable by the swarm.
+func landing_problem(cell: Vector2i) -> String:
+	if cell.x < 6 or cell.y < 6 or cell.x >= w - 6 or cell.y >= h - 6:
+		return "Too close to the cliffs"
+	for oz in range(-3, 4):
+		for ox in range(-3, 4):
+			var c := idx(cell.x + ox, cell.y + oz)
+			if kind[c] != Kind.GROUND:
+				return "Needs open, flat ground"
+			if deposit[c]:
+				return "Don't land on a Xenite deposit"
+	for sc in spawn_cells:
+		if Vector2(sc % w, sc / w).distance_to(Vector2(cell)) < 30.0:
+			return "Too close to a canyon mouth"
+	return ""
+
+
+## Founds the outpost: goal cells, levelled pad, terrain/scatter rebuilt.
+func set_base(cell: Vector2i) -> void:
+	base_cell = cell
 	goal_cells = PackedInt32Array()
 	for oz in range(-1, 2):
 		for ox in range(-1, 2):
-			goal_cells.append(idx(core.x + ox, core.y + oz))
-	core_center = cell_center(idx(core.x, core.y))
+			goal_cells.append(idx(cell.x + ox, cell.y + oz))
+	core_center = cell_center(idx(cell.x, cell.y))
+	# level a pad around the landing site (blend into the raw terrain)
+	var cw := Vector2(core_center.x, core_center.z)
+	var pad := 0.0
+	var pn := 0
+	for j in hh:
+		for i in hw:
+			var wp := Vector2(origin.x + i * 0.5, origin.y + j * 0.5)
+			var d := wp.distance_to(cw)
+			var k := j * hw + i
+			if d < 6.0:
+				pad += hbase[k]
+				pn += 1
+	pad = pad / maxf(1, pn)
+	for j in hh:
+		for i in hw:
+			var k := j * hw + i
+			var wp := Vector2(origin.x + i * 0.5, origin.y + j * 0.5)
+			var d := wp.distance_to(cw)
+			if d > 26.0 or hbase[k] > 2.0:
+				hgrid[k] = hbase[k]
+			else:
+				hgrid[k] = lerpf(pad, hbase[k], smoothstep(17.0, 24.0, d))
+	(_terrain.mesh as ArrayMesh).clear_surfaces()
+	_fill_terrain_mesh(_terrain.mesh as ArrayMesh)
+	terrain_material.set_shader_parameter("core_pos", core_center)
+	terrain_material.set_shader_parameter("pad_radius", 19.0)
+	_rebuild_dressing()
+
+
+## Glowing Xenite deposits on open ground (2x2 cells) for Mining Rigs.
+func _place_deposits(seed_value: int, mouths: Array) -> void:
+	deposit.resize(w * h)
+	deposit.fill(0)
+	deposit_centers.clear()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_value + 77
+	var tries := 0
+	while deposit_centers.size() < 10 and tries < 4000:
+		tries += 1
+		var x := rng.randi_range(8, w - 9)
+		var z := rng.randi_range(8, h - 9)
+		var ok := true
+		for oz in range(-1, 3):
+			for ox in range(-1, 3):
+				if kind[idx(x + ox, z + oz)] != Kind.GROUND:
+					ok = false
+		for m: Vector2i in mouths:
+			if Vector2(x, z).distance_to(Vector2(m)) < 18.0:
+				ok = false
+		for dcen in deposit_centers:
+			if Vector2(x, z).distance_to(Vector2(dcen)) < 16.0:
+				ok = false
+		if not ok:
+			continue
+		deposit_centers.append(Vector2i(x, z))
+		for oz in range(0, 2):
+			for ox in range(0, 2):
+				deposit[idx(x + ox, z + oz)] = 1
 
 
 # ---------------------------------------------------------------- terrain
@@ -367,12 +468,9 @@ func _build_heights(seed_value: int, core: Vector2i) -> void:
 	rng.seed = seed_value + 5
 	# craters: bowl + raised rim, kept off the base pad
 	var craters: Array[Vector3] = []
-	var core_w := Vector2(origin.x + core.x + 0.5, origin.y + core.y + 0.5)
 	for k in 60:
 		var cx := rng.randf_range(origin.x + 6, origin.x + w - 6)
 		var cz := rng.randf_range(origin.y + 6, origin.y + h - 6)
-		if Vector2(cx, cz).distance_to(core_w) < 26.0:
-			continue
 		craters.append(Vector3(cx, cz, rng.randf_range(1.5, 5.5)))
 	var rock_h := PackedFloat32Array()
 	rock_h.resize(w * h)
@@ -424,13 +522,24 @@ func _build_heights(seed_value: int, core: Vector2i) -> void:
 						hgt += -0.55 * cr.z * 0.25 * maxf(0.0, 1.0 - d * d) + 0.25 * exp(-pow((d - 1.0) * 5.0, 2.0))
 				if any_rock:
 					hgt += 0.35  # rubble at the cliff foot
-				# levelled base pad around the outpost
-				var dc := Vector2(wx, wz).distance_to(core_w)
-				hgt = lerpf(0.12, hgt, smoothstep(17.0, 24.0, dc))
 			hgrid[j * hw + i] = hgt
+	hbase = hgrid.duplicate()
 
 
 func _build_terrain_mesh() -> void:
+	var mesh := ArrayMesh.new()
+	_fill_terrain_mesh(mesh)
+	_terrain = MeshInstance3D.new()
+	_terrain.name = "Terrain"
+	_terrain.mesh = mesh
+	terrain_material = ShaderMaterial.new()
+	terrain_material.shader = preload("res://scripts/render/terrain.gdshader")
+	terrain_material.set_shader_parameter("pad_radius", 0.0)
+	_terrain.material_override = terrain_material
+	add_child(_terrain)
+
+
+func _fill_terrain_mesh(mesh: ArrayMesh) -> void:
 	var verts := PackedVector3Array()
 	var norms := PackedVector3Array()
 	var uvs := PackedVector2Array()
@@ -470,15 +579,7 @@ func _build_terrain_mesh() -> void:
 	arr[Mesh.ARRAY_NORMAL] = norms
 	arr[Mesh.ARRAY_TEX_UV] = uvs
 	arr[Mesh.ARRAY_INDEX] = idxs
-	var mesh := ArrayMesh.new()
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
-	_terrain = MeshInstance3D.new()
-	_terrain.name = "Terrain"
-	_terrain.mesh = mesh
-	terrain_material = ShaderMaterial.new()
-	terrain_material.shader = preload("res://scripts/render/terrain.gdshader")
-	_terrain.material_override = terrain_material
-	add_child(_terrain)
 
 
 ## Build-grid overlay strength (brighter while a build tool is selected).
@@ -502,7 +603,7 @@ func _build_scatter(seed_value: int) -> void:
 		var near_rock := kind[c - 1] == Kind.ROCK or kind[c + 1] == Kind.ROCK or kind[c - w] == Kind.ROCK or kind[c + w] == Kind.ROCK
 		if kind[c] == Kind.GROUND:
 			var chance := 0.22 if near_rock else 0.012
-			if is_goal(c) or cell_center(c).distance_to(core_center) < 20.0:
+			if deposit[c] or (has_base() and cell_center(c).distance_to(core_center) < 20.0):
 				chance = 0.0
 			if rng.randf() < chance:
 				var p := cell_center(c) + Vector3(rng.randf_range(-0.4, 0.4), 0, rng.randf_range(-0.4, 0.4))
@@ -529,20 +630,52 @@ func _scatter_mmi(mesh: Mesh, xfs: Array[Transform3D], mat: Material) -> void:
 	var mmi := MultiMeshInstance3D.new()
 	mmi.multimesh = mm
 	mmi.material_override = mat
-	add_child(mmi)
+	_dressing.add_child(mmi)
 
 
 # ---------------------------------------------------------------- visuals
 
 func _build_visuals() -> void:
 	_build_terrain_mesh()
+	_rebuild_dressing()
+
+
+## Scatter, Xenite deposits, props and (once landed) the hab dome. Rebuilt
+## when the outpost lands so nothing clutters the base pad.
+func _rebuild_dressing() -> void:
+	if _dressing:
+		_dressing.queue_free()
+	_dressing = Node3D.new()
+	_dressing.name = "Dressing"
+	add_child(_dressing)
 	_build_scatter(int(GameConfig.section("test_range").get("seed", 1337)))
-	var core := Node3D.new()
-	core.name = "HabDome"
-	core.position = cell_ground(idx(int(core_center.x - origin.x), int(core_center.z - origin.y)))
-	add_child(core)
-	StationModels.build_hab_dome(core)
-	_place_props()
+	_build_deposits()
+	if has_base():
+		var core := Node3D.new()
+		core.name = "HabDome"
+		core.position = cell_ground(idx(base_cell.x, base_cell.y))
+		_dressing.add_child(core)
+		StationModels.build_hab_dome(core)
+		_place_props()
+
+
+func _build_deposits() -> void:
+	var xfs: Array[Transform3D] = []
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 4242
+	for dc in deposit_centers:
+		for k in 5:
+			var p := Vector3(origin.x + dc.x + rng.randf_range(0.2, 1.8), 0, origin.y + dc.y + rng.randf_range(0.2, 1.8))
+			p.y = height_at(p.x, p.z) - 0.05
+			var sc := rng.randf_range(0.35, 0.7)
+			xfs.append(Transform3D(Basis.from_euler(Vector3(rng.randf_range(-0.3, 0.3), rng.randf() * TAU, rng.randf_range(-0.3, 0.3))).scaled(Vector3.ONE * sc), p))
+		var glow := OmniLight3D.new()
+		glow.light_color = Color(0.2, 1.0, 0.85)
+		glow.omni_range = 5.0
+		glow.light_energy = 1.2
+		glow.position = Vector3(origin.x + dc.x + 1.0, height_at(origin.x + dc.x + 1.0, origin.y + dc.y + 1.0) + 1.2, origin.y + dc.y + 1.0)
+		_dressing.add_child(glow)
+	_scatter_mmi(StationModels.crystal_mesh(), xfs, StationModels.crystal_material())
 
 
 ## A few Mars-base props (solar arrays, tanks, comms towers) on the rock
@@ -577,7 +710,7 @@ func _place_props() -> void:
 		var prop := StationModels.plateau_prop(k)
 		prop.position = p
 		prop.rotation.y = float(k) * 1.3
-		add_child(prop)
+		_dressing.add_child(prop)
 		placed.append(p)
 		k += 1
 

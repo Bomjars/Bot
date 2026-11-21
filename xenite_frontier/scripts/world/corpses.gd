@@ -121,7 +121,7 @@ func add(t: int, x: float, z: float, yaw: float, size: float, height: float, cha
 	buf[o] = b.x.x; buf[o + 1] = b.y.x; buf[o + 2] = b.z.x; buf[o + 3] = x
 	buf[o + 4] = b.x.y; buf[o + 5] = b.y.y; buf[o + 6] = b.z.y; buf[o + 7] = map.height_at(x, z) + rest * 0.85 + 0.15 * size
 	buf[o + 8] = b.x.z; buf[o + 9] = b.y.z; buf[o + 10] = b.z.z; buf[o + 11] = z
-	buf[o + 12] = 0.0; buf[o + 13] = 1.0; buf[o + 14] = 1.0 if charred else 0.0; buf[o + 15] = 0.0
+	buf[o + 12] = 0.0; buf[o + 13] = 2.0 if charred else 1.0; buf[o + 14] = 0.0; buf[o + 15] = 0.0
 	_dirty[t] = 1
 
 

@@ -8,19 +8,27 @@ extends CanvasLayer
 signal tool_changed(id: String)
 signal inspector_action(action: String)
 
-const TOOLS := ["wall", "blast_door", "floodlight", "harvester_bay", "autocannon", "flamethrower", "railgun", "shock_grid", "mortar", "seismic_spike"]
+const CATEGORIES := {
+	"DEFENCE": ["wall", "blast_door", "floodlight", "guard_post"],
+	"TURRETS": ["autocannon", "flamethrower", "railgun", "shock_grid", "mortar", "seismic_spike"],
+	"COLONY": ["harvester_bay", "mining_rig", "hab_module", "barracks", "bio_refinery", "fabricator", "armory", "medbay"],
+}
+const TOOLS := ["wall", "blast_door", "floodlight", "guard_post", "autocannon", "flamethrower", "railgun", "shock_grid", "mortar", "seismic_spike",
+	"harvester_bay", "mining_rig", "hab_module", "barracks", "bio_refinery", "fabricator", "armory", "medbay"]
 
 var selected := ""
+var category := "DEFENCE"
 var economy: Economy
+var structures: Structures
+var _cat_buttons := {}
 var _buttons: Array[Button] = []
 var _info: RichTextLabel
 var _info_panel: PanelContainer
 var _intel: PanelContainer
 var _insp_panel: PanelContainer
 var _insp_text: RichTextLabel
-var _btn_upgrade: Button
-var _btn_repair: Button
-var _btn_sell: Button
+var _insp_row: HBoxContainer
+var _insp_sig := ""
 var _toast: Label
 var _toast_t := 0.0
 
@@ -32,34 +40,58 @@ func _ready() -> void:
 	root.theme = UiStyle.theme()
 	add_child(root)
 
+	var col := VBoxContainer.new()
+	col.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	col.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	col.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	col.position.y = -8
+	col.add_theme_constant_override("separation", 2)
+	root.add_child(col)
+	var tabs := HBoxContainer.new()
+	tabs.alignment = BoxContainer.ALIGNMENT_CENTER
+	tabs.add_theme_constant_override("separation", 4)
+	col.add_child(tabs)
+	for cat: String in CATEGORIES:
+		var tb := Button.new()
+		tb.focus_mode = Control.FOCUS_NONE
+		tb.toggle_mode = true
+		tb.text = cat
+		tb.custom_minimum_size = Vector2(120, 28)
+		tb.add_theme_font_size_override("font_size", 14)
+		tb.pressed.connect(set_category.bind(cat))
+		tabs.add_child(tb)
+		_cat_buttons[cat] = tb
+	var hint := Label.new()
+	hint.text = "  Tab: next category"
+	hint.add_theme_font_size_override("font_size", 13)
+	hint.add_theme_color_override("font_color", Color(0.7, 0.75, 0.8))
+	tabs.add_child(hint)
 	var bar := HBoxContainer.new()
-	bar.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	bar.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	bar.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	bar.position.y = -10
+	bar.alignment = BoxContainer.ALIGNMENT_CENTER
 	bar.add_theme_constant_override("separation", 4)
-	root.add_child(bar)
+	col.add_child(bar)
 	for k in TOOLS.size():
 		var id: String = TOOLS[k]
 		var d := _def(id)
 		var b := Button.new()
 		b.focus_mode = Control.FOCUS_NONE
 		b.toggle_mode = true
-		b.custom_minimum_size = Vector2(110, 62)
-		b.text = "%d %s\n%d" % [(k + 1) % 10, d.get("name", id), GameConfig.build_cost(id)]
+		b.custom_minimum_size = Vector2(116, 60)
 		b.autowrap_mode = TextServer.AUTOWRAP_WORD
 		b.add_theme_font_size_override("font_size", 14)
 		b.tooltip_text = tool_text(id, false)
-		var col := Color(0.5, 0.56, 0.62)
+		var accent := Color(0.6, 0.62, 0.66)
 		if d.has("damage_type"):
-			col = GameConfig.damage_color(GameConfig.damage_index(d.damage_type))
-		elif id == "blast_door":
-			col = Color(0.85, 0.7, 0.2)
+			accent = GameConfig.damage_color(GameConfig.damage_index(d.damage_type))
+		elif id in ["blast_door", "guard_post"]:
+			accent = Color(0.95, 0.78, 0.1)
 		elif id == "floodlight":
-			col = Color(1.0, 0.95, 0.75)
-		elif id == "harvester_bay":
-			col = Color(0.4, 1.0, 0.35)
-		var sb := UiStyle.panel(0.85, col)
+			accent = Color(1.0, 0.95, 0.75)
+		elif id in ["harvester_bay", "bio_refinery"]:
+			accent = Color(0.4, 1.0, 0.35)
+		elif id == "mining_rig":
+			accent = Color(0.2, 0.95, 0.85)
+		var sb := UiStyle.panel(0.85, accent)
 		sb.border_width_bottom = 4
 		sb.border_width_left = 0
 		b.add_theme_stylebox_override("normal", sb)
@@ -67,19 +99,20 @@ func _ready() -> void:
 		sbh.bg_color = Color(0.1, 0.13, 0.16, 0.95)
 		b.add_theme_stylebox_override("hover", sbh)
 		var sbp := sb.duplicate()
-		sbp.bg_color = col.darkened(0.55)
+		sbp.bg_color = accent.darkened(0.55)
 		sbp.border_width_top = 2
 		b.add_theme_stylebox_override("pressed", sbp)
 		b.add_theme_stylebox_override("hover_pressed", sbp)
 		b.pressed.connect(select.bind(id))
 		bar.add_child(b)
 		_buttons.append(b)
+	set_category("DEFENCE")
 
 	_info_panel = PanelContainer.new()
 	_info_panel.add_theme_stylebox_override("panel", UiStyle.panel())
 	_info_panel.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
 	_info_panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	_info_panel.position = Vector2(12, -86)
+	_info_panel.position = Vector2(12, -110)
 	root.add_child(_info_panel)
 	_info = RichTextLabel.new()
 	_info.bbcode_enabled = true
@@ -94,7 +127,7 @@ func _ready() -> void:
 	_toast = Label.new()
 	_toast.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
 	_toast.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	_toast.position.y = -110
+	_toast.position.y = -140
 	_toast.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_toast.add_theme_color_override("font_color", Color(1.0, 0.55, 0.4))
 	_toast.add_theme_color_override("font_outline_color", Color.BLACK)
@@ -112,7 +145,7 @@ func _build_inspector(root: Control) -> void:
 	_insp_panel.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
 	_insp_panel.grow_horizontal = Control.GROW_DIRECTION_BEGIN
 	_insp_panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	_insp_panel.position = Vector2(-12, -86)
+	_insp_panel.position = Vector2(-12, -110)
 	root.add_child(_insp_panel)
 	var v := VBoxContainer.new()
 	_insp_panel.add_child(v)
@@ -122,17 +155,16 @@ func _build_inspector(root: Control) -> void:
 	_insp_text.custom_minimum_size = Vector2(360, 0)
 	_insp_text.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	v.add_child(_insp_text)
-	var h := HBoxContainer.new()
-	v.add_child(h)
-	_btn_upgrade = _insp_button(h, "upgrade")
-	_btn_repair = _insp_button(h, "repair")
-	_btn_sell = _insp_button(h, "sell")
+	_insp_row = HBoxContainer.new()
+	v.add_child(_insp_row)
 	_insp_panel.visible = false
 
 
-func _insp_button(parent: Control, action: String) -> Button:
+func _insp_button(parent: Control, label: String, action: String, enabled: bool) -> Button:
 	var b := Button.new()
 	b.focus_mode = Control.FOCUS_NONE
+	b.text = label
+	b.disabled = not enabled
 	b.add_theme_font_size_override("font_size", 15)
 	b.pressed.connect(func(): inspector_action.emit(action))
 	parent.add_child(b)
@@ -180,6 +212,8 @@ func tool_text(id: String, bbcode := true) -> String:
 		if id == "harvester_bay":
 			var hv := GameConfig.econ("harvester")
 			lines.append("Drones %s   range %s m by tier" % ["/".join(PackedStringArray(hv.get("drones_per_tier", []).map(func(x): return str(int(x))))), "/".join(PackedStringArray(hv.get("range_per_tier", []).map(func(x): return str(int(x)))))])
+	if d.has("build_time"):
+		lines.append("Workers build it: %.0f work-seconds" % float(d.build_time))
 	lines.append("LMB / (A) build    RMB / (B) sell    Esc deselect")
 	return "\n".join(lines)
 
@@ -194,14 +228,39 @@ func select(id: String) -> void:
 	tool_changed.emit(selected)
 
 
+## Number keys pick within the shown category.
 func select_index(k: int) -> void:
-	if k >= 0 and k < TOOLS.size():
-		select(TOOLS[k])
+	var list: Array = CATEGORIES[category]
+	if k >= 0 and k < list.size():
+		select(list[k])
 
 
+func set_category(cat: String) -> void:
+	category = cat
+	var list: Array = CATEGORIES[cat]
+	for k in TOOLS.size():
+		_buttons[k].visible = TOOLS[k] in list
+		_buttons[k].text = "%d %s\n%d" % [list.find(TOOLS[k]) + 1, _def(TOOLS[k]).get("name", TOOLS[k]), _cost(TOOLS[k])]
+	for c: String in _cat_buttons:
+		_cat_buttons[c].set_pressed_no_signal(c == cat)
+
+
+func next_category() -> void:
+	var keys := CATEGORIES.keys()
+	set_category(keys[(keys.find(category) + 1) % keys.size()])
+
+
+func _cost(id: String) -> int:
+	return structures.cost_of(id) if structures else GameConfig.build_cost(id)
+
+
+## Gamepad LB/RB: step through every tool (switching category as needed).
 func cycle(dir: int) -> void:
 	var k := TOOLS.find(selected)
 	k = wrapi(k + dir, 0, TOOLS.size()) if k >= 0 else (0 if dir > 0 else TOOLS.size() - 1)
+	for cat: String in CATEGORIES:
+		if TOOLS[k] in CATEGORIES[cat] and cat != category:
+			set_category(cat)
 	select(TOOLS[k])
 
 
@@ -213,9 +272,12 @@ func toggle_intel() -> void:
 func refresh_affordability() -> void:
 	if economy == null:
 		return
+	var list: Array = CATEGORIES[category]
 	for k in TOOLS.size():
-		var ok := economy.can_afford(GameConfig.build_cost(TOOLS[k]))
+		var ok := economy.can_afford(_cost(TOOLS[k]))
 		_buttons[k].modulate = Color.WHITE if ok else Color(1, 1, 1, 0.45)
+		if TOOLS[k] in list:
+			_buttons[k].text = "%d %s\n%d" % [list.find(TOOLS[k]) + 1, _def(TOOLS[k]).get("name", TOOLS[k]), _cost(TOOLS[k])]
 
 
 func toast(text: String) -> void:
@@ -229,18 +291,23 @@ func _process(delta: float) -> void:
 		_toast.modulate.a = clampf(_toast_t, 0.0, 1.0)
 
 
-## Inspector for a selected structure. info = {} hides it.
+## Inspector for a selection. info = {} hides it. info.buttons:
+## [{label, action, enabled}] (rebuilt only when they change).
 func show_inspector(info: Dictionary) -> void:
 	_insp_panel.visible = not info.is_empty()
 	if info.is_empty():
+		_insp_sig = ""
 		return
 	_insp_text.text = info.text
-	_btn_upgrade.text = info.upgrade_label
-	_btn_upgrade.disabled = not info.can_upgrade
-	_btn_upgrade.visible = info.upgrade_label != ""
-	_btn_repair.text = info.repair_label
-	_btn_repair.disabled = not info.can_repair
-	_btn_sell.text = info.sell_label
+	var buttons: Array = info.get("buttons", [])
+	var sig := str(buttons)
+	if sig == _insp_sig:
+		return
+	_insp_sig = sig
+	for ch in _insp_row.get_children():
+		ch.queue_free()
+	for b: Dictionary in buttons:
+		_insp_button(_insp_row, b.label, b.action, b.get("enabled", true))
 
 
 func _build_intel() -> PanelContainer:

@@ -156,3 +156,90 @@ static func plateau_prop(kind_id: int) -> Node3D:
 	var n := Node3D.new()
 	n.add_child(mi)
 	return n
+
+
+# ------------------------------------------------------------ colony buildings
+
+static func _node_from(a: MeshAcc) -> MeshInstance3D:
+	var mi := MeshInstance3D.new()
+	mi.mesh = a.commit(true)
+	mi.material_override = station_material()
+	return mi
+
+
+## Construction scaffold shown while workers build a structure.
+static func build_scaffold(root: Node3D, height: float) -> void:
+	var a := MeshAcc.new()
+	var hgt := maxf(1.0, height)
+	for x in [-0.42, 0.42]:
+		for z in [-0.42, 0.42]:
+			a.add(MeshAcc.box(0.06, hgt, 0.06), MeshAcc.xf(Vector3(x, hgt * 0.5, z)), GREY)
+	for y in [0.3, hgt * 0.5, hgt - 0.05]:
+		a.add(MeshAcc.box(0.9, 0.05, 0.05), MeshAcc.xf(Vector3(0, y, -0.42)), ORANGE)
+		a.add(MeshAcc.box(0.9, 0.05, 0.05), MeshAcc.xf(Vector3(0, y, 0.42)), ORANGE)
+		a.add(MeshAcc.box(0.05, 0.05, 0.9), MeshAcc.xf(Vector3(-0.42, y, 0)), GREY)
+		a.add(MeshAcc.box(0.05, 0.05, 0.9), MeshAcc.xf(Vector3(0.42, y, 0)), GREY)
+	a.add(MeshAcc.box(0.8, 0.12, 0.8), MeshAcc.xf(Vector3(0, 0.06, 0)), BAGS)
+	a.add(MeshAcc.box(0.08, 0.08, 0.08), MeshAcc.xf(Vector3(0.42, hgt + 0.05, 0.42)), AMBER)
+	root.add_child(_node_from(a))
+
+
+static func build_building(root: Node3D, id: String) -> void:
+	var a := MeshAcc.new()
+	match id:
+		"guard_post":
+			for x in [-0.38, 0.38]:
+				for z in [-0.38, 0.38]:
+					a.add(MeshAcc.box(0.1, 2.2, 0.1), MeshAcc.xf(Vector3(x, 1.1, z)), GREY)
+			a.add(MeshAcc.box(0.98, 0.14, 0.98), MeshAcc.xf(Vector3(0, 2.2, 0)), DARK)
+			for k in 4:
+				var r := Basis(Vector3.UP, k * PI * 0.5)
+				a.add(MeshAcc.box(0.98, 0.35, 0.06), Transform3D(r, r * Vector3(0, 2.45, 0.46)), WHITE)
+				a.add(MeshAcc.box(0.98, 0.06, 0.08), Transform3D(r, r * Vector3(0, 2.62, 0.46)), ORANGE)
+			a.add(MeshAcc.box(0.5, 0.5, 0.5), MeshAcc.xf(Vector3(0, 0.25, 0)), BAGS)
+			for k in 6:
+				a.add(MeshAcc.box(0.3, 0.03, 0.04), MeshAcc.xf(Vector3(0.43, 0.3 + k * 0.32, 0.52)), GREY)
+		"mining_rig":
+			a.add(MeshAcc.box(0.95, 0.3, 0.95), MeshAcc.xf(Vector3(0, 0.15, 0)), DARK)
+			for k in 3:
+				var ang := k * TAU / 3.0
+				a.add(MeshAcc.cyl(0.04, 1.0, -1.0, 4), MeshAcc.limb(Vector3(cos(ang) * 0.4, 0.3, sin(ang) * 0.4), Vector3(0, 2.4, 0)), Color(0.8, 0.6, 0.15))
+			a.add(MeshAcc.cyl(0.12, 2.2, -1.0, 6), MeshAcc.xf(Vector3(0, 1.1, 0)), GREY)
+			a.add(MeshAcc.box(0.5, 0.4, 0.4), MeshAcc.xf(Vector3(0.3, 0.5, -0.3)), ORANGE)
+			a.add(MeshAcc.cyl(0.14, 0.3, -1.0, 6), MeshAcc.xf(Vector3(0, 2.4, 0)), DARK)
+			a.add(MeshAcc.ball(0.08, 6, 3), MeshAcc.xf(Vector3(0, 2.6, 0)), CYAN)
+		"hab_module":
+			a.add(MeshAcc.box(0.9, 0.25, 0.9), MeshAcc.xf(Vector3(0, 0.12, 0)), GREY)
+			a.add(MeshAcc.capsule(0.42, 1.35, 12, 3), MeshAcc.xf(Vector3(0, 0.7, 0), Vector3(0, 0, 90)), WHITE)
+			a.add(MeshAcc.box(0.9, 0.1, 0.86), MeshAcc.xf(Vector3(0, 0.75, 0)), CYAN)
+			a.add(MeshAcc.box(0.24, 0.3, 0.1), MeshAcc.xf(Vector3(0, 0.55, 0.45)), ORANGE)
+		"barracks":
+			a.add(MeshAcc.box(0.96, 1.4, 0.96), MeshAcc.xf(Vector3(0, 0.7, 0)), WHITE)
+			a.add(MeshAcc.box(0.98, 0.18, 0.98), MeshAcc.xf(Vector3(0, 1.45, 0)), Color(0.25, 0.35, 0.55))
+			a.add(MeshAcc.box(0.36, 0.7, 0.06), MeshAcc.xf(Vector3(0, 0.35, 0.49)), DARK)
+			a.add(MeshAcc.box(0.96, 0.08, 0.98), MeshAcc.xf(Vector3(0, 1.1, 0)), ORANGE)
+			a.add(MeshAcc.cyl(0.03, 1.2, -1.0, 4), MeshAcc.xf(Vector3(0.38, 2.1, -0.38)), GREY)
+			a.add(MeshAcc.box(0.35, 0.22, 0.02), MeshAcc.xf(Vector3(0.56, 2.55, -0.38)), Color(0.25, 0.45, 0.85))
+		"bio_refinery":
+			a.add(MeshAcc.box(0.95, 0.2, 0.95), MeshAcc.xf(Vector3(0, 0.1, 0)), GREY)
+			for x in [-0.22, 0.22]:
+				a.add(MeshAcc.cyl(0.2, 1.4, -1.0, 10), MeshAcc.xf(Vector3(x, 0.9, -0.1)), WHITE)
+				a.add(MeshAcc.cyl(0.16, 0.9, -1.0, 10), MeshAcc.xf(Vector3(x, 0.9, -0.1)), Color(0.4, 1.0, 0.3, 0.0))
+			a.add(MeshAcc.box(0.8, 0.35, 0.3), MeshAcc.xf(Vector3(0, 0.4, 0.3)), ORANGE)
+		"fabricator":
+			a.add(MeshAcc.box(0.96, 1.1, 0.96), MeshAcc.xf(Vector3(0, 0.55, 0)), WHITE)
+			a.add(MeshAcc.box(0.6, 0.4, 0.05), MeshAcc.xf(Vector3(0, 0.6, 0.49)), Color(0.3, 0.6, 1.0, 0.0))
+			a.add(MeshAcc.box(0.12, 0.7, 0.12), MeshAcc.xf(Vector3(0.3, 1.45, 0.1), Vector3(0, 0, 30)), GREY)
+			a.add(MeshAcc.box(0.5, 0.1, 0.1), MeshAcc.xf(Vector3(0.05, 1.75, 0.1)), GREY)
+			a.add(MeshAcc.box(0.96, 0.08, 0.98), MeshAcc.xf(Vector3(0, 1.1, 0)), ORANGE)
+		"armory":
+			a.add(MeshAcc.box(0.96, 1.0, 0.96), MeshAcc.xf(Vector3(0, 0.5, 0)), Color(0.4, 0.42, 0.42))
+			a.add(MeshAcc.box(1.0, 0.25, 1.0), MeshAcc.xf(Vector3(0, 1.1, 0)), DARK)
+			a.add(MeshAcc.box(0.96, 0.1, 0.98), MeshAcc.xf(Vector3(0, 0.75, 0)), Color(0.8, 0.12, 0.08))
+			a.add(MeshAcc.box(0.4, 0.5, 0.06), MeshAcc.xf(Vector3(0, 0.3, 0.49)), Color(0.8, 0.65, 0.15))
+		"medbay":
+			a.add(MeshAcc.box(0.9, 0.2, 0.9), MeshAcc.xf(Vector3(0, 0.1, 0)), GREY)
+			a.add(MeshAcc.dome(0.48, 1.0, 12, 3), MeshAcc.xf(Vector3(0, 0.2, 0)), WHITE)
+			a.add(MeshAcc.box(0.5, 0.14, 0.14), MeshAcc.xf(Vector3(0, 1.25, 0)), Color(0.2, 0.9, 0.4, 0.0))
+			a.add(MeshAcc.box(0.14, 0.14, 0.5), MeshAcc.xf(Vector3(0, 1.25, 0)), Color(0.2, 0.9, 0.4, 0.0))
+	root.add_child(_node_from(a))

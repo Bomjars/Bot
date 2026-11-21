@@ -1,5 +1,5 @@
 {
-	"_comment": "Non-turret structures. nav_cost: how many metres of detour the swarm will accept before bashing through (x10 internally). climbable when the corpse pile next to it reaches climb_height.",
+	"_comment": "Structures. nav_cost: metres of detour the swarm accepts before bashing through (x10 internally). build_time: worker-seconds to construct (more workers = faster). staff: workers needed for it to function. category: build bar tab.",
 	"climb_height": 1.6,
 	"max_pile_height": 2.6,
 	"turret_nav_cost": 28,
@@ -11,7 +11,9 @@
 			"role": "Cheap barrier. The swarm paths around it, or bashes through.",
 			"hp": 600,
 			"height": 2.2,
-			"nav_cost": 24
+			"nav_cost": 24,
+			"build_time": 1.5,
+			"category": "defence"
 		},
 		{
 			"id": "blast_door",
@@ -19,7 +21,9 @@
 			"role": "Heavy armoured door. Maulers deal x4 damage to doors.",
 			"hp": 1500,
 			"height": 2.4,
-			"nav_cost": 24
+			"nav_cost": 24,
+			"build_time": 3,
+			"category": "defence"
 		},
 		{
 			"id": "floodlight",
@@ -28,7 +32,9 @@
 			"hp": 250,
 			"height": 3.4,
 			"nav_cost": 20,
-			"light_radius": 11.0
+			"light_radius": 11.0,
+			"build_time": 3,
+			"category": "defence"
 		},
 		{
 			"id": "harvester_bay",
@@ -36,11 +42,110 @@
 			"role": "Launches harvester drones that collect Biomass from corpses in range. Drones also clear corpse piles off your walls.",
 			"hp": 700,
 			"height": 1.8,
-			"nav_cost": 28
+			"nav_cost": 28,
+			"build_time": 8,
+			"category": "colony"
+		},
+		{
+			"id": "guard_post",
+			"name": "Guard Post",
+			"category": "defence",
+			"role": "Raised firing platform. Up to 2 soldiers garrison it and shoot with +4 m range.",
+			"hp": 500,
+			"height": 2.6,
+			"nav_cost": 28,
+			"build_time": 6,
+			"garrison": 2,
+			"range_bonus": 4.0
+		},
+		{
+			"id": "mining_rig",
+			"name": "Mining Rig",
+			"category": "colony",
+			"role": "Build on a glowing Xenite deposit. A worker mines Xenite; the company buys it after every wave.",
+			"hp": 450,
+			"height": 2.2,
+			"nav_cost": 28,
+			"build_time": 10,
+			"staff": 1,
+			"needs_deposit": true,
+			"xenite_per_minute": 14
+		},
+		{
+			"id": "hab_module",
+			"name": "Hab Module",
+			"category": "colony",
+			"role": "Living quarters: +4 colonist capacity.",
+			"hp": 500,
+			"height": 1.8,
+			"nav_cost": 28,
+			"build_time": 8,
+			"pop_cap": 4
+		},
+		{
+			"id": "barracks",
+			"name": "Barracks",
+			"category": "colony",
+			"role": "Trains soldiers (select it to recruit).",
+			"hp": 650,
+			"height": 2.0,
+			"nav_cost": 28,
+			"build_time": 10
+		},
+		{
+			"id": "bio_refinery",
+			"name": "Bio-Refinery",
+			"category": "colony",
+			"role": "+25% Biomass from every drone delivery (needs 1 worker; max 2 count).",
+			"hp": 450,
+			"height": 2.2,
+			"nav_cost": 28,
+			"build_time": 10,
+			"staff": 1,
+			"biomass_bonus": 0.25,
+			"max_effect": 2
+		},
+		{
+			"id": "fabricator",
+			"name": "Fabricator",
+			"category": "colony",
+			"role": "-15% build and upgrade costs (needs 1 worker; max 2 count).",
+			"hp": 450,
+			"height": 2.0,
+			"nav_cost": 28,
+			"build_time": 12,
+			"staff": 1,
+			"cost_reduction": 0.15,
+			"max_effect": 2
+		},
+		{
+			"id": "armory",
+			"name": "Armory",
+			"category": "colony",
+			"role": "Unlocks tier III turret upgrades and +25% soldier damage (needs 1 worker).",
+			"hp": 550,
+			"height": 2.0,
+			"nav_cost": 28,
+			"build_time": 12,
+			"staff": 1,
+			"soldier_damage_bonus": 0.25
+		},
+		{
+			"id": "medbay",
+			"name": "Medbay",
+			"category": "colony",
+			"role": "Wounded colonists recover twice as fast; soldiers on base heal (needs 1 worker).",
+			"hp": 450,
+			"height": 1.8,
+			"nav_cost": 28,
+			"build_time": 10,
+			"staff": 1,
+			"recovery_mult": 0.5
 		}
 	],
 	"core": {
-		"name": "Outpost Core",
+		"name": "Command Hab",
 		"hp": 6000
-	}
+	},
+	"construction_site_hp_ratio": 0.3
 }

@@ -8,7 +8,7 @@
 	},
 	"swarm": {
 		"max_spawn_per_frame": 600,
-		"separation": 2.2,
+		"separation": 2.6,
 		"intra_cell_spread": 2.5,
 		"density_cell_size": 0.5,
 		"threaded": true,

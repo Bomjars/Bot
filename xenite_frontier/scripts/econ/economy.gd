@@ -15,6 +15,9 @@ var refund_ratio := 0.5
 var repair_per_hp := 0.04
 
 # run stats
+var bounties := 0.0
+var ore_sales := 0.0
+var wages_paid := 0.0
 var collected := 0.0
 var spent := 0.0
 var refunded := 0.0
@@ -30,6 +33,9 @@ func setup() -> void:
 
 func reset() -> void:
 	biomass = float(GameConfig.econ("biomass").get("starting", 300))
+	bounties = 0.0
+	ore_sales = 0.0
+	wages_paid = 0.0
 	collected = 0.0
 	spent = 0.0
 	refunded = 0.0
@@ -57,6 +63,26 @@ func refund(amount: float) -> void:
 		return
 	biomass += amount
 	refunded += amount
+	changed.emit(biomass)
+
+
+## Company payments (bounties, ore sales, early-call bonus).
+func credit(amount: float, reason: String) -> void:
+	if amount <= 0.0:
+		return
+	biomass += amount
+	if reason == "ore sale":
+		ore_sales += amount
+	else:
+		bounties += amount
+	changed.emit(biomass)
+
+
+## Wages and other running costs (never below zero).
+func pay(amount: float, _reason: String) -> void:
+	var a := minf(amount, biomass)
+	biomass -= a
+	wages_paid += a
 	changed.emit(biomass)
 
 

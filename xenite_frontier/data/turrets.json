@@ -36,7 +36,9 @@
 			"range": 11.0,
 			"fire_rate": 6.0,
 			"damage": 9.0,
-			"dodgeable": true
+			"dodgeable": true,
+			"build_time": 6,
+			"category": "turrets"
 		},
 		{
 			"id": "flamethrower",
@@ -49,7 +51,9 @@
 			"damage": 2.5,
 			"cone_deg": 45.0,
 			"burn_dps": 7.0,
-			"burn_time": 2.5
+			"burn_time": 2.5,
+			"build_time": 6,
+			"category": "turrets"
 		},
 		{
 			"id": "railgun",
@@ -62,7 +66,9 @@
 			"damage": 150.0,
 			"pierce": 5,
 			"width": 0.8,
-			"dodgeable": true
+			"dodgeable": true,
+			"build_time": 9,
+			"category": "turrets"
 		},
 		{
 			"id": "shock_grid",
@@ -74,7 +80,9 @@
 			"fire_rate": 1.4,
 			"damage": 16.0,
 			"max_targets": 14,
-			"slow_time": 1.6
+			"slow_time": 1.6,
+			"build_time": 7,
+			"category": "turrets"
 		},
 		{
 			"id": "mortar",
@@ -87,7 +95,9 @@
 			"fire_rate": 0.45,
 			"damage": 70.0,
 			"aoe": 3.2,
-			"shell_time": 1.3
+			"shell_time": 1.3,
+			"build_time": 8,
+			"category": "turrets"
 		},
 		{
 			"id": "seismic_spike",
@@ -98,7 +108,9 @@
 			"range": 7.0,
 			"fire_rate": 0.4,
 			"damage": 40.0,
-			"surface_time": 3.5
+			"surface_time": 3.5,
+			"build_time": 7,
+			"category": "turrets"
 		}
 	],
 	"tiers": [

@@ -25,6 +25,7 @@ var rng := 0.0
 var crew_efficiency := 1.0   # raised by tiers: crewed fire-rate multiplier
 var crewed := true           # set by ColonistSystem each frame
 var uncrewed_rate := 0.4     # colonists.json: uncrewed turrets fire at 40%
+var morale := 1.0            # unpaid wages -> 0.8
 var _slam := 0.0
 
 
@@ -55,7 +56,7 @@ func set_tier(t: int) -> void:
 
 
 func fire_rate() -> float:
-	return float(def.fire_rate) * (crew_efficiency if crewed else uncrewed_rate)
+	return float(def.fire_rate) * (crew_efficiency * morale if crewed else uncrewed_rate)
 
 
 func range_m() -> float:

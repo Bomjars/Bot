@@ -5,7 +5,7 @@ extends RefCounted
 ## alien's index is only valid within a frame. Handles = (type << 17) | index.
 ## The render buffer is written in the same pass as the simulation.
 
-const STRIDE := 16  # 12 floats transform + 4 floats custom (flash, dead, charred, -)
+const STRIDE := 16  # 12 floats transform + 4 custom: flash, dead (1) / charred (2), stride phase, state
 
 var type_id := 0
 var def: Dictionary
@@ -42,6 +42,8 @@ var tgt := PackedInt32Array()      # spitters: structure cell being shelled
 var carry := PackedInt32Array()    # colonist id being dragged off, -1 none
 var feed := PackedFloat32Array()   # seconds left eating a corpse
 var stuck := PackedFloat32Array()  # seconds not moving without a reason (diagnostics / unstick)
+var lane := PackedFloat32Array()   # persistent sideways offset in the flow (-1..1): packs keep a lane
+var gait := PackedFloat32Array()   # stride phase, advanced by distance actually travelled
 var bucket := PackedInt32Array()   # spatial grid bucket (written by sim)
 var lnext := PackedInt32Array()    # spatial grid linked list
 var buf := PackedFloat32Array()
@@ -87,7 +89,7 @@ func _init(id: int, d: Dictionary, mesh: Mesh, material: Material) -> void:
 
 func _grow(new_cap: int) -> void:
 	capacity = new_cap
-	for a: PackedFloat32Array in [px, pz, vx, vz, hp, speed, size, timer, slow, burn, aux, feed, stuck]:
+	for a: PackedFloat32Array in [px, pz, vx, vz, hp, speed, size, timer, slow, burn, aux, feed, stuck, lane, gait]:
 		a.resize(capacity)
 	for a: PackedInt32Array in [tgt, bucket, lnext, carry]:
 		a.resize(capacity)
@@ -96,7 +98,7 @@ func _grow(new_cap: int) -> void:
 	multimesh.visible_instance_count = count
 
 
-func spawn(x: float, z: float, rng: RandomNumberGenerator) -> int:
+func spawn(x: float, z: float, rng: RandomNumberGenerator, hp_mult := 1.0, lane_v := 9.0) -> int:
 	if count >= capacity:
 		_grow(int(capacity * 1.5) + 64)
 	var i := count
@@ -105,9 +107,9 @@ func spawn(x: float, z: float, rng: RandomNumberGenerator) -> int:
 	pz[i] = z
 	vx[i] = 0.0
 	vz[i] = 0.0
-	hp[i] = float(def.hp)
-	speed[i] = float(def.speed) * rng.randf_range(0.85, 1.15)
-	var s := float(def.size) * rng.randf_range(0.9, 1.1)
+	hp[i] = float(def.hp) * hp_mult
+	speed[i] = float(def.speed) * rng.randf_range(0.78, 1.22)
+	var s := float(def.size) * rng.randf_range(0.88, 1.12)
 	size[i] = s
 	timer[i] = rng.randf() * maxf(brood_interval, ranged_cd)
 	slow[i] = 0.0
@@ -117,6 +119,8 @@ func spawn(x: float, z: float, rng: RandomNumberGenerator) -> int:
 	carry[i] = -1
 	feed[i] = 0.0
 	stuck[i] = 0.0
+	lane[i] = lane_v if lane_v <= 1.0 else rng.randf_range(-1.0, 1.0)
+	gait[i] = rng.randf() * TAU
 	bucket[i] = 0
 	var o := i * STRIDE
 	buf[o] = s; buf[o + 1] = 0.0; buf[o + 2] = 0.0; buf[o + 3] = x
@@ -135,6 +139,7 @@ func remove(i: int) -> void:
 		timer[i] = timer[last]; slow[i] = slow[last]; burn[i] = burn[last]
 		aux[i] = aux[last]; tgt[i] = tgt[last]; bucket[i] = bucket[last]
 		carry[i] = carry[last]; feed[i] = feed[last]; stuck[i] = stuck[last]
+		lane[i] = lane[last]; gait[i] = gait[last]
 		var o := i * STRIDE
 		var ol := last * STRIDE
 		for k in STRIDE:

@@ -12,6 +12,7 @@ signal core_destroyed
 signal built(cell: int, id: String)
 signal removed(cell: int, id: String)
 signal upgraded(cell: int, id: String, tier: int)
+signal site_placed(cell: int, id: String)
 
 var map: OutpostMap
 var fx: Fx
@@ -21,6 +22,9 @@ var nodes := {}              # cell -> Node3D (turrets, bays, floodlights)
 var ids := {}                # cell -> id
 var tiers := {}              # cell -> tier (1-based)
 var invested := {}           # cell -> Biomass spent on it (refund basis)
+var sites := {}              # cell -> {work, need}: under construction (workers build it)
+var staff := {}              # cell -> colonist id working there (rigs, refinery, ...)
+var instant_build := false   # tests / free build: skip construction
 var defs := {}               # id -> def
 var core_hp := 6000.0
 var core_max := 6000.0
@@ -92,6 +96,8 @@ func reset() -> void:
 		if map.kind[c] == OutpostMap.Kind.STRUCT:
 			map.clear_structure(c)
 	map.lit.fill(0)
+	sites.clear()
+	staff.clear()
 	for entry in map.initial_structures:
 		if place(entry[0], entry[1], false):
 			invested[entry[0]] = float(GameConfig.build_cost(entry[1]))
@@ -110,13 +116,136 @@ func try_build(c: int, id: String) -> String:
 		return "Unknown structure"
 	if not map.can_build(c):
 		return "Can't build there"
-	var cost := GameConfig.build_cost(id)
+	var d: Dictionary = defs[id]
+	if d.get("needs_deposit", false) and not map.deposit[c]:
+		return "Build Mining Rigs on a glowing Xenite deposit"
+	var cost := cost_of(id)
 	if not economy.can_afford(cost):
 		return "Need %d Biomass" % cost
 	economy.spend(cost)
-	place(c, id)
+	if instant_build or economy.free_build:
+		place(c, id)
+	else:
+		_place_site(c, id)
 	invested[c] = float(cost)
 	return ""
+
+
+## Biomass cost after Fabricator discounts.
+func cost_of(id: String) -> int:
+	return int(round(GameConfig.build_cost(id) * cost_mult()))
+
+
+func cost_mult() -> float:
+	var n := mini(count_active("fabricator"), int(defs.get("fabricator", {}).get("max_effect", 2)))
+	return 1.0 - float(defs.get("fabricator", {}).get("cost_reduction", 0.15)) * n
+
+
+## A structure workers still have to build: solid (it blocks paths and the
+## swarm can smash it) but fragile, with a scaffold instead of its model.
+func _place_site(c: int, id: String) -> void:
+	var d: Dictionary = defs[id]
+	var hp := float(d.hp) * float(GameConfig.structures.get("construction_site_hp_ratio", 0.3))
+	var st := _stype_of(id)
+	var hgt := _turret_height if is_turret(id) else float(d.height)
+	var nav := _turret_nav if is_turret(id) else int(d.nav_cost)
+	map.put_structure(c, st, hp, hgt, nav)
+	ids[c] = id
+	tiers[c] = 1
+	invested[c] = 0.0
+	sites[c] = {"work": 0.0, "need": float(d.get("build_time", 5.0))}
+	var n := Node3D.new()
+	n.name = "site_%d" % c
+	n.position = map.cell_ground(c)
+	add_child(n)
+	StationModels.build_scaffold(n, hgt)
+	nodes[c] = n
+	_visual_dirty = true
+	site_placed.emit(c, id)
+	nav_changed.emit()
+
+
+func is_site(c: int) -> bool:
+	return sites.has(c)
+
+
+## Construction progress 0..1.
+func site_progress(c: int) -> float:
+	if not sites.has(c):
+		return 1.0
+	return clampf(sites[c].work / maxf(0.01, sites[c].need), 0.0, 1.0)
+
+
+## Workers add build work; returns true when the structure is finished.
+func work_on(c: int, amount: float) -> bool:
+	if not sites.has(c):
+		return true
+	sites[c].work += amount
+	if sites[c].work >= sites[c].need:
+		_complete(c)
+		return true
+	return false
+
+
+func _complete(c: int) -> void:
+	var id: String = ids[c]
+	var ratio := map.shp[c] / maxf(1.0, map.smax[c])
+	var paid: float = invested.get(c, 0.0)
+	sites.erase(c)
+	if nodes.has(c):
+		nodes[c].queue_free()
+		nodes.erase(c)
+	ids.erase(c)
+	map.clear_structure(c)
+	place(c, id, false)
+	invested[c] = paid
+	map.shp[c] = map.smax[c] * ratio  # keeps damage the site took
+	fx.burst(map.cell_ground(c) + Vector3(0, 1.0, 0), Color(0.5, 0.9, 1.0, 1.0), 10, 3.0, 0.08, 0.5, 0.0)
+
+
+func _stype_of(id: String) -> int:
+	if is_turret(id):
+		return OutpostMap.SType.TURRET
+	match id:
+		"blast_door": return OutpostMap.SType.DOOR
+		"wall": return OutpostMap.SType.WALL
+		"harvester_bay": return OutpostMap.SType.BAY
+		"floodlight": return OutpostMap.SType.LIGHT
+	return OutpostMap.SType.BUILDING
+
+
+# ------------------------------------------------------------ effects
+
+## Built (not under construction) and staffed if it needs staff.
+func is_active(c: int) -> bool:
+	if not ids.has(c) or sites.has(c):
+		return false
+	var need := int(defs[ids[c]].get("staff", 0))
+	return need == 0 or staff.has(c)
+
+
+func count_active(id: String) -> int:
+	var n := 0
+	for c: int in ids:
+		if ids[c] == id and is_active(c):
+			n += 1
+	return n
+
+
+func count_built(id: String) -> int:
+	var n := 0
+	for c: int in ids:
+		if ids[c] == id and not sites.has(c):
+			n += 1
+	return n
+
+
+func cells_of(id: String) -> Array[int]:
+	var out: Array[int] = []
+	for c: int in ids:
+		if ids[c] == id:
+			out.append(c)
+	return out
 
 
 ## Places without cost (starting layout, sandbox).
@@ -135,13 +264,8 @@ func place(c: int, id: String, emit := true) -> bool:
 		nodes[c] = t
 		_node_mats[c] = t.base_mat
 	else:
-		var st := OutpostMap.SType.WALL
-		match id:
-			"blast_door": st = OutpostMap.SType.DOOR
-			"harvester_bay": st = OutpostMap.SType.BAY
-			"floodlight": st = OutpostMap.SType.LIGHT
-		map.put_structure(c, st, float(d.hp), float(d.height), int(d.nav_cost))
-		if id == "harvester_bay" or id == "floodlight":
+		map.put_structure(c, _stype_of(id), float(d.hp), float(d.height), int(d.nav_cost))
+		if id != "wall" and id != "blast_door":
 			var n := Node3D.new()
 			n.name = "%s_%d" % [id, c]
 			n.position = pos
@@ -149,9 +273,11 @@ func place(c: int, id: String, emit := true) -> bool:
 			nodes[c] = n
 			if id == "harvester_bay":
 				_node_mats[c] = TurretModels.build_bay(n)
-			else:
+			elif id == "floodlight":
 				_node_mats[c] = TurretModels.build_floodlight(n, light_radius())
 				map.add_light(c, light_radius(), 1)
+			else:
+				StationModels.build_building(n, id)
 	ids[c] = id
 	tiers[c] = 1
 	invested[c] = 0.0
@@ -164,6 +290,8 @@ func place(c: int, id: String, emit := true) -> bool:
 
 
 func sell_value(c: int) -> int:
+	if sites.has(c):
+		return int(invested.get(c, 0.0))  # cancelled construction: full refund
 	return int(floor(invested.get(c, 0.0) * economy.refund_ratio))
 
 
@@ -180,8 +308,10 @@ func sell(c: int) -> bool:
 
 func _remove(c: int) -> void:
 	var id: String = ids.get(c, "")
-	if id == "floodlight":
+	if id == "floodlight" and not sites.has(c):
 		map.add_light(c, light_radius(), -1)
+	sites.erase(c)
+	staff.erase(c)
 	if nodes.has(c):
 		nodes[c].queue_free()
 		nodes.erase(c)
@@ -199,9 +329,19 @@ func _remove(c: int) -> void:
 # ------------------------------------------------------------ upgrade / repair
 
 func upgrade_cost(c: int) -> int:
-	if not ids.has(c):
+	if not ids.has(c) or sites.has(c):
 		return -1
-	return GameConfig.upgrade_cost(ids[c], tier_at(c))
+	var base := GameConfig.upgrade_cost(ids[c], tier_at(c))
+	if base < 0:
+		return -1
+	return int(round(base * cost_mult()))
+
+
+## "" if allowed, else why not (tier III turret upgrades need an Armory).
+func upgrade_block(c: int) -> String:
+	if is_turret(ids.get(c, "")) and tier_at(c) >= 2 and count_active("armory") == 0:
+		return "Tier III needs a staffed Armory"
+	return ""
 
 
 ## Raises a turret / Harvester Bay one tier. Returns "" or a reason.
@@ -209,6 +349,9 @@ func upgrade(c: int) -> String:
 	var cost := upgrade_cost(c)
 	if cost < 0:
 		return "Already at max tier" if ids.has(c) else "Nothing to upgrade"
+	var block := upgrade_block(c)
+	if block != "":
+		return block
 	if not economy.can_afford(cost):
 		return "Need %d Biomass" % cost
 	economy.spend(cost)
@@ -305,6 +448,8 @@ func _refresh_visuals() -> void:
 	var walls: Array[int] = []
 	var doors: Array[int] = []
 	for c: int in ids:
+		if sites.has(c):
+			continue
 		match map.stype[c]:
 			OutpostMap.SType.WALL: walls.append(c)
 			OutpostMap.SType.DOOR: doors.append(c)
@@ -330,7 +475,7 @@ func _refresh_visuals() -> void:
 				continue
 			var n := map.idx(x + o.x, z + o.y)
 			var st := map.stype[n]
-			if map.kind[n] != OutpostMap.Kind.STRUCT or (st != OutpostMap.SType.WALL and st != OutpostMap.SType.DOOR):
+			if map.kind[n] != OutpostMap.Kind.STRUCT or sites.has(n) or (st != OutpostMap.SType.WALL and st != OutpostMap.SType.DOOR):
 				continue
 			var q := map.cell_ground(n)
 			var b := Basis() if o.x == 1 else Basis(Vector3.UP, -PI * 0.5)

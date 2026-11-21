@@ -3,8 +3,9 @@ shader_type spatial;
 // in UV.x; the shader rotates parts about their joints (hip, knee, shoulder,
 // elbow, neck) every frame, so 10k animated aliens cost no CPU.
 //
-// INSTANCE_CUSTOM: r = hit flash, g = dead (corpse), b = charred,
-//                  a = state: >= 0 speed ratio (0 idle .. 1 full speed),
+// INSTANCE_CUSTOM: r = hit flash, g = 1 dead (corpse) / 2 charred corpse,
+//                  b = stride phase (advanced on the CPU by distance walked,
+//                      so feet never slide), a = state: >= 0 speed ratio,
 //                      -1 feeding (crouch + peck), -2 attacking (rear + slash)
 // Posture q: 0 upright biped .. 1 on all fours. Strains blend between their
 // q_min and q_max with speed (run_lo..run_hi): they drop to all fours to sprint.
@@ -45,13 +46,13 @@ vec3 rot_xn(vec3 n, float a) {
 
 void vertex() {
 	int pid = int(UV.x + 0.5);
-	float alive = 1.0 - INSTANCE_CUSTOM.g;
+	float alive = 1.0 - min(INSTANCE_CUSTOM.g, 1.0);
 	float st = INSTANCE_CUSTOM.a;
 	float feeding = step(st, -0.5) * step(-1.5, st) * alive;
 	float attacking = step(st, -1.5) * alive;
 	float spd = max(st, 0.0);
 	float move = smoothstep(0.04, 0.25, spd) * alive;
-	float ph = TIME * gait_freq * mix(0.75, 1.25, clamp(spd, 0.0, 1.0)) + float(INSTANCE_ID) * 2.3999;
+	float ph = INSTANCE_CUSTOM.b;
 	float q = mix(q_min, q_max, smoothstep(run_lo, run_hi, spd));
 	q = mix(q, max(q, 0.85), feeding);
 	q = mix(q, q_min * 0.5, attacking);
@@ -109,7 +110,7 @@ void vertex() {
 	NORMAL = normalize(n);
 	// vertex colours are authored in sRGB: convert to linear for ALBEDO
 	vcol = vec4(pow(COLOR.rgb, vec3(2.2)), COLOR.a);
-	fx = INSTANCE_CUSTOM.rgb;
+	fx = vec3(INSTANCE_CUSTOM.r, min(INSTANCE_CUSTOM.g, 1.0), step(1.5, INSTANCE_CUSTOM.g));
 }
 
 void fragment() {

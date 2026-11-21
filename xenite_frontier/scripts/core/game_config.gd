@@ -8,6 +8,7 @@ const STRUCTURES_PATH := "res://data/structures.json"
 const CONFIG_PATH := "res://data/game_config.json"
 const ECONOMY_PATH := "res://data/economy.json"
 const COLONISTS_PATH := "res://data/colonists.json"
+const WAVES_PATH := "res://data/waves.json"
 
 enum Dmg { BALLISTIC, INCENDIARY, PIERCING, SHOCK, EXPLOSIVE, SEISMIC }
 const DMG_COUNT := 6
@@ -22,6 +23,7 @@ var economy: Dictionary = {}
 var tiers: Array = []
 var colonists: Dictionary = {}
 var feeding: Dictionary = {}
+var waves: Dictionary = {}
 var damage_type_ids: PackedStringArray = []
 ## damage multiplier: counter[alien_type * DMG_COUNT + damage_type]
 var counter := PackedFloat32Array()
@@ -37,6 +39,7 @@ func reload() -> void:
 	alien_defs = ad.get("aliens", [])
 	feeding = ad.get("feeding", {})
 	colonists = load_json(COLONISTS_PATH)
+	waves = load_json(WAVES_PATH)
 	turrets_data = load_json(TURRETS_PATH)
 	turret_defs = turrets_data.get("turrets", [])
 	structures = load_json(STRUCTURES_PATH)
@@ -81,6 +84,16 @@ func upgrade_cost(id: String, tier: int) -> int:
 	if tier - 1 < arr.size():
 		return int(arr[tier - 1])
 	return -1
+
+
+func structure_def(id: String) -> Dictionary:
+	for d in structure_defs:
+		if d.id == id:
+			return d
+	for d in turret_defs:
+		if d.id == id:
+			return d
+	return {}
 
 
 func max_tier(id: String) -> int:
