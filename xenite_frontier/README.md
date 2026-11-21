@@ -407,6 +407,9 @@ See `CHANGELOG.md` for per-milestone notes.
 
 ## Screenshots (software-rendered)
 
+![Humanoid Lineup v3 in game: Stalkers, Maulers, Spitters + corpses](docs/m5a1_lineup_a.png)
+![Humanoid Lineup v3: Snatchers, Burrowers breaching, Brood Mothers](docs/m5a1_lineup_b.png)
+
 ![Art direction: the six strains walking, attacking, feeding and dead](docs/m5a_aliens.png)
 ![M5a: waves, workers and soldiers, Mars-base outpost](docs/m5a_outpost.png)
 
