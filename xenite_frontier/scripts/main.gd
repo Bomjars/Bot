@@ -278,7 +278,7 @@ func _process(delta: float) -> void:
 	var dt := minf(delta, 1.0 / 30.0)
 	_step(dt)
 	_update_ghost()
-	swarm.set_far_lod(cam.distance > 70.0)
+	swarm.set_far_lod(cam.distance > 62.0)
 	_insp_timer -= delta
 	if _insp_timer <= 0.0:
 		_insp_timer = 0.25

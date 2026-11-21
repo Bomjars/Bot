@@ -87,9 +87,9 @@ static func build(id: String, lod := 0) -> ArrayMesh:
 
 
 static func _biped(a: MeshAcc, c: Dictionary, hi: bool) -> void:
-	var seg := 9 if hi else 5
-	var rings := 5 if hi else 3
-	var cseg := 7 if hi else 4
+	var seg := 7 if hi else 4
+	var rings := 4 if hi else 2
+	var cseg := 5 if hi else 4
 	var skin: Color = c.skin
 	var claw: Color = c.claw
 	var hy: float = c.hy
@@ -106,17 +106,18 @@ static func _biped(a: MeshAcc, c: Dictionary, hi: bool) -> void:
 	# pelvis + torso (ribcage tapering to a thin waist)
 	a.add(MeshAcc.ball(1.0, seg, rings), MeshAcc.xf(Vector3(0, hy, 0), Vector3.ZERO, Vector3(hx + 0.07, 0.11, chest.z * 0.9)), skin, P.TORSO)
 	a.add(MeshAcc.ball(1.0, seg, rings), MeshAcc.xf(Vector3(0, hy + (sy - hy) * 0.62, -0.01), Vector3.ZERO, Vector3(chest.x, (sy - hy) * 0.55, chest.z)), skin, P.TORSO)
-	a.add(MeshAcc.capsule(chest.x * 0.45, (sy - hy) * 0.7, cseg, 1), MeshAcc.xf(Vector3(0, hy + (sy - hy) * 0.3, 0)), skin.darkened(0.08), P.TORSO)
+	a.add(MeshAcc.capsule(chest.x * 0.45, (sy - hy) * 0.7, cseg, 0), MeshAcc.xf(Vector3(0, hy + (sy - hy) * 0.3, 0)), skin.darkened(0.08), P.TORSO)
 	# neck + head (big bald cranium, small jaw, huge almond eyes)
-	a.add(MeshAcc.capsule(hr * 0.24, 1.0, cseg, 1), MeshAcc.limb(Vector3(0, sy - 0.02, 0), Vector3(0, head_y - hr * 0.6, head_z * 0.6)), skin, P.HEAD)
+	a.add(MeshAcc.capsule(hr * 0.24, 1.0, cseg, 0), MeshAcc.limb(Vector3(0, sy - 0.02, 0), Vector3(0, head_y - hr * 0.6, head_z * 0.6)), skin, P.HEAD)
 	a.add(MeshAcc.ball(hr, seg, rings), MeshAcc.xf(Vector3(0, head_y + hr * 0.18, head_z - hr * 0.12), Vector3.ZERO, Vector3(1.0, 1.08, 1.18)), skin, P.HEAD)
 	a.add(MeshAcc.ball(hr * 0.62, seg, rings), MeshAcc.xf(Vector3(0, head_y - hr * 0.52, head_z + hr * 0.38), Vector3.ZERO, Vector3(0.85, 0.9, 1.0)), skin, P.HEAD)
 	for side: float in [-1.0, 1.0]:
-		a.add(MeshAcc.ball(hr * 0.34, seg if hi else 5, 3), MeshAcc.xf(Vector3(side * hr * 0.43, head_y - hr * 0.02, head_z + hr * 0.78), Vector3(-8, side * 18.0, side * -24.0), Vector3(1.0, 0.52, 0.42)), c.eye, P.HEAD)
-	a.add(MeshAcc.box(hr * 0.75, hr * 0.09, hr * 0.25), MeshAcc.xf(Vector3(0, head_y - hr * 0.74, head_z + hr * 0.86)), Color(0.08, 0.04, 0.04), P.HEAD)
+		a.add(MeshAcc.ball(hr * 0.34, 6 if hi else 4, 3 if hi else 2), MeshAcc.xf(Vector3(side * hr * 0.43, head_y - hr * 0.02, head_z + hr * 0.78), Vector3(-8, side * 18.0, side * -24.0), Vector3(1.0, 0.52, 0.42)), c.eye, P.HEAD)
 	if hi:
-		for k in 4:
-			var tx := (-1.5 + k) * hr * 0.17
+		a.add(MeshAcc.box(hr * 0.75, hr * 0.09, hr * 0.25), MeshAcc.xf(Vector3(0, head_y - hr * 0.74, head_z + hr * 0.86)), Color(0.08, 0.04, 0.04), P.HEAD)
+	if hi:
+		for k in 3:
+			var tx := (-1.0 + k) * hr * 0.2
 			a.add(MeshAcc.cone(hr * 0.05, hr * 0.2, 4), MeshAcc.xf(Vector3(tx, head_y - hr * 0.73, head_z + hr * 0.95), Vector3(180, 0, 0)), claw, P.HEAD)
 
 	# arms: shoulder -> elbow -> wrist, three long claws
@@ -127,13 +128,15 @@ static func _biped(a: MeshAcc, c: Dictionary, hi: bool) -> void:
 		var sh := Vector3(side * sx, sy, 0.0)
 		var el := Vector3(side * sx * 1.04, ey, 0.02)
 		var wr := Vector3(side * sx * 1.07, sy - arm_len + 0.06, 0.04)
-		a.add(MeshAcc.ball(c.arm_t * 1.25, cseg, 3), MeshAcc.xf(sh), skin, P.UARM_L if l else P.UARM_R)
-		a.add(MeshAcc.capsule(c.arm_t, 1.0, cseg, 1), MeshAcc.limb(sh, el), skin, P.UARM_L if l else P.UARM_R)
-		a.add(MeshAcc.ball(c.arm_t * 1.1, cseg, 3), MeshAcc.xf(el), skin, P.FARM_L if l else P.FARM_R)
-		a.add(MeshAcc.capsule(c.fore_t, 1.0, cseg, 1), MeshAcc.limb(el, wr), skin, P.FARM_L if l else P.FARM_R)
+		if hi:
+			a.add(MeshAcc.ball(c.arm_t * 1.25, cseg, 2), MeshAcc.xf(sh), skin, P.UARM_L if l else P.UARM_R)
+		a.add(MeshAcc.capsule(c.arm_t, 1.0, cseg, 0), MeshAcc.limb(sh, el), skin, P.UARM_L if l else P.UARM_R)
+		if hi:
+			a.add(MeshAcc.ball(c.arm_t * 1.1, cseg, 2), MeshAcc.xf(el), skin, P.FARM_L if l else P.FARM_R)
+		a.add(MeshAcc.capsule(c.fore_t, 1.0, cseg, 0), MeshAcc.limb(el, wr), skin, P.FARM_L if l else P.FARM_R)
 		var flen: float = c.get("fingers", 0.16)
-		for f in (3 if hi else 2):
-			var fx: float = (f - 1.0) * c.fore_t * 0.9
+		for f in (3 if hi else 1):
+			var fx: float = ((f - 1.0) if hi else 0.0) * c.fore_t * 0.9
 			var tip := wr + Vector3(fx * side, -flen, 0.05 + flen * 0.35)
 			a.add(MeshAcc.cone(c.fore_t * 0.42, 1.0, 4), MeshAcc.limb(wr + Vector3(fx * side, 0, 0), tip, Vector3(1, 1, 1)), claw if f != 1 else skin, P.FARM_L if l else P.FARM_R)
 
@@ -143,10 +146,11 @@ static func _biped(a: MeshAcc, c: Dictionary, hi: bool) -> void:
 		var hp := Vector3(side * hx, hy, 0.0)
 		var kn := Vector3(side * hx * 1.05, ky, 0.05)
 		var an := Vector3(side * hx * 1.05, 0.07, -0.03)
-		a.add(MeshAcc.capsule(c.leg_t, 1.0, cseg, 1), MeshAcc.limb(hp, kn), skin, P.THIGH_L if l else P.THIGH_R)
-		a.add(MeshAcc.ball(c.leg_t * 1.05, cseg, 3), MeshAcc.xf(kn), skin, P.SHIN_L if l else P.SHIN_R)
-		a.add(MeshAcc.capsule(c.shin_t, 1.0, cseg, 1), MeshAcc.limb(kn, an), skin, P.SHIN_L if l else P.SHIN_R)
-		a.add(MeshAcc.ball(1.0, cseg, 3), MeshAcc.xf(an + Vector3(0, -0.02, 0.07), Vector3.ZERO, Vector3(c.shin_t * 1.3, 0.04, 0.12)), dark, P.SHIN_L if l else P.SHIN_R)
+		a.add(MeshAcc.capsule(c.leg_t, 1.0, cseg, 0), MeshAcc.limb(hp, kn), skin, P.THIGH_L if l else P.THIGH_R)
+		if hi:
+			a.add(MeshAcc.ball(c.leg_t * 1.05, cseg, 2), MeshAcc.xf(kn), skin, P.SHIN_L if l else P.SHIN_R)
+		a.add(MeshAcc.capsule(c.shin_t, 1.0, cseg, 0), MeshAcc.limb(kn, an), skin, P.SHIN_L if l else P.SHIN_R)
+		a.add(MeshAcc.ball(1.0, 4, 2) if hi else MeshAcc.box(1.0, 1.0, 1.0), MeshAcc.xf(an + Vector3(0, -0.02, 0.07), Vector3.ZERO, Vector3(c.shin_t * 1.3, 0.04, 0.12) * (1.0 if hi else 1.4)), dark, P.SHIN_L if l else P.SHIN_R)
 		if hi:
 			a.add(MeshAcc.cone(c.shin_t * 0.5, 0.1, 4), MeshAcc.xf(an + Vector3(0, -0.03, 0.2), Vector3(90, 0, 0)), claw, P.SHIN_L if l else P.SHIN_R)
 

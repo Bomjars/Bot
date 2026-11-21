@@ -3,10 +3,40 @@
 *Horde tower defence. Contracted colonists hold remote mining outposts against
 a starving, predatory alien swarm.*
 
-Engine: **Godot 4.4** (GDScript, Forward+). Original placeholder art built from
-low-poly primitives at runtime; no imported assets.
+Engine: **Godot 4.4** (GDScript, Forward+). All art is original and generated
+procedurally at runtime (no imported assets). There is a drop-in hook for your
+own `.glb` models, described in `art/README.md`.
 
 ---
+
+## Visual style (M4.5)
+* **The swarm** is one family of predatory **bald grey aliens**: big craniums,
+  huge almond eyes that glow in the strain colour, slit mouths full of teeth,
+  long clawed limbs. They **walk upright and drop to all fours to sprint**,
+  crouch over corpses to feed, and rear up to slash at walls. The animation is
+  a GPU joint rig (hips, knees, shoulders, elbows, neck), so 10,000 animated
+  aliens cost no CPU.
+  | Strain | Silhouette | Identity colour |
+  |---|---|---|
+  | Stalker | lean grey sprinter, spine ridge | amber eyes |
+  | Mauler | hulking slate brute, huge fists, knuckle-walks | red armour plates and eyes |
+  | Spitter | thin green-grey biped | glowing acid throat and back sacs |
+  | Snatcher | very tall, enormous arms with hooked fingers | violet eyes |
+  | Burrower | low armoured crawler, always on all fours | orange shovel claws |
+  | Brood Mother | towering matriarch, bone crown | glowing magenta egg sacs |
+* **Colonists** wear white EVA suits with orange trim, gold visors and
+  life-support packs, and have a walk cycle.
+* **The outpost** follows Mars-base concepts. There is a central hab dome with
+  a window band, airlock tunnel and comms dish. Barrier walls are composite
+  panels on regolith berms, with posts and amber lights, and join into
+  continuous lines. Blast doors are chevron airlocks. The Harvester Bay is an
+  octagonal drone pad. Floodlights are lattice masts. Turrets sit on round
+  strut-mounted pads. Solar arrays, tanks and comms towers stand on the mesas.
+* **The planet** has uneven rust regolith with craters and dark gravel fields,
+  banded basalt mesas with cliff faces, glowing teal Xenite crystal clusters,
+  boulders, and a violet-to-salmon alien sky with dusty fog. Everything
+  (aliens, corpses, gore, drones, colonists, structures) follows the terrain
+  height. The build grid only shows while a build tool is selected.
 
 ## Current milestone: **M4 – colonists, abduction, feeding**
 
@@ -257,8 +287,11 @@ xenite_frontier/
     econ/economy.gd       Biomass wallet, costs, refunds, deposits
     econ/harvester.gd     Harvester Bays + drone state machine
     colony/colonists.gd   colonists: crew assignment, A* walking, abduction, rescue, recovery
-    render/alien_meshes.gd   procedural predator silhouettes
-    render/alien.gdshader    faceted shading, GPU gait, hit-flash channel
+    render/alien_meshes.gd   grey alien family (near/far LOD), joint rig data
+    render/alien.gdshader    GPU joint animation: walk / all-fours sprint / feed / attack
+    render/mesh_acc.gd       primitive-to-mesh builder (vertex colours, part ids)
+    render/station_models.gd hab dome, barrier walls, doors, props, crystals, boulders
+    render/terrain.gdshader  planet surface (regolith, strata cliffs, craters, build grid)
     render/fx.gd / fx.gdshader  pooled particles, beams, ichor splats
     render/ground.gdshader
     world/outpost_map.gd  grid (ground/rock/wall), spawn zones, core, visuals
@@ -286,15 +319,10 @@ xenite_frontier/
 * **Animation on the GPU.** Gait swing and bob happen in the vertex shader,
   phased by `INSTANCE_ID`.
 
-### Alien silhouettes
-| Strain | Read it by |
-|---|---|
-| Stalker | low, long, bone-yellow, back spines, red maw |
-| Mauler | hulking rust-red block, huge forearms, grey plates |
-| Spitter | thin grey body under a glowing green acid sac |
-| Snatcher | tall violet stick-figure, long hooked arms |
-| Burrower | flat orange segmented grub, steel drill head |
-| Brood Mother | huge crimson-magenta abdomen, glowing egg sacs, bone crown |
+### Using your own models
+Each strain in `data/aliens.json` accepts `"mesh": "res://art/<name>.glb"` to
+replace its procedural model. `art/README.md` lists the requirements:
+orientation, triangle budget, vertex colours and part ids for the animation rig.
 
 ---
 
@@ -311,6 +339,9 @@ xenite_frontier/
 See `CHANGELOG.md` for per-milestone notes.
 
 ## Screenshots (software-rendered)
+
+![M4.5: the grey alien family - walking, sprinting on all fours, attacking, feeding](docs/m45_aliens.png)
+![M4.5: Mars-base outpost on the alien planet](docs/m45_outpost.png)
 
 ![M4: colonist bar, event feed of abductions and rescues, crewed Autocannon in the Inspector](docs/m4_colony.png)
 

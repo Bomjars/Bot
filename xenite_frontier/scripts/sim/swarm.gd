@@ -126,10 +126,17 @@ func setup(m: OutpostMap, f: FlowField, bf: FlowField, rf: FlowField, hf: FlowFi
 		var rig := AlienMeshes.rig(defs[i].id)
 		for k: String in rig:
 			mat.set_shader_parameter(k, rig[k])
-		var near := AlienMeshes.build(defs[i].id, 0)
+		var near: Mesh = AlienMeshes.build(defs[i].id, 0)
+		var far: Mesh = AlienMeshes.build(defs[i].id, 1)
+		# art hook: "mesh": "res://art/<name>.glb" in aliens.json replaces the
+		# procedural model (see README "Using your own models")
+		var custom := _load_custom_mesh(str(defs[i].get("mesh", "")))
+		if custom:
+			near = custom
+			far = custom
 		var pool := AlienPool.new(i, defs[i], near, mat)
 		pool.mesh_near = near
-		pool.mesh_far = AlienMeshes.build(defs[i].id, 1)
+		pool.mesh_far = far
 		pools.append(pool)
 		add_child(pool.instance)
 		_weights.append(float(defs[i].get("spawn_weight", 1)))
@@ -144,6 +151,25 @@ func set_far_lod(far: bool) -> void:
 	far_lod = far
 	for p in pools:
 		p.multimesh.mesh = p.mesh_far if far else p.mesh_near
+
+
+static func _load_custom_mesh(path: String) -> Mesh:
+	if path == "" or not ResourceLoader.exists(path):
+		if path != "":
+			push_warning("aliens.json: mesh '%s' not found, using the procedural model" % path)
+		return null
+	var res := load(path)
+	if res is Mesh:
+		return res
+	if res is PackedScene:
+		var inst: Node = (res as PackedScene).instantiate()
+		var found: Mesh = null
+		for n in inst.find_children("*", "MeshInstance3D", true, false):
+			found = (n as MeshInstance3D).mesh
+			break
+		inst.free()
+		return found
+	return null
 
 
 func total() -> int:

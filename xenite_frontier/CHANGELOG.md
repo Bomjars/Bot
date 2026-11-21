@@ -1,5 +1,42 @@
 # Changelog
 
+## M4.5 – Visual pass: grey aliens, space suits, Mars-base outpost, alien planet
+
+### Added
+- **Grey alien family** (`render/alien_meshes.gd`, `render/alien.gdshader`).
+  - Bald, big-headed predatory greys with glowing almond eyes, toothed mouths and long clawed limbs.
+  - Every strain is redesigned in this style with its own silhouette, posture and identity colour.
+  - **GPU joint rig:** vertices carry a part id (UV.x), and the shader rotates parts about the hip, knee, shoulder, elbow and neck.
+  - Aliens walk upright and **drop to all fours to sprint** (posture blends with speed). They crouch and peck when feeding, and rear up and slash when attacking.
+  - The swarm sim writes each alien's state (speed / feeding / attacking) into `INSTANCE_CUSTOM.a`.
+  - Near and far meshes: about 1,000–1,500 triangles zoomed in, 430–670 zoomed out. Corpses use the far mesh.
+- **Space-suited colonists**: white EVA suit, orange trim, gold visor, life-support pack, oxygen tanks, boots, and a walk cycle.
+- **Mars-base outpost** (`render/station_models.gd`, `render/station.gdshader`).
+  - Hab dome core with window band, airlock tunnel, side module and comms dish.
+  - Barrier walls: posts, plus composite panels on regolith berms that **join neighbouring walls and doors into continuous lines**, with damage tint and climbable tint.
+  - Chevron airlock blast doors, oriented to the wall line.
+  - Octagonal Harvester Bay landing pad with a biomass tank and gantry; lattice floodlight masts.
+  - Turrets on round strut-mounted pads.
+  - Solar arrays, tanks and comms towers on the mesas.
+- **Alien planet terrain**.
+  - Half-metre heightfield replacing the stacked cubes.
+  - Basalt mesas with cliff faces and strata bands, uneven lumpy regolith, 60 craters, dark gravel fields.
+  - A levelled base pad, boulders at cliff feet, teal Xenite crystal clusters on the mesas.
+  - Violet-to-salmon procedural sky, dusty fog, SSAO, ACES tonemap, low sun with a cool fill light.
+  - The build grid shows only while a build tool is selected.
+- Everything follows the terrain height (bilinear sampling, inside the threaded swarm loop as well).
+- **Custom model hook:** `"mesh": "res://art/x.glb"` per strain in `aliens.json`; see `art/README.md`.
+- Dev `--showcase [--pair=N]`: lineup of every strain in five poses, in photo mode.
+
+### Fixed
+- Vertex colours are now treated as sRGB in the alien, station and fx shaders. Before, everything rendered washed out.
+
+### Measured (headless, slow 4-thread cloud CPU)
+- 10k benchmark: 1% low 66–76 fps, sim 6.5–7.1 ms (terrain sampling adds about 0.5 ms). PASS.
+- 3-min soak at 240/min, bot: core 5997/6000, 10/10 colonists, 0 stuck aliens.
+- GPU cost depends on your card. Press B in game.
+
+
 ## M4.1 – Stuck-alien fix and rebalance (from playtest feedback)
 
 ### Fixed
