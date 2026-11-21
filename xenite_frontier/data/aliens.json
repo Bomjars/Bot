@@ -4,7 +4,7 @@
 		{
 			"id": "stalker",
 			"name": "Stalker",
-			"trait": "Small, low, six-legged pack hunter. Floods in fast, low HP.",
+			"trait": "Hunched, long-jawed hunter with a spiked back. Floods in fast, low HP. Brood young are Stalker runts.",
 			"hp": 22,
 			"speed": 7.0,
 			"steer": 6.0,
@@ -29,7 +29,7 @@
 		{
 			"id": "mauler",
 			"name": "Mauler",
-			"trait": "Huge front-heavy brute: plated shell, club forelimbs. Smashes blast doors (x4). Mauls colonists.",
+			"trait": "Gorilla-built brute with boulder shoulders and rock fists. Smashes blast doors (x4). Mauls colonists.",
 			"hp": 260,
 			"speed": 3.4,
 			"steer": 3.0,
@@ -55,7 +55,7 @@
 		{
 			"id": "spitter",
 			"name": "Spitter",
-			"trait": "Tall four-legged stilt-walker. Stops at range and lobs acid at structures from its throat sac.",
+			"trait": "Upright, spiked back, swollen glowing throat sac. Hunches and spits acid at structures from range.",
 			"hp": 35,
 			"speed": 4.2,
 			"steer": 4.0,
@@ -83,7 +83,7 @@
 		{
 			"id": "snatcher",
 			"name": "Snatcher",
-			"trait": "Lean crouched sprinter with hooked arms. Dodges 35% of aimed shots, hunts colonists and drags them off.",
+			"trait": "Very long arms dragging white claws, yellow spines. Dodges 35% of aimed shots, hunts colonists and drags them off.",
 			"hp": 48,
 			"speed": 6.6,
 			"steer": 7.0,
@@ -110,7 +110,7 @@
 		{
 			"id": "burrower",
 			"name": "Burrower",
-			"trait": "Segmented worm with a drill-tooth maw. Tunnels under walls; only Seismic reaches it underground.",
+			"trait": "Legless segmented torso with a circular toothed maw. Tunnels under walls (only Seismic reaches it) and breaches near the core.",
 			"hp": 90,
 			"speed": 4.6,
 			"steer": 4.0,
@@ -135,7 +135,7 @@
 		{
 			"id": "brood_mother",
 			"name": "Brood Mother",
-			"trait": "Boss. Four times a Stalker, egg-sac abdomen, crown of horns. Births broods, gorges to grow.",
+			"trait": "Boss. Carries a glowing egg sac on her back, crown of white spikes. Births broods of runts, gorges to grow.",
 			"hp": 3000,
 			"speed": 2.2,
 			"steer": 1.5,

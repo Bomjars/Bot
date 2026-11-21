@@ -673,7 +673,7 @@ func _sim_chunk(ci: int) -> void:
 		var h1 := hg[hk + hgw] + (hg[hk + hgw + 1] - hg[hk + hgw]) * htx
 		var y := h0 + (h1 - h0) * (hz - hj)
 		if burrowed:
-			y -= 0.55 * sz[i]
+			pose = -3.0   # the shader sinks it so only the head and mound show
 		elif kind[ncell] == OutpostMap.Kind.STRUCT:
 			y += sheight[ncell]
 		else:

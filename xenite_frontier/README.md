@@ -63,16 +63,30 @@ Buildings marked "needs 1 worker" only work while staffed.
 * Wider size (±12%) and speed (±22%) variation.
 
 ## Art direction
-* **Aliens:** grim low-poly, dark oily chitin and flesh, with the identity
-  colour on eyes and markings. Six distinct body plans with GPU animation:
-  hexapod tripod gait, quadruped trot, knuckle-walking clubs, a worm's
-  travelling wave, pulsing sacs. Each strain has its own corpse look:
-  * **Stalker:** curls its legs in and splits along the back.
-  * **Mauler:** collapses face-first; its shell cracks and plates scatter.
-  * **Spitter:** its sac bursts into a green acid pool.
-  * **Snatcher:** falls on its back, arms reaching up.
-  * **Burrower:** separates into a line of chunks.
-  * **Brood Mother:** her sac ruptures, spilling dead young into a huge ichor pool.
+* **Aliens:** built from your concept sheet *"predatory/primal – Humanoid
+  Lineup v3"* (`docs/concept_humanoid_lineup_v3.svg`). They are gaunt,
+  faceted (flat-shaded) bipeds in charcoal (#1c1c1a / #2b2c29) with a light
+  olive front panel (#8f8a52), bone-white claws and teeth (#e8e4d6), and one
+  glowing identity colour each.
+  | Strain | Look | Identity |
+  |---|---|---|
+  | Stalker | hunched, long jaw, black back spikes, long arms; Brood young are *runts* | white eye #e8e4d6 |
+  | Mauler | gorilla build, boulder shoulders and head, huge rock fists it knuckle-walks on, white fang | red #c8201f eyes and slashes |
+  | Spitter | upright, black back spikes, glowing throat sac; hunches forward to spit | green #3fd23a |
+  | Snatcher | very long arms dragging white claws, yellow back spines | yellow #e3c21b |
+  | Burrower | legless segmented torso, circular orange-toothed maw; while tunnelling only the head and a moving dirt mound break the surface | orange #e8871a |
+  | Brood Mother | tall, faceted purple egg sac on her back with glowing spots, crown of white spikes | magenta #d42bb4 |
+
+  A GPU biped rig (hip, knee, shoulder, elbow, neck pivots stored per vertex)
+  walks them upright. Fast strains drop to all fours to sprint. They crouch to
+  feed, rear up to attack, and Spitters hunch forward to spit.
+  Corpses follow the brief:
+  * Stalker: curls up on its side and splits along the back.
+  * Mauler: face-first; its boulders crack off and scatter.
+  * Spitter: its sac bursts into an acid pool.
+  * Snatcher: on its back, arms up.
+  * Burrower: face-first, segments drifting apart.
+  * Brood Mother: face-first, sac ruptured, dead young spilled, huge ichor pool.
 * **Ichor** is acid green; **human blood** dark red.
 * **Humans and buildings** are industrial: off-white, hazard yellow, worn grey.
   **Dragged colonists flail and kick.**

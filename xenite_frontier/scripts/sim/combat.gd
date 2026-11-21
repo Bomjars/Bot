@@ -58,8 +58,8 @@ func setup(s: Swarm, m: OutpostMap, st: Structures, effects: Fx, c: Corpses) -> 
 	_growth = float(fd.get("growth_per_meal", _growth))
 	_max_size = float(fd.get("max_size", _max_size))
 	_hp_per_meal = float(fd.get("hp_per_meal", _hp_per_meal))
-	var cols := {"stalker": Color(0.14, 0.1, 0.12), "mauler": Color(0.16, 0.1, 0.11), "spitter": Color(0.14, 0.11, 0.12),
-		"snatcher": Color(0.13, 0.1, 0.12), "burrower": Color(0.18, 0.11, 0.1), "brood_mother": Color(0.2, 0.12, 0.15)}
+	var cols := {"stalker": Color("2b2c29"), "mauler": Color("4b4f4c"), "spitter": Color("2b2c29"),
+		"snatcher": Color("2b2c29"), "burrower": Color("2b2c29"), "brood_mother": Color("3a2433")}
 	for p in swarm.pools:
 		_body_colors.append(cols.get(p.def.id, Color.GRAY))
 
@@ -110,6 +110,14 @@ func process_swarm_events() -> void:
 				bx = br[k]
 				bz = br[k + 1]
 			swarm.spawn_at(mother.brood_type, bx, bz)
+			# brood young are "runts": small Stalkers
+			var bp := swarm.pools[mother.brood_type]
+			var bi := bp.count - 1
+			bp.size[bi] *= 0.62
+			bp.hp[bi] *= 0.6
+			var bo := bi * AlienPool.STRIDE
+			for kk in [0, 5, 10]:
+				bp.buf[bo + kk] *= 0.62
 		fx.burst(Vector3(br[k], 1.0, br[k + 1]), mother.ichor, 8, 3.0, 0.12, 0.6)
 	combat_usec = Time.get_ticks_usec() - t0
 

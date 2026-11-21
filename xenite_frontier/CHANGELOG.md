@@ -1,5 +1,19 @@
 # Changelog
 
+## M5a.1 – Humanoid Lineup v3 (concept sheet)
+
+### Changed
+- **All six aliens rebuilt from the concept sheet** "predatory/primal – Humanoid Lineup v3" (saved as `docs/concept_humanoid_lineup_v3.svg`).
+  - Gaunt, faceted, flat-shaded bipeds in the sheet's palette: charcoal, light olive front panel, bone claws, one identity colour each.
+  - Stalker: hunched long-jaw with back spikes. Mauler: boulder-shouldered gorilla with rock fists. Spitter: glowing throat sac. Snatcher: long dragging claws, yellow spines. Burrower: legless segmented torso with a circular orange maw and a dirt mound. Brood Mother: egg sac on her back, white spike crown.
+- **Biped GPU rig:** per-vertex joint pivots for hips, knees, shoulders, elbows and neck. Posture blends to all fours when sprinting. Feeding crouch, attack rear-up, Spitter hunch-and-spit.
+- **Burrowers breach:** while tunnelling the shader sinks the body so only the head and a widening dirt mound show. The mound disappears on death.
+- **Brood young are runts:** small (x0.62), weaker Stalkers.
+- Corpse poses per the brief. Mauler boulders crack off.
+- Alien triangles: 620–930 near, 390–540 far (lighter than before).
+- HUD and Intel strain colours use the sheet's swatches.
+
+
 ## M5a – Waves with a build timer, landing site, workers & soldiers, finance, art direction
 
 ### Added

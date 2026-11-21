@@ -1012,12 +1012,12 @@ func _showcase() -> void:
 	target_count = 0
 	swarm.paused = true
 	var row := map.core_center + Vector3(-8.5, 0, -11.0)
-	var poses := [0.6, -2.0, -1.0]
 	for t in swarm.pools.size():
 		var p := swarm.pools[t]
 		var x := row.x + t * 3.4
+		var poses := [0.35, 1.0, -2.0, -3.0 if p.def.id == "burrower" else -1.0]
 		for k in poses.size():
-			var z := row.z + k * 2.8 - (1.5 if t == 5 else 0.0) * k
+			var z := row.z + k * 2.6
 			var i := p.spawn(x, z, swarm.rng)
 			var o := i * AlienPool.STRIDE
 			p.buf[o] = 1.0; p.buf[o + 2] = 0.0; p.buf[o + 8] = 0.0; p.buf[o + 10] = 1.0
@@ -1026,7 +1026,7 @@ func _showcase() -> void:
 			p.buf[o + 14] = 0.8 + k * 1.7
 			p.buf[o + 15] = poses[k]
 		# a corpse of each strain in the front row (its death pose)
-		corpses.add(t, x, row.z + 3 * 2.8 + (2.0 if t == 5 else 0.0), PI * 0.15, 1.0, 0.1, false)
+		corpses.add(t, x, row.z + 4 * 2.6 + 0.3, PI * 0.15, 1.0, 0.1, false)
 	corpses.upload()
 	# photo mode: no UI, close low camera (pick the strain pair with --pair=N)
 	hud.visible = false
@@ -1035,7 +1035,7 @@ func _showcase() -> void:
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--pair="):
 			pair = int(arg.split("=")[1])
-	cam.position = row + Vector3(1.6 + pair * 6.4, 1.0, 6.0)
+	cam.position = row + Vector3(1.7 + pair * 6.8, 1.0, 7.5)
 	cam.pitch_deg = 24.0
 	cam.photo_lock = true
 	cam._target_distance = 9.0
