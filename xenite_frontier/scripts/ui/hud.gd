@@ -94,14 +94,14 @@ func _ready() -> void:
 	_bio_label = Label.new()
 	_bio_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_bio_label.add_theme_color_override("font_color", Color(0.55, 1.0, 0.45))
-	_bio_label.add_theme_font_size_override("font_size", 19)
+	_bio_label.add_theme_font_size_override("font_size", 16)
 	cv.add_child(_bio_label)
 	_col_label = RichTextLabel.new()
 	_col_label.bbcode_enabled = true
 	_col_label.fit_content = true
-	_col_label.custom_minimum_size = Vector2(520, 0)
+	_col_label.custom_minimum_size = Vector2(470, 0)
 	_col_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_col_label.add_theme_font_size_override("normal_font_size", 16)
+	_col_label.add_theme_font_size_override("normal_font_size", 14)
 	cv.add_child(_col_label)
 
 	var lp := PanelContainer.new()
@@ -235,13 +235,13 @@ func _process(delta: float) -> void:
 	var J := ColonistSystem.Job
 	var W := ColonistSystem.Role.WORKER
 	var SO := ColonistSystem.Role.SOLDIER
-	_col_label.text = "[center]WORKERS [b]%d[/b] (build %d, repair %d, staff %d)   SOLDIERS [b]%d[/b] (crew %d, posts %d, squad %d)\nPop %d/%d%s   turrets crewed %d/%d   [color=#ffa060]carried %d[/color]   recovering %d   [color=#ff6a5a]lost %d[/color][/center]" % [
+	_col_label.text = "[center]WORKERS [b]%d[/b] (build %d, repair %d, staff %d)\nSOLDIERS [b]%d[/b] (crew %d, posts %d, squad %d)\nPop %d/%d%s   crewed %d/%d   [color=#ffa060]carried %d[/color]   recovering %d   [color=#ff6a5a]lost %d[/color][/center]" % [
 		cs.count_role(W), cs.count_job(W, J.BUILD), cs.count_job(W, J.REPAIR), cs.count_job(W, J.STAFF),
 		cs.count_role(SO), cs.count_job(SO, J.CREW), cs.count_job(SO, J.GARRISON), cs.count_job(SO, J.SQUAD),
 		cs.alive(), cs.pop_cap(), ("  training %d" % cs.training.size()) if not cs.training.is_empty() else "",
 		crewed, st.turrets.size(), cs.count_state(ColonistSystem.S.CARRIED), cs.count_state(ColonistSystem.S.RECOVERING), cs.taken + cs.killed]
 	var eco: Economy = main.economy
-	_bio_label.text = ("BIOMASS  %d" % int(eco.biomass)) + ("   [FREE BUILD]" if eco.free_build else "") + ("   +%d/min   drones %d   XENITE mined %d (banked %d)   wages %d/wave%s" % [
+	_bio_label.text = ("BIOMASS  %d" % int(eco.biomass)) + ("   [FREE BUILD]" if eco.free_build else "") + ("   +%d/min   drones %d\nXenite mined %d (banked %d)   wages %d/wave%s" % [
 		int(eco.income_per_min()), main.harvester.drone_count(), int(wd.xenite_mined), int(wd.xenite_banked), cs.wages_due(), "   MORALE LOW" if wd.morale_low else ""])
 	_accum += delta
 	if _accum < 0.25:

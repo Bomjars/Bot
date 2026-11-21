@@ -3,13 +3,13 @@ shader_type spatial;
 // drifts, dark banded basalt on cliffs (strata by height), pale dust on the
 // plateaus, and the build grid only while building (grid_strength).
 
-uniform vec3 regolith_a : source_color = vec3(0.27, 0.13, 0.10);
-uniform vec3 regolith_b : source_color = vec3(0.45, 0.25, 0.17);
-uniform vec3 dust : source_color = vec3(0.58, 0.40, 0.30);
-uniform vec3 gravel : source_color = vec3(0.16, 0.11, 0.11);
-uniform vec3 basalt_a : source_color = vec3(0.10, 0.08, 0.10);
-uniform vec3 basalt_b : source_color = vec3(0.27, 0.18, 0.19);
-uniform vec3 pad_color : source_color = vec3(0.36, 0.31, 0.29);
+uniform vec3 regolith_a : source_color = vec3(0.40, 0.18, 0.09);
+uniform vec3 regolith_b : source_color = vec3(0.58, 0.30, 0.15);
+uniform vec3 dust : source_color = vec3(0.66, 0.43, 0.28);
+uniform vec3 gravel : source_color = vec3(0.22, 0.11, 0.08);
+uniform vec3 basalt_a : source_color = vec3(0.26, 0.11, 0.06);
+uniform vec3 basalt_b : source_color = vec3(0.56, 0.27, 0.13);
+uniform vec3 pad_color : source_color = vec3(0.38, 0.34, 0.31);
 uniform vec3 core_pos = vec3(0.0, 0.0, 44.5);
 uniform float pad_radius = 19.0;
 uniform float grid_strength = 0.0;
@@ -51,7 +51,7 @@ void fragment() {
 	float strata = sin(wpos.y * 5.5 + fbm(wpos.xz * 0.4) * 4.0) * 0.5 + 0.5;
 	vec3 cliff = mix(basalt_a, basalt_b, strata * 0.7 + n * 0.3);
 	// dusty plateau tops
-	vec3 top = mix(basalt_b * 1.3, dust * 0.75, n * 0.8);
+	vec3 top = mix(basalt_b * 0.9, dust * 0.8, n * 0.8);
 	float high = smoothstep(2.0, 3.0, wpos.y);
 	vec3 flat_col = mix(ground, top, high);
 	vec3 col = mix(flat_col, cliff, smoothstep(0.25, 0.55, slope));

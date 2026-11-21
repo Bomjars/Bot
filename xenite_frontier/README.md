@@ -9,34 +9,80 @@ own `.glb` models, described in `art/README.md`.
 
 ---
 
-## Visual style (M4.5)
-* **The swarm** is one family of predatory **bald grey aliens**: big craniums,
-  huge almond eyes that glow in the strain colour, slit mouths full of teeth,
-  long clawed limbs. They **walk upright and drop to all fours to sprint**,
-  crouch over corpses to feed, and rear up to slash at walls. The animation is
-  a GPU joint rig (hips, knees, shoulders, elbows, neck), so 10,000 animated
-  aliens cost no CPU.
-  | Strain | Silhouette | Identity colour |
-  |---|---|---|
-  | Stalker | lean grey sprinter, spine ridge | amber eyes |
-  | Mauler | hulking slate brute, huge fists, knuckle-walks | red armour plates and eyes |
-  | Spitter | thin green-grey biped | glowing acid throat and back sacs |
-  | Snatcher | very tall, enormous arms with hooked fingers | violet eyes |
-  | Burrower | low armoured crawler, always on all fours | orange shovel claws |
-  | Brood Mother | towering matriarch, bone crown | glowing magenta egg sacs |
-* **Colonists** wear white EVA suits with orange trim, gold visors and
-  life-support packs, and have a walk cycle.
-* **The outpost** follows Mars-base concepts. There is a central hab dome with
-  a window band, airlock tunnel and comms dish. Barrier walls are composite
-  panels on regolith berms, with posts and amber lights, and join into
-  continuous lines. Blast doors are chevron airlocks. The Harvester Bay is an
-  octagonal drone pad. Floodlights are lattice masts. Turrets sit on round
-  strut-mounted pads. Solar arrays, tanks and comms towers stand on the mesas.
-* **The planet** has uneven rust regolith with craters and dark gravel fields,
-  banded basalt mesas with cliff faces, glowing teal Xenite crystal clusters,
-  boulders, and a violet-to-salmon alien sky with dusty fog. Everything
-  (aliens, corpses, gore, drones, colonists, structures) follows the terrain
-  height. The build grid only shows while a build tool is selected.
+## How a run plays (M5a)
+1. **Choose your landing site.** Click open, flat ground away from the canyon
+   mouths. A green 7x7 footprint means valid. The Command Hab lands there, the
+   pad is levelled, and you start with 450 Biomass, 6 workers and 4 soldiers.
+   Glowing teal **Xenite deposits** around the map are where Mining Rigs go.
+2. **Build phase.** A countdown runs (90 s before wave 1, then 40 s). Press
+   **N** or the button to **call the wave early** for +3 Biomass per second left.
+3. **Wave.** The swarm arrives in packs from random canyon mouths, spread over
+   about 28 s. Wave sizes are **30% smaller** than the base schedule
+   (`waves.json size_multiplier: 0.7`). Every wave grows and toughens a little,
+   and Threat Level rises by +0.25 per wave.
+4. **Payday** after every wave survived:
+   * **Company bounty:** (60 + 12 x wave) x Threat Level.
+   * **Xenite ore sale:** mined Xenite x 3 Biomass. A 25% contract share is
+     banked toward the Colony Charter (M6).
+   * **Wages:** 3 per worker and 5 per soldier. Can't pay? Morale drops and
+     crews and soldiers fire 20% slower until you can.
+
+### Workers and soldiers
+* **Workers** (white EVA, yellow visor, tool pack) **build** every structure,
+  since construction is no longer instant: sites show scaffolding and progress.
+  They also **repair** damage automatically (paying Biomass per HP), **staff**
+  economy buildings and Mining Rigs, and crew spare turrets.
+* **Soldiers** (grey armour, red shoulder band, mirrored visor, rifle) crew
+  turrets first, then **garrison Guard Posts** and shoot from them (+4 m range).
+  * **Squad orders:** click a soldier or drag a box around several, then
+    **right-click** to send them anywhere. They hold there and shoot.
+  * **H** returns them to automatic duty.
+* **Recruit** workers at the Command Hab (click it, 40 Biomass) and train
+  soldiers at a Barracks (60). Population cap is 12 plus 4 per Hab Module.
+
+### Colony buildings (COLONY tab)
+| Building | Effect |
+|---|---|
+| Harvester Bay | drones collect corpse Biomass |
+| Mining Rig | on a Xenite deposit; a worker mines 14 Xenite/min, sold after each wave |
+| Hab Module | +4 population |
+| Barracks | train soldiers |
+| Bio-Refinery | +25% Biomass from drone deliveries (max 2 count) |
+| Fabricator | -15% build and upgrade costs (max 2 count) |
+| Armory | unlocks tier III turret upgrades, +25% soldier damage |
+| Medbay | wounded recover twice as fast; soldiers heal on base |
+| Guard Post (DEFENCE tab) | 2 soldiers garrison it |
+
+Buildings marked "needs 1 worker" only work while staffed.
+
+### A more realistic horde
+* Stride phase advances with the **distance actually walked**, so feet never
+  slide.
+* **Packs** leave one canyon mouth together and hold a shared lane.
+* Aliens out in the open **pause to sniff** before pressing on.
+* Wider size (±12%) and speed (±22%) variation.
+
+## Art direction
+* **Aliens:** grim low-poly, dark oily chitin and flesh, with the identity
+  colour on eyes and markings. Six distinct body plans with GPU animation:
+  hexapod tripod gait, quadruped trot, knuckle-walking clubs, a worm's
+  travelling wave, pulsing sacs. Each strain has its own corpse look:
+  * **Stalker:** curls its legs in and splits along the back.
+  * **Mauler:** collapses face-first; its shell cracks and plates scatter.
+  * **Spitter:** its sac bursts into a green acid pool.
+  * **Snatcher:** falls on its back, arms reaching up.
+  * **Burrower:** separates into a line of chunks.
+  * **Brood Mother:** her sac ruptures, spilling dead young into a huge ichor pool.
+* **Ichor** is acid green; **human blood** dark red.
+* **Humans and buildings** are industrial: off-white, hazard yellow, worn grey.
+  **Dragged colonists flail and kick.**
+* **Turrets** carry their damage-type accent stripe and matching muzzle
+  effects: Ballistic orange, Incendiary red, Piercing cyan, Shock electric
+  blue, Explosive yellow, Seismic brown. Tiers II/III add armour plating and
+  +10% size per tier.
+* **The planet:** rust-orange rock under a dim violet sky with a large ringed
+  gas giant and a small moon. Zoom in and the camera tilts toward the horizon
+  to show them.
 
 ## Current milestone: **M4 – colonists, abduction, feeding**
 
@@ -146,25 +192,29 @@ On Windows, `run_benchmark.bat` does the import and runs the benchmark:
 xenite_frontier\run_benchmark.bat "C:\path\to\Godot_v4.4.1-stable_win64_console.exe"
 ```
 
-### Controls (M4)
+### Controls (M5a)
 
 | Action | Keyboard / mouse | Gamepad |
 |---|---|---|
-| Pick build tool | 1-9, 0 (Tab cycles) | LB / RB |
+| Build category (Defence / Turrets / Colony) | Tab | – |
+| Pick build tool | 1-8 within the category | LB / RB |
 | Build (drag to paint walls/doors) | Left click | A (at screen-centre crosshair) |
-| Select a structure (no tool) | Left click | A |
+| Select a structure / the Command Hab (no tool) | Left click | A |
+| Select soldiers | Click one, Shift-click to add, or drag a box | A on a soldier |
+| Order selected soldiers | Right click on the ground | B |
+| Return soldiers to their posts | H | – |
+| Call the next wave early | N | D-pad left |
 | Upgrade selected | U or Inspector button | X |
 | Repair selected | R or Inspector button | Y |
 | Sell (50% refund) | Right click (drag with a tool) | B |
 | Deselect | Esc / right click elsewhere | – |
 | Intel: counter table | I | D-pad right |
-| Swarm pressure ±60 aliens/min | + / − | D-pad up / down |
-| Swarm pressure 120 / 600 / 3,000 / 12,000 per min | F5 / F6 / F7 / F8 | – |
+| Sandbox pressure (`--sandbox` only) | + / −, F5–F8 | D-pad up / down |
 | Pan camera | WASD / arrows / screen edge / middle-drag | Left stick |
 | Fast pan | Shift | L3 |
 | Zoom | Mouse wheel / Q, E | LT / RT |
 | Pause simulation | Space | Start |
-| Reset outpost | F10 | – |
+| New run (back to landing) | F10 | – |
 | Sandbox free build | F11 | – |
 | Run benchmark | B / F9 | – |
 | Flow-field heatmap | F | – |
@@ -270,6 +320,7 @@ xenite_frontier/
     turrets.json       damage types, counter multipliers, turret stats
     structures.json    walls, blast doors, core HP, climb height
     colonists.json     crew size, walk speed, uncrewed rate, recovery, carrier speed, names
+    waves.json         wave schedule (size x0.7), timers, packs, growth
     economy.json       ALL economy values: Biomass, costs, upgrades, drones, Xenite, Threat, Hazard Contracts
     game_config.json   benchmark / swarm / combat caps / map tuning
   scenes/main.tscn     root; everything else is built in code
@@ -286,12 +337,14 @@ xenite_frontier/
     world/corpses.gd      pooled corpses + pile heights + Biomass value
     econ/economy.gd       Biomass wallet, costs, refunds, deposits
     econ/harvester.gd     Harvester Bays + drone state machine
-    colony/colonists.gd   colonists: crew assignment, A* walking, abduction, rescue, recovery
+    colony/colonists.gd   workers & soldiers: jobs, A* walking, recruitment, squads, abduction, rescue
+    game/wave_director.gd landing -> build countdown -> waves -> payday (bounty, ore, wages)
     render/alien_meshes.gd   grey alien family (near/far LOD), joint rig data
     render/alien.gdshader    GPU joint animation: walk / all-fours sprint / feed / attack
     render/mesh_acc.gd       primitive-to-mesh builder (vertex colours, part ids)
     render/station_models.gd hab dome, barrier walls, doors, props, crystals, boulders
     render/terrain.gdshader  planet surface (regolith, strata cliffs, craters, build grid)
+    render/sky.gdshader      dim violet sky, ringed gas giant, small moon
     render/fx.gd / fx.gdshader  pooled particles, beams, ichor splats
     render/ground.gdshader
     world/outpost_map.gd  grid (ground/rock/wall), spawn zones, core, visuals
@@ -331,7 +384,7 @@ orientation, triangle budget, vertex colours and part ids for the animation rig.
 - [x] **M2** Walls, turrets, damage types and counter table, death, corpse piling
 - [x] **M3** Biomass economy, harvester drones, in-run turret tiers
 - [x] **M4** Colonists, abduction, feeding
-- [ ] **M5** Build/battle phases, waves, day/night, abilities, Threat Level
+- [~] **M5** Build/battle phases (M5a done: phases, waves, timer, Threat Level, workers/soldiers, finance; M5b: day/night, abilities), waves, day/night, abilities, Threat Level
 - [ ] **M6** Xenite, Colony Charter, specialisations, Hazard Contracts, save/load
 - [ ] **M7** Gore/juice pass, 3 outposts, balance pass
 - [ ] **M8** Steam (GodotSteam), achievements, cloud saves, Deck/controller, export + upload scripts
@@ -339,6 +392,9 @@ orientation, triangle budget, vertex colours and part ids for the animation rig.
 See `CHANGELOG.md` for per-milestone notes.
 
 ## Screenshots (software-rendered)
+
+![Art direction: the six strains walking, attacking, feeding and dead](docs/m5a_aliens.png)
+![M5a: waves, workers and soldiers, Mars-base outpost](docs/m5a_outpost.png)
 
 ![M4.5: the grey alien family - walking, sprinting on all fours, attacking, feeding](docs/m45_aliens.png)
 ![M4.5: Mars-base outpost on the alien planet](docs/m45_outpost.png)

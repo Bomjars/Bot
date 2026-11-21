@@ -17,12 +17,12 @@
 		"seismic": "Seismic"
 	},
 	"damage_type_colors": {
-		"ballistic": "#f2c94c",
-		"incendiary": "#ff6a2a",
-		"piercing": "#5fb8ff",
-		"shock": "#6ff7ff",
-		"explosive": "#a3d65c",
-		"seismic": "#c98b55"
+		"ballistic": "#ff8c1a",
+		"incendiary": "#ff2a1a",
+		"piercing": "#2ee6ff",
+		"shock": "#3a6bff",
+		"explosive": "#ffd21a",
+		"seismic": "#9a6a3a"
 	},
 	"weak_multiplier": 1.5,
 	"resist_multiplier": 0.5,

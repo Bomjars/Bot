@@ -72,6 +72,8 @@ func _process(delta: float) -> void:
 	if photo_lock:
 		_apply()
 		return
+	# tilt toward the horizon as you zoom in (the sky and gas giant show)
+	pitch_deg = lerpf(22.0, 60.0, smoothstep(12.0, 110.0, distance))
 	position.x = clampf(position.x, bounds.position.x, bounds.end.x)
 	position.z = clampf(position.z, bounds.position.y, bounds.end.y)
 	_apply()

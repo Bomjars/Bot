@@ -52,6 +52,7 @@ var multimesh: MultiMesh
 var instance: MultiMeshInstance3D
 var mesh_near: Mesh
 var mesh_far: Mesh
+var stride := 1.0     # stride phase per metre walked
 
 
 func _init(id: int, d: Dictionary, mesh: Mesh, material: Material) -> void:

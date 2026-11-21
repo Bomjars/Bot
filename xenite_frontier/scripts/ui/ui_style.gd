@@ -4,8 +4,8 @@ extends RefCounted
 
 ## strain identity colours = their glowing eyes / markings
 const ALIEN_COLORS := {
-	"stalker": "#ffa01a", "mauler": "#ff2a14", "spitter": "#7dff40",
-	"snatcher": "#b45aff", "burrower": "#ff8c1a", "brood_mother": "#ff4aa0",
+	"stalker": "#efe9d6", "mauler": "#d0141a", "spitter": "#7dff3a",
+	"snatcher": "#ffd21a", "burrower": "#ffa31a", "brood_mother": "#ff2fb0",
 }
 
 

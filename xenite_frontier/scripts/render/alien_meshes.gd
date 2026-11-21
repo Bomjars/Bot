@@ -1,205 +1,264 @@
 class_name AlienMeshes
 extends RefCounted
-## The swarm: one family of predatory grey aliens - bald, big-craniumed,
-## huge almond eyes, slit mouths full of teeth, long clawed limbs. They walk
-## upright and drop to all fours to sprint (see alien.gdshader). Each strain
-## keeps a distinct silhouette, posture and glowing eye/marking colour:
-##   Stalker   lean grey sprinter, amber eyes, spine ridge
-##   Mauler    hulking slate brute, red armour plates, huge fists, knuckle-walks
-##   Spitter   thin green-grey biped, glowing acid throat and back sacs
-##   Snatcher  very tall pale-violet grey, enormous arms with hooked fingers
-##   Burrower  low armoured crawler, orange shovel claws, always on all fours
-##   Brood Mother  towering matriarch, bone crown, bloated abdomen of glowing eggs
-## Each mesh is built twice: lod 0 (near) and lod 1 (zoomed out).
+## The swarm (art direction): grim low-poly predators of dark oily chitin and
+## flesh (near-black, purple-brown) so each strain's identity colour pops:
+##   Stalker   small, low, 6 thin legs, long jaw, hunched starving dog | bone-white eyes
+##   Mauler    huge, front-heavy, plated shoulder shell, two club forelimbs,
+##             short hind legs | deep red markings on the plates
+##   Spitter   tall, thin, upright on 4 stilt legs, swollen throat sac | acid green sac
+##   Snatcher  lean crouched sprinter, long hooked arms, back spines
+##             | yellow eyes + yellow stripe down the spine
+##   Burrower  segmented worm, drill-tooth maw, no eyes | amber glow between segments
+##   Brood Mother  4x Stalker scale, bloated egg-sac abdomen, crown of horns | magenta
+## Vertices carry part type / phase / joint pivot for the GPU rig in
+## alien.gdshader. Each mesh is built twice: lod 0 (near) and lod 1 (far).
 
-const GLOW := 0.0  # vertex alpha for emissive parts
+const GLOW := 0.0  # vertex alpha: 0 = fully emissive, 1 = none
 
-enum P { TORSO, HEAD, UARM_L, UARM_R, FARM_L, FARM_R, THIGH_L, THIGH_R, SHIN_L, SHIN_R, STATIC, TAIL }
+const CHITIN := Color(0.11, 0.08, 0.1)
+const FLESH := Color(0.21, 0.12, 0.13)
+const DARK := Color(0.05, 0.04, 0.05)
+const BONE := Color(0.72, 0.68, 0.6)
+
+enum P { BODY, HEAD, LEG, ARM, SEG, SAC, TAIL, STATIC, SHELL }
 
 
-static func _cfg(id: String) -> Dictionary:
+## Shader uniforms + stride rate per strain.
+static func rig(id: String) -> Dictionary:
 	match id:
 		"stalker":
-			return {"hy": 0.62, "ky": 0.33, "sy": 1.02, "sx": 0.15, "hx": 0.08, "head_r": 0.2, "head_y": 1.24, "head_z": 0.03,
-				"arm_len": 0.84, "arm_t": 0.05, "fore_t": 0.045, "leg_t": 0.065, "shin_t": 0.05, "chest": Vector3(0.14, 0.22, 0.1),
-				"skin": Color(0.4, 0.42, 0.45), "eye": Color(1.0, 0.62, 0.1, GLOW), "claw": Color(0.86, 0.82, 0.74),
-				"q_min": 0.0, "q_max": 1.0, "run_lo": 0.45, "run_hi": 0.75, "gait": 11.0, "leg_amp": 0.6, "arm_amp": 0.5}
+			return {"leg_amp": 0.55, "arm_amp": 0.0, "wave_amp": 0.0, "leg_lift": 0.07, "dead_curl": 1.25, "dead_arm": 0.0, "seg_gap": 0.0, "split": 0.05, "split_y": 0.47, "sheen": 0.55, "gait_freq": 13.0}
 		"mauler":
-			return {"hy": 0.8, "ky": 0.42, "sy": 1.5, "sx": 0.36, "hx": 0.16, "head_r": 0.15, "head_y": 1.52, "head_z": 0.24,
-				"arm_len": 1.22, "arm_t": 0.11, "fore_t": 0.15, "leg_t": 0.12, "shin_t": 0.1, "chest": Vector3(0.4, 0.42, 0.3),
-				"skin": Color(0.26, 0.27, 0.3), "mark": Color(0.5, 0.07, 0.05), "eye": Color(1.0, 0.15, 0.08, GLOW), "claw": Color(0.8, 0.76, 0.7),
-				"q_min": 0.45, "q_max": 0.8, "run_lo": 0.3, "run_hi": 0.8, "gait": 6.0, "leg_amp": 0.4, "arm_amp": 0.45}
+			return {"leg_amp": 0.35, "arm_amp": 0.55, "wave_amp": 0.0, "leg_lift": 0.1, "dead_curl": 0.4, "dead_arm": 0.7, "seg_gap": 0.0, "split": 0.0, "split_y": 10.0, "sheen": 0.5, "gait_freq": 5.5}
 		"spitter":
-			return {"hy": 0.68, "ky": 0.36, "sy": 1.12, "sx": 0.13, "hx": 0.08, "head_r": 0.18, "head_y": 1.34, "head_z": 0.02,
-				"arm_len": 0.6, "arm_t": 0.045, "fore_t": 0.04, "leg_t": 0.06, "shin_t": 0.05, "chest": Vector3(0.12, 0.24, 0.09),
-				"skin": Color(0.36, 0.41, 0.36), "sac": Color(0.45, 1.0, 0.2, GLOW), "eye": Color(0.5, 1.0, 0.25, GLOW), "claw": Color(0.8, 0.85, 0.7),
-				"q_min": 0.0, "q_max": 0.15, "run_lo": 0.6, "run_hi": 0.9, "gait": 8.0, "leg_amp": 0.5, "arm_amp": 0.35}
+			return {"leg_amp": 0.4, "arm_amp": 0.0, "wave_amp": 0.0, "leg_lift": 0.12, "dead_curl": 0.8, "dead_arm": 0.0, "seg_gap": 0.0, "split": 0.0, "split_y": 10.0, "sheen": 0.5, "gait_freq": 7.0}
 		"snatcher":
-			return {"hy": 1.0, "ky": 0.52, "sy": 1.6, "sx": 0.17, "hx": 0.08, "head_r": 0.19, "head_y": 1.84, "head_z": 0.04,
-				"arm_len": 1.45, "arm_t": 0.045, "fore_t": 0.04, "leg_t": 0.06, "shin_t": 0.048, "chest": Vector3(0.14, 0.3, 0.1),
-				"skin": Color(0.5, 0.47, 0.56), "eye": Color(0.72, 0.35, 1.0, GLOW), "claw": Color(0.95, 0.92, 1.0),
-				"q_min": 0.0, "q_max": 1.0, "run_lo": 0.5, "run_hi": 0.8, "gait": 9.0, "leg_amp": 0.55, "arm_amp": 0.45, "fingers": 0.32}
+			return {"leg_amp": 0.7, "arm_amp": 0.6, "wave_amp": 0.0, "leg_lift": 0.08, "dead_curl": 0.5, "dead_arm": 0.0, "seg_gap": 0.0, "split": 0.0, "split_y": 10.0, "sheen": 0.55, "gait_freq": 9.5}
 		"burrower":
-			return {"hy": 0.5, "ky": 0.27, "sy": 0.95, "sx": 0.2, "hx": 0.13, "head_r": 0.14, "head_y": 1.04, "head_z": 0.1,
-				"arm_len": 0.62, "arm_t": 0.07, "fore_t": 0.075, "leg_t": 0.08, "shin_t": 0.065, "chest": Vector3(0.24, 0.25, 0.18),
-				"skin": Color(0.38, 0.33, 0.29), "mark": Color(0.42, 0.28, 0.18), "eye": Color(1.0, 0.55, 0.1, GLOW), "claw": Color(0.95, 0.55, 0.15),
-				"q_min": 1.0, "q_max": 1.0, "run_lo": 0.4, "run_hi": 0.8, "gait": 10.0, "leg_amp": 0.45, "arm_amp": 0.5, "shovel": true}
+			return {"leg_amp": 0.0, "arm_amp": 0.0, "wave_amp": 0.14, "leg_lift": 0.0, "dead_curl": 0.0, "dead_arm": 0.0, "seg_gap": 0.3, "split": 0.0, "split_y": 10.0, "sheen": 0.6, "gait_freq": 8.0}
 		"brood_mother":
-			return {"hy": 1.2, "ky": 0.62, "sy": 2.1, "sx": 0.45, "hx": 0.25, "head_r": 0.3, "head_y": 2.42, "head_z": 0.18,
-				"arm_len": 1.7, "arm_t": 0.14, "fore_t": 0.15, "leg_t": 0.18, "shin_t": 0.15, "chest": Vector3(0.5, 0.5, 0.42),
-				"skin": Color(0.5, 0.47, 0.5), "eggs": Color(1.0, 0.3, 0.7, GLOW), "eye": Color(1.0, 0.25, 0.6, GLOW), "claw": Color(0.92, 0.88, 0.78),
-				"q_min": 0.3, "q_max": 0.55, "run_lo": 0.3, "run_hi": 0.9, "gait": 3.5, "leg_amp": 0.35, "arm_amp": 0.3}
-	return _cfg("stalker")
+			return {"leg_amp": 0.35, "arm_amp": 0.0, "wave_amp": 0.0, "leg_lift": 0.15, "dead_curl": 1.0, "dead_arm": 0.0, "seg_gap": 0.0, "split": 0.12, "split_y": 1.3, "sheen": 0.55, "gait_freq": 3.5}
+	return rig("stalker")
 
 
-## Shader uniforms for a strain (joint pivots + gait).
-static func rig(id: String) -> Dictionary:
-	var c := _cfg(id)
-	var hy: float = c.hy
-	var sy: float = c.sy
-	var arm_len: float = c.arm_len
-	# pitch so the hands reach the ground on all fours; crouch the rest
-	var cos_p := clampf((arm_len + 0.05 - hy) / (sy - hy), 0.2, 1.0)
-	var pitch := acos(cos_p)
-	var hand_h := hy + (sy - hy) * cos_p - arm_len
-	return {
-		"hip": Vector2(c.hx, hy), "knee_y": c.ky, "shoulder": Vector3(c.sx, sy, 0.0),
-		"elbow_y": sy - arm_len * 0.5, "neck_y": sy + 0.04, "pitch_max": pitch,
-		"q_min": c.q_min, "q_max": c.q_max, "run_lo": c.run_lo, "run_hi": c.run_hi,
-		"quad_drop": maxf(0.0, hand_h - 0.05) * 0.6, "gait_freq": c.gait,
-		"leg_amp": c.leg_amp, "arm_amp": c.arm_amp, "knee_amp": 0.7,
-	}
+## How the corpse lies: "side", "back", "face" (face-first) or "flat".
+static func corpse_pose(id: String) -> String:
+	match id:
+		"snatcher": return "back"
+		"mauler": return "face"
+		"burrower": return "flat"
+	return "side"
 
 
 static func build(id: String, lod := 0) -> ArrayMesh:
 	var a := MeshAcc.new()
-	var c := _cfg(id)
 	var hi := lod == 0
-	_biped(a, c, hi)
 	match id:
-		"stalker": _stalker(a, c, hi)
-		"mauler": _mauler(a, c, hi)
-		"spitter": _spitter(a, c, hi)
-		"snatcher": pass
-		"burrower": _burrower(a, c, hi)
-		"brood_mother": _mother(a, c, hi)
+		"stalker": _stalker(a, hi, 1.0, Color(0.95, 0.93, 0.85, GLOW))
+		"mauler": _mauler(a, hi)
+		"spitter": _spitter(a, hi)
+		"snatcher": _snatcher(a, hi)
+		"burrower": _burrower(a, hi)
+		"brood_mother": _mother(a, hi)
+		_: _stalker(a, hi, 1.0, Color(0.95, 0.93, 0.85, GLOW))
 	return a.commit(false)
 
 
-static func _biped(a: MeshAcc, c: Dictionary, hi: bool) -> void:
-	var seg := 7 if hi else 4
-	var rings := 4 if hi else 2
-	var cseg := 5 if hi else 4
-	var skin: Color = c.skin
-	var claw: Color = c.claw
-	var hy: float = c.hy
-	var ky: float = c.ky
-	var sy: float = c.sy
-	var sx: float = c.sx
-	var hx: float = c.hx
-	var hr: float = c.head_r
-	var head_y: float = c.head_y
-	var head_z: float = c.head_z
-	var chest: Vector3 = c.chest
-	var dark := skin.darkened(0.55)
+# ------------------------------------------------------------ helpers
 
-	# pelvis + torso (ribcage tapering to a thin waist)
-	a.add(MeshAcc.ball(1.0, seg, rings), MeshAcc.xf(Vector3(0, hy, 0), Vector3.ZERO, Vector3(hx + 0.07, 0.11, chest.z * 0.9)), skin, P.TORSO)
-	a.add(MeshAcc.ball(1.0, seg, rings), MeshAcc.xf(Vector3(0, hy + (sy - hy) * 0.62, -0.01), Vector3.ZERO, Vector3(chest.x, (sy - hy) * 0.55, chest.z)), skin, P.TORSO)
-	a.add(MeshAcc.capsule(chest.x * 0.45, (sy - hy) * 0.7, cseg, 0), MeshAcc.xf(Vector3(0, hy + (sy - hy) * 0.3, 0)), skin.darkened(0.08), P.TORSO)
-	# neck + head (big bald cranium, small jaw, huge almond eyes)
-	a.add(MeshAcc.capsule(hr * 0.24, 1.0, cseg, 0), MeshAcc.limb(Vector3(0, sy - 0.02, 0), Vector3(0, head_y - hr * 0.6, head_z * 0.6)), skin, P.HEAD)
-	a.add(MeshAcc.ball(hr, seg, rings), MeshAcc.xf(Vector3(0, head_y + hr * 0.18, head_z - hr * 0.12), Vector3.ZERO, Vector3(1.0, 1.08, 1.18)), skin, P.HEAD)
-	a.add(MeshAcc.ball(hr * 0.62, seg, rings), MeshAcc.xf(Vector3(0, head_y - hr * 0.52, head_z + hr * 0.38), Vector3.ZERO, Vector3(0.85, 0.9, 1.0)), skin, P.HEAD)
-	for side: float in [-1.0, 1.0]:
-		a.add(MeshAcc.ball(hr * 0.34, 6 if hi else 4, 3 if hi else 2), MeshAcc.xf(Vector3(side * hr * 0.43, head_y - hr * 0.02, head_z + hr * 0.78), Vector3(-8, side * 18.0, side * -24.0), Vector3(1.0, 0.52, 0.42)), c.eye, P.HEAD)
+static func _seg(hi: bool) -> int:
+	return 7 if hi else 4
+
+
+static func _ring(hi: bool) -> int:
+	return 4 if hi else 2
+
+
+## Two-segment limb hip -> knee -> foot. All vertices rotate about the hip.
+static func _limb(a: MeshAcc, hip: Vector3, knee: Vector3, foot: Vector3, t1: float, t2: float, col: Color, part: int, off: float, hi: bool) -> void:
+	var pv := Vector2(hip.y, hip.z)
+	var cs := 5 if hi else 4
+	a.add(MeshAcc.cyl(t1, 1.0, t1 * 0.8, cs), MeshAcc.limb(hip, knee), col, part, off, pv)
+	a.add(MeshAcc.cyl(t2, 1.0, t2 * 0.45, cs), MeshAcc.limb(knee, foot), col, part, off, pv)
 	if hi:
-		a.add(MeshAcc.box(hr * 0.75, hr * 0.09, hr * 0.25), MeshAcc.xf(Vector3(0, head_y - hr * 0.74, head_z + hr * 0.86)), Color(0.08, 0.04, 0.04), P.HEAD)
+		a.add(MeshAcc.ball(t1 * 1.15, 5, 3), MeshAcc.xf(knee), col, part, off, pv)
+
+
+static func _ell(a: MeshAcc, pos: Vector3, scl: Vector3, col: Color, part: int, hi: bool, rot := Vector3.ZERO, off := 0.0, pv := Vector2.ZERO) -> void:
+	a.add(MeshAcc.ball(1.0, _seg(hi), _ring(hi)), MeshAcc.xf(pos, rot, scl), col, part, off, pv)
+
+
+# ------------------------------------------------------------ strains
+
+## Stalker (also the Brood Mother's body at scale k).
+static func _stalker(a: MeshAcc, hi: bool, k: float, eye: Color) -> void:
+	var hy := 0.42 * k
+	# gaunt ribcage + pelvis, hunched spine ridge
+	_ell(a, Vector3(0, hy, 0.05 * k), Vector3(0.17, 0.15, 0.32) * k, CHITIN, P.BODY, hi)
+	_ell(a, Vector3(0, hy * 0.96, -0.32 * k), Vector3(0.13, 0.12, 0.17) * k, FLESH, P.BODY, hi)
+	if hi:
+		for r in 3:
+			_ell(a, Vector3(0, hy - 0.02 * k, (0.2 - r * 0.12) * k), Vector3(0.18, 0.13, 0.025) * k, FLESH.darkened(0.3), P.BODY, false)
+	for s in (5 if hi else 3):
+		var z := (0.28 - s * 0.15) * k
+		a.add(MeshAcc.cone(0.035 * k, 0.12 * k, 4), MeshAcc.xf(Vector3(0, hy + 0.14 * k, z), Vector3(-55, 0, 0)), DARK, P.BODY)
+	# long low head with a long jaw
+	var pv := Vector2(hy, 0.32 * k)
+	a.add(MeshAcc.cyl(0.05 * k, 1.0, 0.04 * k, 5), MeshAcc.limb(Vector3(0, hy + 0.02 * k, 0.3 * k), Vector3(0, hy - 0.04 * k, 0.52 * k)), FLESH, P.HEAD, 0.0, pv)
+	_ell(a, Vector3(0, hy - 0.03 * k, 0.62 * k), Vector3(0.085, 0.075, 0.16) * k, CHITIN, P.HEAD, hi, Vector3.ZERO, 0.0, pv)
+	_ell(a, Vector3(0, hy - 0.05 * k, 0.83 * k), Vector3(0.055, 0.035, 0.14) * k, CHITIN, P.HEAD, hi, Vector3(-6, 0, 0), 0.0, pv)
+	_ell(a, Vector3(0, hy - 0.11 * k, 0.78 * k), Vector3(0.05, 0.028, 0.13) * k, FLESH, P.HEAD, hi, Vector3(12, 0, 0), 0.0, pv)
+	if hi:
+		for t in 4:
+			a.add(MeshAcc.cone(0.012 * k, 0.05 * k, 3), MeshAcc.xf(Vector3((t - 1.5) * 0.025 * k, hy - 0.085 * k, (0.86 + 0.02 * t) * k), Vector3(180, 0, 0)), BONE, P.HEAD, 0.0, pv)
+	for e in 2:
+		for sx: float in [-1.0, 1.0]:
+			a.add(MeshAcc.ball(0.017 * k if e == 0 else 0.012 * k, 5, 3), MeshAcc.xf(Vector3(sx * (0.045 + 0.02 * e) * k, hy + 0.02 * k, (0.7 - 0.06 * e) * k)), eye, P.HEAD, 0.0, pv)
+	# six thin legs, tripod gait (L1 R2 L3 together)
+	for pair in 3:
+		var z := (0.22 - pair * 0.24) * k
+		for sx: float in [-1.0, 1.0]:
+			var off := (0.0 if pair % 2 == 0 else PI) + (0.0 if sx < 0.0 else PI)
+			var hip := Vector3(sx * 0.1 * k, hy, z)
+			var knee := Vector3(sx * 0.32 * k, hy + 0.14 * k, z + 0.04 * k)
+			var foot := Vector3(sx * 0.37 * k, 0.0, z + 0.1 * k)
+			_limb(a, hip, knee, foot, 0.024 * k, 0.017 * k, CHITIN, P.LEG, off, hi)
+
+
+static func _mauler(a: MeshAcc, hi: bool) -> void:
+	var red := Color(0.75, 0.05, 0.04, 0.5)
+	# front-heavy torso, small rear
+	_ell(a, Vector3(0, 1.15, 0.3), Vector3(0.6, 0.55, 0.62), FLESH, P.BODY, hi)
+	_ell(a, Vector3(0, 0.85, -0.6), Vector3(0.38, 0.35, 0.45), FLESH.darkened(0.15), P.BODY, hi)
+	# plated shoulder shell with deep red markings
+	_ell(a, Vector3(0, 1.5, 0.25), Vector3(0.78, 0.42, 0.72), CHITIN, P.SHELL, hi)
+	for sx: float in [-1.0, 1.0]:
+		_ell(a, Vector3(sx * 0.55, 1.32, 0.38), Vector3(0.26, 0.3, 0.45), CHITIN, P.SHELL, hi, Vector3(0, 0, sx * 20.0))
+		a.add(MeshAcc.box(0.08, 0.05, 0.6), MeshAcc.xf(Vector3(sx * 0.28, 1.88, 0.25), Vector3(0, 0, sx * 18.0)), red, P.SHELL)
+	a.add(MeshAcc.box(0.5, 0.05, 0.1), MeshAcc.xf(Vector3(0, 1.9, 0.5)), red, P.SHELL)
 	if hi:
 		for k in 3:
-			var tx := (-1.0 + k) * hr * 0.2
-			a.add(MeshAcc.cone(hr * 0.05, hr * 0.2, 4), MeshAcc.xf(Vector3(tx, head_y - hr * 0.73, head_z + hr * 0.95), Vector3(180, 0, 0)), claw, P.HEAD)
-
-	# arms: shoulder -> elbow -> wrist, three long claws
-	var arm_len: float = c.arm_len
-	var ey := sy - arm_len * 0.5
-	for side: float in [-1.0, 1.0]:
-		var l := side < 0.0
-		var sh := Vector3(side * sx, sy, 0.0)
-		var el := Vector3(side * sx * 1.04, ey, 0.02)
-		var wr := Vector3(side * sx * 1.07, sy - arm_len + 0.06, 0.04)
+			_ell(a, Vector3(0, 1.32 - k * 0.12, -0.05 - k * 0.22), Vector3(0.48 - k * 0.07, 0.16, 0.2), CHITIN, P.SHELL, false)
+	# low head under the shell, tusks, small red eyes
+	var pv := Vector2(1.05, 0.75)
+	_ell(a, Vector3(0, 0.98, 0.95), Vector3(0.24, 0.2, 0.25), CHITIN, P.HEAD, hi, Vector3.ZERO, 0.0, pv)
+	for sx: float in [-1.0, 1.0]:
+		a.add(MeshAcc.cone(0.045, 0.28, 4), MeshAcc.xf(Vector3(sx * 0.14, 0.86, 1.12), Vector3(60, 0, sx * -20.0)), BONE, P.HEAD, 0.0, pv)
+		a.add(MeshAcc.ball(0.03, 5, 3), MeshAcc.xf(Vector3(sx * 0.1, 1.05, 1.15)), Color(1.0, 0.1, 0.05, GLOW), P.HEAD, 0.0, pv)
+	# two club forelimbs (knuckle-walk), short hind legs
+	for sx: float in [-1.0, 1.0]:
+		var off := 0.0 if sx < 0.0 else PI
+		var sh := Vector3(sx * 0.55, 1.3, 0.55)
+		var el := Vector3(sx * 0.68, 0.72, 0.78)
+		var wr := Vector3(sx * 0.64, 0.25, 0.85)
+		var pvs := Vector2(sh.y, sh.z)
+		a.add(MeshAcc.cyl(0.17, 1.0, 0.15, 6 if hi else 4), MeshAcc.limb(sh, el), FLESH, P.ARM, off, pvs)
+		a.add(MeshAcc.cyl(0.16, 1.0, 0.2, 6 if hi else 4), MeshAcc.limb(el, wr), FLESH, P.ARM, off, pvs)
+		_ell(a, wr + Vector3(0, -0.05, 0.02), Vector3(0.28, 0.24, 0.3), CHITIN, P.ARM, hi, Vector3.ZERO, off, pvs)
 		if hi:
-			a.add(MeshAcc.ball(c.arm_t * 1.25, cseg, 2), MeshAcc.xf(sh), skin, P.UARM_L if l else P.UARM_R)
-		a.add(MeshAcc.capsule(c.arm_t, 1.0, cseg, 0), MeshAcc.limb(sh, el), skin, P.UARM_L if l else P.UARM_R)
+			for k in 3:
+				a.add(MeshAcc.cone(0.05, 0.16, 4), MeshAcc.xf(wr + Vector3(sx * 0.12 - sx * k * 0.1, 0.12, 0.2), Vector3(-40, 0, 0)), BONE, P.ARM, off, pvs)
+		_limb(a, Vector3(sx * 0.3, 0.82, -0.65), Vector3(sx * 0.4, 0.45, -0.5), Vector3(sx * 0.4, 0.0, -0.68), 0.13, 0.11, FLESH, P.LEG, PI - off, hi)
+
+
+static func _spitter(a: MeshAcc, hi: bool) -> void:
+	var acid := Color(0.35, 0.95, 0.08, 0.62)
+	# tall thin body on four stilt legs
+	_ell(a, Vector3(0, 1.45, 0.02), Vector3(0.14, 0.32, 0.15), CHITIN, P.BODY, hi, Vector3(8, 0, 0))
+	_ell(a, Vector3(0, 1.1, -0.06), Vector3(0.17, 0.1, 0.19), FLESH, P.BODY, hi)
+	a.add(MeshAcc.ball(0.11, 6, 4), MeshAcc.xf(Vector3(0, 1.5, -0.16)), acid, P.SAC, 0.7, Vector2(1.5, -0.16))
+	# neck, small head, swollen translucent throat sac
+	var pv := Vector2(1.72, 0.06)
+	a.add(MeshAcc.cyl(0.04, 1.0, 0.035, 5), MeshAcc.limb(Vector3(0, 1.72, 0.05), Vector3(0, 1.95, 0.14)), FLESH, P.HEAD, 0.0, pv)
+	_ell(a, Vector3(0, 2.0, 0.2), Vector3(0.08, 0.085, 0.13), CHITIN, P.HEAD, hi, Vector3.ZERO, 0.0, pv)
+	for sx: float in [-1.0, 1.0]:
+		a.add(MeshAcc.ball(0.015, 4, 2), MeshAcc.xf(Vector3(sx * 0.045, 2.03, 0.3)), acid, P.HEAD, 0.0, pv)
+	a.add(MeshAcc.ball(0.17, 8 if hi else 5, 5 if hi else 3), MeshAcc.xf(Vector3(0, 1.78, 0.22), Vector3.ZERO, Vector3(1.0, 1.1, 1.0)), acid, P.SAC, 0.0, Vector2(1.78, 0.22))
+	# four stilt legs, diagonal trot
+	for fz: float in [1.0, -1.0]:
+		for sx: float in [-1.0, 1.0]:
+			var off := 0.0 if sx * fz > 0.0 else PI
+			_limb(a, Vector3(sx * 0.11, 1.1, fz * 0.1), Vector3(sx * 0.36, 0.82, fz * 0.3), Vector3(sx * 0.44, 0.0, fz * 0.4), 0.032, 0.022, CHITIN, P.LEG, off, hi)
+
+
+static func _snatcher(a: MeshAcc, hi: bool) -> void:
+	var yel := Color(1.0, 0.85, 0.1, GLOW)
+	# crouched lean torso pitched forward, yellow stripe + spines on the back
+	_ell(a, Vector3(0, 1.0, 0.15), Vector3(0.15, 0.32, 0.12), CHITIN, P.BODY, hi, Vector3(52, 0, 0))
+	_ell(a, Vector3(0, 0.76, -0.12), Vector3(0.13, 0.1, 0.13), FLESH, P.BODY, hi)
+	var back := Basis.from_euler(Vector3(deg_to_rad(52), 0, 0))
+	a.add(MeshAcc.box(0.07, 0.62, 0.03), Transform3D(back, Vector3(0, 1.0, 0.15) + back * Vector3(0, 0, -0.125)), yel, P.BODY)
+	for s in (5 if hi else 3):
+		var t := float(s) / 4.0
+		var p := Vector3(0, 1.0, 0.15) + back * Vector3(0, lerpf(0.26, -0.24, t), -0.12)
+		a.add(MeshAcc.cone(0.03, 0.16, 4), MeshAcc.xf(p, Vector3(-20, 0, 0)), DARK, P.BODY)
+	# narrow head, yellow eyes
+	var pv := Vector2(1.18, 0.38)
+	_ell(a, Vector3(0, 1.17, 0.52), Vector3(0.085, 0.09, 0.15), CHITIN, P.HEAD, hi, Vector3(10, 0, 0), 0.0, pv)
+	_ell(a, Vector3(0, 1.08, 0.64), Vector3(0.05, 0.03, 0.1), FLESH, P.HEAD, hi, Vector3.ZERO, 0.0, pv)
+	for sx: float in [-1.0, 1.0]:
+		a.add(MeshAcc.ball(0.028, 5, 3), MeshAcc.xf(Vector3(sx * 0.05, 1.2, 0.63)), yel, P.HEAD, 0.0, pv)
+	# long arms with hooked claws, swinging like a sprinter's
+	for sx: float in [-1.0, 1.0]:
+		var off := PI if sx < 0.0 else 0.0
+		var sh := Vector3(sx * 0.17, 1.18, 0.33)
+		var el := Vector3(sx * 0.26, 0.7, 0.55)
+		var wr := Vector3(sx * 0.26, 0.18, 0.7)
+		var pvs := Vector2(sh.y, sh.z)
+		a.add(MeshAcc.cyl(0.035, 1.0, 0.03, 5 if hi else 4), MeshAcc.limb(sh, el), CHITIN, P.ARM, off, pvs)
+		a.add(MeshAcc.cyl(0.03, 1.0, 0.022, 5 if hi else 4), MeshAcc.limb(el, wr), CHITIN, P.ARM, off, pvs)
+		for k in (3 if hi else 1):
+			var tip := wr + Vector3(sx * (k - 1) * 0.035, -0.1, 0.18)
+			a.add(MeshAcc.cone(0.018, 1.0, 4), MeshAcc.limb(wr + Vector3(sx * (k - 1) * 0.03, 0, 0), tip), BONE, P.ARM, off, pvs)
+	# digitigrade legs
+	for sx: float in [-1.0, 1.0]:
+		var off := 0.0 if sx < 0.0 else PI
+		var hip := Vector3(sx * 0.1, 0.75, -0.15)
+		var pvl := Vector2(hip.y, hip.z)
+		var knee := Vector3(sx * 0.13, 0.45, 0.1)
+		var ank := Vector3(sx * 0.13, 0.16, -0.16)
+		a.add(MeshAcc.cyl(0.045, 1.0, 0.035, 5 if hi else 4), MeshAcc.limb(hip, knee), CHITIN, P.LEG, off, pvl)
+		a.add(MeshAcc.cyl(0.035, 1.0, 0.025, 5 if hi else 4), MeshAcc.limb(knee, ank), CHITIN, P.LEG, off, pvl)
+		a.add(MeshAcc.cyl(0.025, 1.0, 0.015, 4), MeshAcc.limb(ank, Vector3(sx * 0.13, 0.0, 0.05)), DARK, P.LEG, off, pvl)
+
+
+static func _burrower(a: MeshAcc, hi: bool) -> void:
+	var amber := Color(1.0, 0.55, 0.08, 0.4)
+	var zs := [0.75, 0.38, 0.0, -0.38, -0.74, -1.07]
+	var rs := [0.3, 0.29, 0.27, 0.24, 0.2, 0.16]
+	for k in zs.size():
+		var z: float = zs[k]
+		var r: float = rs[k]
+		var off := float(k) * 0.9
+		_ell(a, Vector3(0, r * 0.8, z), Vector3(r, r * 0.78, 0.22), CHITIN if k % 2 == 0 else FLESH, P.SEG, hi, Vector3.ZERO, off)
 		if hi:
-			a.add(MeshAcc.ball(c.arm_t * 1.1, cseg, 2), MeshAcc.xf(el), skin, P.FARM_L if l else P.FARM_R)
-		a.add(MeshAcc.capsule(c.fore_t, 1.0, cseg, 0), MeshAcc.limb(el, wr), skin, P.FARM_L if l else P.FARM_R)
-		var flen: float = c.get("fingers", 0.16)
-		for f in (3 if hi else 1):
-			var fx: float = ((f - 1.0) if hi else 0.0) * c.fore_t * 0.9
-			var tip := wr + Vector3(fx * side, -flen, 0.05 + flen * 0.35)
-			a.add(MeshAcc.cone(c.fore_t * 0.42, 1.0, 4), MeshAcc.limb(wr + Vector3(fx * side, 0, 0), tip, Vector3(1, 1, 1)), claw if f != 1 else skin, P.FARM_L if l else P.FARM_R)
-
-	# legs: hip -> knee -> ankle, long foot with toe claws
-	for side: float in [-1.0, 1.0]:
-		var l := side < 0.0
-		var hp := Vector3(side * hx, hy, 0.0)
-		var kn := Vector3(side * hx * 1.05, ky, 0.05)
-		var an := Vector3(side * hx * 1.05, 0.07, -0.03)
-		a.add(MeshAcc.capsule(c.leg_t, 1.0, cseg, 0), MeshAcc.limb(hp, kn), skin, P.THIGH_L if l else P.THIGH_R)
-		if hi:
-			a.add(MeshAcc.ball(c.leg_t * 1.05, cseg, 2), MeshAcc.xf(kn), skin, P.SHIN_L if l else P.SHIN_R)
-		a.add(MeshAcc.capsule(c.shin_t, 1.0, cseg, 0), MeshAcc.limb(kn, an), skin, P.SHIN_L if l else P.SHIN_R)
-		a.add(MeshAcc.ball(1.0, 4, 2) if hi else MeshAcc.box(1.0, 1.0, 1.0), MeshAcc.xf(an + Vector3(0, -0.02, 0.07), Vector3.ZERO, Vector3(c.shin_t * 1.3, 0.04, 0.12) * (1.0 if hi else 1.4)), dark, P.SHIN_L if l else P.SHIN_R)
-		if hi:
-			a.add(MeshAcc.cone(c.shin_t * 0.5, 0.1, 4), MeshAcc.xf(an + Vector3(0, -0.03, 0.2), Vector3(90, 0, 0)), claw, P.SHIN_L if l else P.SHIN_R)
+			_ell(a, Vector3(0, r * 1.45, z), Vector3(r * 0.7, r * 0.18, 0.16), DARK, P.SEG, false, Vector3.ZERO, off)
+		if k < zs.size() - 1:
+			# amber glow seeping between the segments
+			var zm := (z + float(zs[k + 1])) * 0.5
+			a.add(MeshAcc.cyl(r * 0.82, 0.07, -1.0, 8 if hi else 5), MeshAcc.xf(Vector3(0, r * 0.78, zm), Vector3(90, 0, 0)), amber, P.SEG, off + 0.45)
+	# drill-tooth maw ringed with teeth, no eyes
+	a.add(MeshAcc.cyl(0.2, 0.06, -1.0, 8), MeshAcc.xf(Vector3(0, 0.25, 1.0), Vector3(90, 0, 0)), DARK, P.SEG, 0.0)
+	for t in (8 if hi else 5):
+		var ang := TAU * t / (8.0 if hi else 5.0)
+		var p := Vector3(cos(ang) * 0.2, 0.25 + sin(ang) * 0.17, 1.0)
+		var b := Basis.looking_at(Vector3(-cos(ang) * 0.4, -sin(ang) * 0.4, 1.0).normalized(), Vector3.UP)
+		a.add(MeshAcc.cone(0.04, 0.17, 4), Transform3D(b * Basis.from_euler(Vector3(-PI * 0.5, 0, 0)), p), BONE, P.SEG, 0.0)
 
 
-static func _stalker(a: MeshAcc, c: Dictionary, hi: bool) -> void:
-	# serrated spine ridge
-	for k in (5 if hi else 3):
-		var t := float(k) / 4.0
-		var y := lerpf(c.sy - 0.05, c.hy + 0.05, t)
-		a.add(MeshAcc.cone(0.03, 0.13, 4), MeshAcc.xf(Vector3(0, y, -c.chest.z - 0.02), Vector3(-60, 0, 0)), c.skin.darkened(0.4), P.TORSO)
-
-
-static func _mauler(a: MeshAcc, c: Dictionary, hi: bool) -> void:
-	var mark: Color = c.mark
-	# shoulder armour, back plates, huge fists
-	for side: float in [-1.0, 1.0]:
-		a.add(MeshAcc.ball(1.0, 6, 3), MeshAcc.xf(Vector3(side * c.sx * 0.95, c.sy + 0.04, -0.02), Vector3(0, 0, side * 20.0), Vector3(0.22, 0.12, 0.24)), mark, P.UARM_L if side < 0 else P.UARM_R)
-		a.add(MeshAcc.ball(0.17, 7 if hi else 5, 4), MeshAcc.xf(Vector3(side * c.sx * 1.07, c.sy - c.arm_len + 0.02, 0.05)), c.skin.darkened(0.15), P.FARM_L if side < 0 else P.FARM_R)
-	for k in (3 if hi else 2):
-		var y := lerpf(c.sy - 0.1, c.hy + 0.25, float(k) / 2.0)
-		a.add(MeshAcc.box(0.32 - k * 0.05, 0.08, 0.16), MeshAcc.xf(Vector3(0, y, -c.chest.z * 0.9), Vector3(-20, 0, 0)), mark, P.TORSO)
-
-
-static func _spitter(a: MeshAcc, c: Dictionary, hi: bool) -> void:
-	var sac: Color = c.sac
-	a.add(MeshAcc.ball(0.24, 8 if hi else 5, 4), MeshAcc.xf(Vector3(0, c.sy - 0.12, -0.2), Vector3.ZERO, Vector3(1.0, 1.15, 0.9)), sac, P.TORSO)
-	a.add(MeshAcc.ball(0.1, 7 if hi else 5, 4), MeshAcc.xf(Vector3(0, c.head_y - c.head_r * 0.95, c.head_z + 0.06)), sac, P.HEAD)
-
-
-static func _burrower(a: MeshAcc, c: Dictionary, hi: bool) -> void:
-	var mark: Color = c.mark
-	# armoured back plates and big shovel claws
-	for k in (4 if hi else 2):
-		var y := lerpf(c.sy - 0.05, c.hy, float(k) / 3.0)
-		a.add(MeshAcc.ball(1.0, 6, 3), MeshAcc.xf(Vector3(0, y, -c.chest.z * 0.75), Vector3(-15, 0, 0), Vector3(0.2, 0.06, 0.12)), mark, P.TORSO)
-	for side: float in [-1.0, 1.0]:
-		var wr := Vector3(side * c.sx * 1.07, c.sy - c.arm_len + 0.06, 0.04)
-		a.add(MeshAcc.box(0.16, 0.04, 0.2), MeshAcc.xf(wr + Vector3(0, -0.06, 0.1), Vector3(30, 0, 0)), c.claw, P.FARM_L if side < 0 else P.FARM_R)
-
-
-static func _mother(a: MeshAcc, c: Dictionary, hi: bool) -> void:
-	var eggs: Color = c.eggs
-	# bloated abdomen trailing behind, studded with glowing egg sacs
-	a.add(MeshAcc.ball(1.0, 10 if hi else 6, 6 if hi else 4), MeshAcc.xf(Vector3(0, 1.25, -1.25), Vector3(-10, 0, 0), Vector3(0.9, 0.78, 1.3)), c.skin.lerp(Color(0.42, 0.38, 0.46), 0.5), P.TAIL)
-	var spots := [Vector3(0.5, 1.6, -1.0), Vector3(-0.55, 1.5, -1.4), Vector3(0.2, 1.95, -1.6), Vector3(-0.3, 1.0, -2.1), Vector3(0.6, 1.05, -1.9), Vector3(0.0, 1.7, -0.55)]
+static func _mother(a: MeshAcc, hi: bool) -> void:
+	var mag := Color(1.0, 0.2, 0.75, 0.35)
+	_stalker(a, hi, 2.6, Color(1.0, 0.2, 0.75, GLOW))
+	# bloated egg-sac abdomen
+	var c := Vector3(0, 1.4, -1.75)
+	_ell(a, c, Vector3(1.0, 0.85, 1.35), FLESH.lerp(Color(0.3, 0.12, 0.22), 0.5), P.SAC, hi, Vector3(-8, 0, 0), 0.0, Vector2(c.y, c.z))
+	var spots := [Vector3(0.6, 1.7, -1.4), Vector3(-0.65, 1.55, -1.9), Vector3(0.25, 2.05, -2.0), Vector3(-0.3, 1.1, -2.7), Vector3(0.7, 1.1, -2.3), Vector3(0.0, 1.85, -1.15)]
 	for k in (spots.size() if hi else 3):
-		a.add(MeshAcc.ball(0.2, 6, 3), MeshAcc.xf(spots[k]), eggs, P.TAIL)
-	# bone crown
-	for k in (6 if hi else 3):
-		var ang := -60.0 + k * 24.0
-		var p := Vector3(sin(deg_to_rad(ang)) * c.head_r * 0.8, c.head_y + c.head_r * 0.9, c.head_z - c.head_r * 0.3 + cos(deg_to_rad(ang)) * c.head_r * 0.2)
-		a.add(MeshAcc.cone(0.06, 0.45, 4), MeshAcc.xf(p, Vector3(-30, 0, -ang * 0.6)), c.claw, P.HEAD)
+		a.add(MeshAcc.ball(0.2, 6, 3), MeshAcc.xf(spots[k]), mag, P.SAC, float(k), Vector2(c.y, c.z))
+	# crown of horns
+	var hy := 0.42 * 2.6
+	var pv := Vector2(hy, 0.32 * 2.6)
+	for k in (7 if hi else 4):
+		var ang := -70.0 + k * (140.0 / (6.0 if hi else 3.0))
+		var p := Vector3(sin(deg_to_rad(ang)) * 0.2, hy + 0.16, 0.55 * 2.6 + cos(deg_to_rad(ang)) * 0.05 - 0.15)
+		a.add(MeshAcc.cone(0.05, 0.5, 4), MeshAcc.xf(p, Vector3(-35, 0, -ang * 0.7)), BONE, P.HEAD, 0.0, pv)

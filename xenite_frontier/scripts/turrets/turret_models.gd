@@ -45,11 +45,11 @@ static func cyl(r: float, hgt: float, top := -1.0, seg := 8) -> CylinderMesh:
 
 ## Builds the model under `root`; returns [base_material, head, muzzle].
 static func build(root: Node3D, id: String, accent: Color) -> Array:
-	var steel := mat(Color(0.78, 0.79, 0.78), 0.0, 0.35)          # white composite body
-	var base_mat := mat(Color(0.5, 0.52, 0.55), 0.0, 0.5)         # grey mount (damage tint)
+	var steel := mat(Color(0.78, 0.77, 0.72), 0.0, 0.3)           # off-white composite body
+	var base_mat := mat(Color(0.45, 0.46, 0.46), 0.0, 0.5)        # worn grey mount (damage tint)
 	var acc := mat(accent, 0.6, 0.2)
 	var dark := mat(Color(0.12, 0.13, 0.14), 0.0, 0.7)
-	var hazard := mat(Color(0.95, 0.45, 0.08), 0.0, 0.2)
+	var hazard := mat(Color(0.95, 0.78, 0.12), 0.0, 0.2)
 	# round mounting pad on four struts, accent ring, hazard collar
 	part(root, cyl(0.5, 0.12, 0.48, 12), dark, Vector3(0, 0.06, 0))
 	for k in 4:
@@ -65,6 +65,8 @@ static func build(root: Node3D, id: String, accent: Color) -> Array:
 	var muzzle := Node3D.new()
 	muzzle.name = "Muzzle"
 	head.add_child(muzzle)
+	# damage-type accent stripe on every head
+	part(head, box(0.5, 0.06, 0.5), acc, Vector3(0, 0.03, 0))
 	match id:
 		"autocannon":
 			part(head, box(0.55, 0.35, 0.6), steel, Vector3(0, 0.2, 0))
@@ -145,6 +147,27 @@ static func build_floodlight(root: Node3D, radius: float) -> StandardMaterial3D:
 	light.omni_attenuation = 0.7
 	root.add_child(light)
 	return base_mat
+
+
+## Tier II/III armour: extra plating on the head (scale +10%/tier is applied
+## by the Turret itself).
+static func set_tier_armor(head: Node3D, tier: int) -> void:
+	var old := head.get_node_or_null("Armor")
+	if old:
+		old.queue_free()
+	if tier <= 1:
+		return
+	var arm := Node3D.new()
+	arm.name = "Armor"
+	head.add_child(arm)
+	var m := mat(Color(0.36, 0.37, 0.37), 0.0, 0.6)
+	var y := mat(Color(0.95, 0.78, 0.12), 0.0, 0.2)
+	for sx in [-1.0, 1.0]:
+		part(arm, box(0.08, 0.32, 0.5), m, Vector3(sx * 0.33, 0.22, 0.0))
+		if tier >= 3:
+			part(arm, box(0.1, 0.1, 0.5), y, Vector3(sx * 0.36, 0.42, 0.0))
+	if tier >= 3:
+		part(arm, box(0.6, 0.06, 0.3), m, Vector3(0, 0.45, -0.15))
 
 
 ## Tier pips on a turret base: one bar per tier above I.

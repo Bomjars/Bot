@@ -1,5 +1,53 @@
 # Changelog
 
+## M5a – Waves with a build timer, landing site, workers & soldiers, finance, art direction
+
+### Added
+- **Waves** (`game/wave_director.gd`, `data/waves.json`).
+  - Run flow: landing, then a build countdown (90 s / 40 s), then a wave, then payday.
+  - **Call the wave early** (N) for +3 Biomass per second remaining.
+  - Waves arrive as packs from random canyon mouths. Sizes are **x0.7 (30% fewer enemies)** via `size_multiplier`.
+  - Waves grow 45% per wave, with +4% alien HP per wave.
+  - **Threat Level** +0.25 per wave. Stragglers time out so a wave can't soft-lock.
+- **Choose the landing site.** Click to drop the Command Hab on any valid 7x7 open area away from the canyon mouths. The pad is levelled and the scenery rebuilt around it. Runs start empty.
+- **Xenite deposits** (10 glowing outcrops) and **Mining Rigs** on them. The company buys mined Xenite after every wave (x3 Biomass); 25% is banked for the Colony Charter.
+- **Workers.**
+  - Construction is no longer instant: sites with scaffolding, build time in work-seconds, up to 2 builders each. Cancelling a site gives a full refund.
+  - Workers repair automatically (paying Biomass per HP), staff economy buildings and rigs, and crew spare turrets.
+- **Soldiers.**
+  - Trained at a **Barracks**. They crew turrets, garrison **Guard Posts** (+4 m range) and fire rifles (ballistic; Armory +25%).
+  - **Squad control:** click or drag-select, right-click to move and hold, H to release.
+- **Finance.**
+  - Company bounty x Threat Level after every wave, ore sales, early-call bonus.
+  - **Wages** per worker and soldier per wave. Unpaid wages mean low morale: crews and soldiers fire at 80%.
+  - Upgrade buildings: Bio-Refinery (+25% Biomass), Fabricator (-15% costs), Armory (tier III gate + soldier damage), Medbay (2x recovery), Hab Module (+4 population).
+  - Recruitment from the Command Hab (workers) and Barracks (soldiers), with a population cap.
+- **UI.**
+  - Build bar categories (Defence / Turrets / Colony; Tab).
+  - Wave panel with countdown and a call-early button; payday report popup.
+  - Worker/soldier breakdown, Xenite mined/banked, wages.
+  - Inspector actions: recruit, train, cancel construction, staff and garrison names.
+  - Drag-select box.
+- **More realistic horde:** stride synced to the distance actually walked (no foot sliding), packs with shared lanes, sniff pauses out in the open, wider size and speed variation, stronger separation.
+- **Art direction pass.**
+  - Six new dark-chitin alien body plans with a general GPU rig: per-vertex joint pivots and phases for hexapod, quadruped, knuckle-walk and worm motion, pulsing sacs, cracking shells.
+  - Custom corpse looks and death effects: plates scatter, acid pool, the Brood Mother's dead young plus a huge ichor pool.
+  - Acid-green ichor; industrial off-white / hazard-yellow / worn-grey palette.
+  - Damage-type turret accents and matching muzzle effects; tier II/III armour plating and +10% size per tier.
+  - New worker and soldier suits; dragged colonists flail and kick.
+  - Rust-orange planet under a dim violet sky with a ringed gas giant and a small moon. The camera tilts toward the horizon when zoomed in.
+  - Map-edge plateau so the world never ends in a void.
+
+### Changed
+- Runs no longer start with a pre-built compound. Tests and the benchmark use `--classic` / `--auto-land`.
+- The old continuous spawning is now `--sandbox` only.
+- `--fast-waves` dev flag for soak tests.
+
+### Measured (headless, slow 4-thread cloud CPU)
+- Bot soak (fast timers) reached wave 5 with the core intact. Guard Posts, Mining Rig, Hab Module, Barracks and Bio-Refinery were all active. Bounties 510, ore sales 123, wages 152. 0 stuck aliens.
+- 10k benchmark: 1% low 67 fps, sim 8.4 ms. PASS.
+
+
 ## M4.5 – Visual pass: grey aliens, space suits, Mars-base outpost, alien planet
 
 ### Added

@@ -1,14 +1,15 @@
 class_name StationModels
 extends RefCounted
-## Mars-base-concept outpost visuals: hab dome, barrier walls that join into
+## Mars-base-concept outpost visuals (industrial: off-white, hazard yellow, worn grey): hab dome, barrier walls that join into
 ## continuous lines, airlock blast doors, plus planet scatter (boulders,
 ## Xenite crystals) and plateau props. Off-white composite panels, grey
 ## structure, orange hazard trim, cyan lights.
 
-const WHITE := Color(0.86, 0.86, 0.84)
-const GREY := Color(0.45, 0.47, 0.5)
-const DARK := Color(0.16, 0.17, 0.19)
-const ORANGE := Color(0.95, 0.45, 0.08)
+# industrial palette: off-white composite, hazard yellow, worn grey
+const WHITE := Color(0.8, 0.79, 0.74)
+const GREY := Color(0.42, 0.43, 0.43)
+const DARK := Color(0.16, 0.16, 0.17)
+const ORANGE := Color(0.95, 0.78, 0.12)   # hazard yellow (name kept for callers)
 const CYAN := Color(0.3, 0.9, 1.0, 0.0)      # alpha 0 = emissive in station shader
 const AMBER := Color(1.0, 0.7, 0.2, 0.0)
 const BAGS := Color(0.5, 0.36, 0.26)

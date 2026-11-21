@@ -8,10 +8,13 @@ var v := PackedVector3Array()
 var n := PackedVector3Array()
 var c := PackedColorArray()
 var uv := PackedVector2Array()
+var uv2 := PackedVector2Array()
 var i := PackedInt32Array()
 
 
-func add(mesh: Mesh, xf: Transform3D, col: Color, part := 0.0) -> void:
+## part: animation part id (UV.x); off: phase offset (UV.y); pivot: joint
+## (y, z) in model space (UV2) - see alien.gdshader.
+func add(mesh: Mesh, xf: Transform3D, col: Color, part := 0.0, off := 0.0, pivot := Vector2.ZERO) -> void:
 	var arr: Array
 	if mesh is PrimitiveMesh:
 		arr = (mesh as PrimitiveMesh).get_mesh_arrays()
@@ -26,7 +29,8 @@ func add(mesh: Mesh, xf: Transform3D, col: Color, part := 0.0) -> void:
 		v.append(xf * verts[k])
 		n.append((nb * norms[k]).normalized())
 		c.append(col)
-		uv.append(Vector2(part, 0.0))
+		uv.append(Vector2(part, off))
+		uv2.append(pivot)
 	for k in ind.size():
 		i.append(ind[k] + base)
 
@@ -52,6 +56,7 @@ func commit(flat := false) -> ArrayMesh:
 		var fn := PackedVector3Array()
 		var fc := PackedColorArray()
 		var fu := PackedVector2Array()
+		var fu2 := PackedVector2Array()
 		for t in range(0, i.size(), 3):
 			var a := v[i[t]]
 			var b := v[i[t + 1]]
@@ -62,15 +67,18 @@ func commit(flat := false) -> ArrayMesh:
 				fn.append(nrm)
 				fc.append(c[i[t + k]])
 				fu.append(uv[i[t + k]])
+				fu2.append(uv2[i[t + k]])
 		arr[Mesh.ARRAY_VERTEX] = fv
 		arr[Mesh.ARRAY_NORMAL] = fn
 		arr[Mesh.ARRAY_COLOR] = fc
 		arr[Mesh.ARRAY_TEX_UV] = fu
+		arr[Mesh.ARRAY_TEX_UV2] = fu2
 	else:
 		arr[Mesh.ARRAY_VERTEX] = v
 		arr[Mesh.ARRAY_NORMAL] = n
 		arr[Mesh.ARRAY_COLOR] = c
 		arr[Mesh.ARRAY_TEX_UV] = uv
+		arr[Mesh.ARRAY_TEX_UV2] = uv2
 		arr[Mesh.ARRAY_INDEX] = i
 	var m := ArrayMesh.new()
 	m.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)

@@ -104,12 +104,15 @@ func setup(m: OutpostMap, st: Structures, c: Corpses, effects: Fx, hf: FlowField
 	hunt_interval = float(cfg.get("hunt_field_interval", hunt_interval))
 	immunity = float(cfg.get("grab_immunity_seconds", immunity))
 	soldier_cfg = cfg.get("soldier", {})
+	var mirror := TurretModels.mat(Color(0.02, 0.02, 0.025), 0.0, 1.0)
+	mirror.roughness = 0.05
 	_mats = {
-		"white": TurretModels.mat(Color(0.88, 0.88, 0.86), 0.0, 0.15),
-		"orange": TurretModels.mat(Color(0.95, 0.45, 0.08), 0.0, 0.1),
-		"armor": TurretModels.mat(Color(0.25, 0.33, 0.48), 0.0, 0.45),
-		"gold": TurretModels.mat(Color(1.0, 0.72, 0.25), 0.6, 0.9),
-		"red": TurretModels.mat(Color(1.0, 0.25, 0.2), 1.2, 0.3),
+		"white": TurretModels.mat(Color(0.86, 0.85, 0.8), 0.0, 0.15),       # bulky white EVA
+		"orange": TurretModels.mat(Color(0.95, 0.78, 0.12), 0.0, 0.1),      # hazard-yellow trim
+		"armor": TurretModels.mat(Color(0.4, 0.42, 0.43), 0.0, 0.5),        # soldier: grey armour
+		"gold": TurretModels.mat(Color(1.0, 0.85, 0.15), 0.5, 0.6),         # worker: yellow visor
+		"red": mirror,                                                       # soldier: mirrored black visor
+		"band": TurretModels.mat(Color(0.75, 0.07, 0.05), 0.0, 0.2),        # soldier: red shoulder band
 		"dark": TurretModels.mat(Color(0.18, 0.19, 0.2), 0.0, 0.4),
 		"ring": TurretModels.mat(Color(0.3, 1.0, 0.5), 1.5, 0.0),
 	}
@@ -216,13 +219,19 @@ func _make_node(role: int) -> Node3D:
 		TurretModels.part(arm, MeshAcc.capsule(0.06, 0.42, 6, 1), suit if role == Role.WORKER else trim, Vector3(0, -0.18, 0))
 		TurretModels.part(arm, MeshAcc.ball(0.06, 6, 3), _mats.dark, Vector3(0, -0.4, 0))
 	if role == Role.SOLDIER:
-		# rifle held across the body + shoulder pads
+		# rifle held across the body, shoulder pads with a red band
 		TurretModels.part(n, MeshAcc.box(0.06, 0.08, 0.62), _mats.dark, Vector3(0.12, 0.78, 0.22))
+		TurretModels.part(n, MeshAcc.box(0.05, 0.12, 0.1), _mats.dark, Vector3(0.12, 0.7, 0.12))
 		for sx in [-0.21, 0.21]:
-			TurretModels.part(n, MeshAcc.box(0.14, 0.08, 0.2), trim, Vector3(sx, 0.98, 0))
+			TurretModels.part(n, MeshAcc.box(0.15, 0.09, 0.21), trim, Vector3(sx, 0.98, 0))
+			TurretModels.part(n, MeshAcc.box(0.155, 0.04, 0.215), _mats.band, Vector3(sx, 0.93, 0))
 	else:
-		# tool belt
-		TurretModels.part(n, MeshAcc.box(0.38, 0.06, 0.26), _mats.dark, Vector3(0, 0.55, 0))
+		# bulky EVA: chunky torso shell, tool belt and a tool pack with handles
+		TurretModels.part(n, MeshAcc.box(0.4, 0.34, 0.3), suit, Vector3(0, 0.78, 0.01))
+		TurretModels.part(n, MeshAcc.box(0.38, 0.06, 0.28), _mats.dark, Vector3(0, 0.55, 0))
+		TurretModels.part(n, MeshAcc.box(0.32, 0.22, 0.12), trim, Vector3(0, 0.62, -0.26))
+		for sx in [-0.08, 0.08]:
+			TurretModels.part(n, MeshAcc.cyl(0.015, 0.25, -1.0, 4), _mats.dark, Vector3(sx, 0.82, -0.3))
 	var ring := TurretModels.part(n, MeshAcc.cyl(0.42, 0.02, -1.0, 16), _mats.ring, Vector3(0, 0.03, 0))
 	ring.name = "Ring"
 	ring.visible = false
@@ -231,6 +240,13 @@ func _make_node(role: int) -> Node3D:
 
 func _animate(col: Colonist, walking: bool, working: bool) -> void:
 	var t := Time.get_ticks_msec() * 0.011 + col.id * 1.7
+	if col.state == S.CARRIED:
+		# dragged off: flail and kick
+		col.node.get_node("LegL").rotation.x = sin(t * 3.1) * 0.9
+		col.node.get_node("LegR").rotation.x = sin(t * 3.1 + 2.0) * 0.9
+		col.node.get_node("ArmL").rotation.x = -1.2 + sin(t * 3.7) * 1.1
+		col.node.get_node("ArmR").rotation.x = -1.2 + sin(t * 3.3 + 1.0) * 1.1
+		return
 	var amp := 0.6 if walking else 0.0
 	if col.wounded and walking:
 		amp = 0.35

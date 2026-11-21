@@ -58,8 +58,8 @@ func setup(s: Swarm, m: OutpostMap, st: Structures, effects: Fx, c: Corpses) -> 
 	_growth = float(fd.get("growth_per_meal", _growth))
 	_max_size = float(fd.get("max_size", _max_size))
 	_hp_per_meal = float(fd.get("hp_per_meal", _hp_per_meal))
-	var cols := {"stalker": Color(0.58, 0.6, 0.63), "mauler": Color(0.36, 0.37, 0.4), "spitter": Color(0.52, 0.57, 0.52),
-		"snatcher": Color(0.68, 0.65, 0.74), "burrower": Color(0.5, 0.45, 0.4), "brood_mother": Color(0.74, 0.68, 0.68)}
+	var cols := {"stalker": Color(0.14, 0.1, 0.12), "mauler": Color(0.16, 0.1, 0.11), "spitter": Color(0.14, 0.11, 0.12),
+		"snatcher": Color(0.13, 0.1, 0.12), "burrower": Color(0.18, 0.11, 0.1), "brood_mother": Color(0.2, 0.12, 0.15)}
 	for p in swarm.pools:
 		_body_colors.append(cols.get(p.def.id, Color.GRAY))
 
@@ -143,7 +143,7 @@ func tick_projectiles(dt: float) -> void:
 		fx.particle(p, Vector3.ZERO, Color(1.0, 0.75, 0.3, 1.0), 0.18, 0.12, 0.0)
 		if k >= 1.0:
 			damage_circle(to.x, to.z, s.aoe, s.dmg, s.dtype, s.src if is_instance_valid(s.src) else null)
-			fx.burst(to + Vector3(0, 0.3, 0), Color(1.0, 0.55, 0.15, 1.0), 18, 7.0, 0.2, 0.45, 0.4)
+			fx.burst(to + Vector3(0, 0.3, 0), Color(1.0, 0.82, 0.15, 1.0), 18, 7.0, 0.2, 0.45, 0.4)
 			fx.burst(to + Vector3(0, 0.3, 0), Color(0.25, 0.22, 0.2, 0.0), 10, 3.0, 0.4, 1.2, -0.1)
 			_shells.remove_at(i)
 			continue
@@ -281,7 +281,9 @@ func flush_deaths() -> void:
 			if p.carry[i] >= 0 and colonists:
 				colonists.drop(p.carry[i], Vector3(x, 0.0, z))
 				p.carry[i] = -1
-			fx.gib(Vector3(x, 0.0, z), _body_colors[t], p.ichor, big)
+			var gy := map.height_at(x, z)
+			fx.gib(Vector3(x, gy, z), _body_colors[t], p.ichor, big)
+			_death_special(p, Vector3(x, gy, z), sz)
 			corpses.add(t, x, z, p.yaw(i), sz, height * sz, charred)
 			kills += 1
 			kills_by_alien[t] += 1
@@ -290,6 +292,29 @@ func flush_deaths() -> void:
 	_dead_cause.clear()
 	_despawn.clear()
 	combat_usec += Time.get_ticks_usec() - t0
+
+
+## Strain-specific death effects (art direction).
+func _death_special(p: AlienPool, at: Vector3, sz: float) -> void:
+	match p.def.id:
+		"mauler":
+			# the shell cracks and its plates scatter
+			fx.burst(at + Vector3(0, 1.4, 0), Color(0.12, 0.09, 0.1, 0.0), 10, 5.5, 0.3, 2.5, 1.0, 0.8)
+			fx.burst(at + Vector3(0, 1.6, 0), Color(0.6, 0.05, 0.04, 0.3), 5, 5.0, 0.22, 2.5, 1.0, 0.8)
+		"spitter":
+			# throat sac bursts: acid pool
+			fx.burst(at + Vector3(0, 1.7, 0), Color(0.5, 1.0, 0.15, 0.8), 16, 4.0, 0.1, 0.8, 1.0)
+			fx.splat(at, Color(0.5, 1.0, 0.15), 1.4, 0.35)
+		"brood_mother":
+			# the egg sac ruptures and spills dead young
+			fx.burst(at + Vector3(0, 1.6, 0), Color(1.0, 0.2, 0.75, 0.6), 24, 6.0, 0.18, 1.2, 1.0)
+			for k in 3:
+				fx.splat(at + Vector3(rng.randf_range(-1.5, 1.5), 0, rng.randf_range(-2.5, 0.5)), p.ichor, 2.0, 0.1)
+			var st := GameConfig.alien_index("stalker")
+			for k in 5:
+				var a := rng.randf() * TAU
+				var r := rng.randf_range(1.0, 2.6)
+				corpses.add(st, at.x + cos(a) * r, at.z + sin(a) * r - 1.5, rng.randf() * TAU, 0.38 * sz, 0.03, false)
 
 
 # ------------------------------------------------------------ queries

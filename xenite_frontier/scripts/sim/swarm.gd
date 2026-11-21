@@ -138,6 +138,7 @@ func setup(m: OutpostMap, f: FlowField, bf: FlowField, rf: FlowField, hf: FlowFi
 		var pool := AlienPool.new(i, defs[i], near, mat)
 		pool.mesh_near = near
 		pool.mesh_far = far
+		pool.stride = float(rig.get("gait_freq", 10.0)) / maxf(0.5, float(defs[i].speed))
 		pools.append(pool)
 		add_child(pool.instance)
 		_weights.append(float(defs[i].get("spawn_weight", 1)))
@@ -426,7 +427,7 @@ func _sim_chunk(ci: int) -> void:
 	var stk := pool.stuck
 	var lane := pool.lane
 	var gait := pool.gait
-	var stride := float(AlienMeshes.rig(def.id).gait_freq) / maxf(0.5, float(def.speed))
+	var stride := pool.stride
 
 	for i in range(i0, i1):
 		var o := i * 16

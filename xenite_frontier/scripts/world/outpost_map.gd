@@ -637,7 +637,34 @@ func _scatter_mmi(mesh: Mesh, xfs: Array[Transform3D], mat: Material) -> void:
 
 func _build_visuals() -> void:
 	_build_terrain_mesh()
+	_build_skirt()
 	_rebuild_dressing()
+
+
+## Plateau ground stretching past the map edge so the world never ends in a void.
+func _build_skirt() -> void:
+	var m := StandardMaterial3D.new()
+	m.albedo_color = Color(0.42, 0.2, 0.1)
+	m.roughness = 0.95
+	var size := 600.0
+	var cx := origin.x + w * 0.5
+	var cz := origin.y + h * 0.5
+	var y := 3.4
+	# four slabs around the map rectangle
+	var rects := [
+		Rect2(cx - size * 0.5, origin.y - size * 0.5, size, size * 0.5 - 0.6),
+		Rect2(cx - size * 0.5, origin.y + h + 0.6, size, size * 0.5),
+		Rect2(cx - size * 0.5, origin.y - 0.6, size * 0.5 - w * 0.5 - 0.6, h + 1.2),
+		Rect2(origin.x + w + 0.6, origin.y - 0.6, size * 0.5 - w * 0.5, h + 1.2),
+	]
+	for r: Rect2 in rects:
+		var mi := MeshInstance3D.new()
+		var pm := PlaneMesh.new()
+		pm.size = r.size
+		mi.mesh = pm
+		mi.material_override = m
+		mi.position = Vector3(r.position.x + r.size.x * 0.5, y, r.position.y + r.size.y * 0.5)
+		add_child(mi)
 
 
 ## Scatter, Xenite deposits, props and (once landed) the hab dome. Rebuilt

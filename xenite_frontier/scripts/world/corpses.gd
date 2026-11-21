@@ -31,6 +31,7 @@ var _value: Array[PackedFloat32Array] = []
 var _claimed: Array[PackedByteArray] = []
 var _serial: Array[PackedInt32Array] = []
 var _biomass_of := PackedFloat32Array()
+var _pose: Array[String] = []
 var _charred_yield := 0.0
 var _next_serial := 1
 var biomass_lost := 0.0     # value that decayed before harvest
@@ -72,6 +73,7 @@ func setup(m: OutpostMap, pools: Array[AlienPool], _material: Material = null) -
 		var se := PackedInt32Array(); se.resize(c); se.fill(0)
 		_serial.append(se)
 		_biomass_of.append(GameConfig.corpse_biomass(p.def.id))
+		_pose.append(AlienMeshes.corpse_pose(p.def.id))
 		var mm := MultiMesh.new()
 		mm.transform_format = MultiMesh.TRANSFORM_3D
 		mm.use_custom_data = true
@@ -112,14 +114,22 @@ func add(t: int, x: float, z: float, yaw: float, size: float, height: float, cha
 	count += 1
 	if charred:
 		charred_count += 1
-	# rolled onto its side (random side), random yaw, resting on the pile
-	var roll := (PI * 0.5) * (1.0 if _rng.randf() < 0.5 else -1.0) * _rng.randf_range(0.6, 1.0)
-	var b := Basis(Vector3.UP, yaw) * Basis(Vector3.FORWARD, roll)
+	# death pose per strain (AlienMeshes.corpse_pose), random yaw, on the pile
+	var b := Basis(Vector3.UP, yaw)
+	match _pose[t]:
+		"back":
+			b = b * Basis(Vector3.FORWARD, PI)
+		"face":
+			b = b * Basis(Vector3.RIGHT, 1.15)
+		"flat":
+			pass
+		_:
+			b = b * Basis(Vector3.FORWARD, (PI * 0.5) * (1.0 if _rng.randf() < 0.5 else -1.0) * _rng.randf_range(0.75, 1.0))
 	b = b.scaled(Vector3(size, size, size))
 	var o := i * STRIDE
 	var buf := _buf[t]
 	buf[o] = b.x.x; buf[o + 1] = b.y.x; buf[o + 2] = b.z.x; buf[o + 3] = x
-	buf[o + 4] = b.x.y; buf[o + 5] = b.y.y; buf[o + 6] = b.z.y; buf[o + 7] = map.height_at(x, z) + rest * 0.85 + 0.15 * size
+	buf[o + 4] = b.x.y; buf[o + 5] = b.y.y; buf[o + 6] = b.z.y; buf[o + 7] = map.height_at(x, z) + rest * 0.85 + (0.6 * size if _pose[t] == "back" else 0.12 * size)
 	buf[o + 8] = b.x.z; buf[o + 9] = b.y.z; buf[o + 10] = b.z.z; buf[o + 11] = z
 	buf[o + 12] = 0.0; buf[o + 13] = 2.0 if charred else 1.0; buf[o + 14] = 0.0; buf[o + 15] = 0.0
 	_dirty[t] = 1

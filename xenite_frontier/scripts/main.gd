@@ -223,6 +223,7 @@ func _ready() -> void:
 			_auto_land = true
 		elif arg == "--showcase":
 			_auto_land = true
+			_classic = false
 			_showcase.call_deferred()
 		elif arg.begins_with("--screenshot="):
 			_auto_land = true
@@ -281,13 +282,9 @@ func call_wave_early() -> void:
 
 
 func _build_environment() -> void:
-	# alien sky: violet zenith, dusty salmon horizon, a small hot white sun
-	var sky_mat := ProceduralSkyMaterial.new()
-	sky_mat.sky_top_color = Color(0.10, 0.06, 0.16)
-	sky_mat.sky_horizon_color = Color(0.62, 0.36, 0.30)
-	sky_mat.ground_bottom_color = Color(0.12, 0.07, 0.06)
-	sky_mat.ground_horizon_color = Color(0.5, 0.3, 0.24)
-	sky_mat.sun_angle_max = 8.0
+	# dim violet sky with a ringed gas giant and a small moon
+	var sky_mat := ShaderMaterial.new()
+	sky_mat.shader = preload("res://scripts/render/sky.gdshader")
 	var sky := Sky.new()
 	sky.sky_material = sky_mat
 	var env := Environment.new()
@@ -295,8 +292,8 @@ func _build_environment() -> void:
 	env.sky = sky
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
 	env.ambient_light_sky_contribution = 0.65
-	env.ambient_light_color = Color(0.55, 0.42, 0.5)
-	env.ambient_light_energy = 0.7
+	env.ambient_light_color = Color(0.5, 0.4, 0.58)
+	env.ambient_light_energy = 1.15
 	env.tonemap_mode = Environment.TONE_MAPPER_ACES
 	env.tonemap_exposure = 1.05
 	env.glow_enabled = true
@@ -304,9 +301,9 @@ func _build_environment() -> void:
 	env.glow_hdr_threshold = 1.1
 	env.ssao_enabled = true
 	env.ssao_radius = 1.2
-	env.ssao_intensity = 1.6
+	env.ssao_intensity = 1.0
 	env.fog_enabled = true
-	env.fog_light_color = Color(0.55, 0.32, 0.25)
+	env.fog_light_color = Color(0.36, 0.22, 0.3)
 	env.fog_density = 0.0035
 	env.fog_sky_affect = 0.4
 	env.adjustment_enabled = true
@@ -317,16 +314,16 @@ func _build_environment() -> void:
 	add_child(we)
 
 	var sun := DirectionalLight3D.new()
-	sun.light_color = Color(1.0, 0.82, 0.68)
-	sun.light_energy = 1.25
+	sun.light_color = Color(1.0, 0.86, 0.74)
+	sun.light_energy = 1.1
 	sun.rotation_degrees = Vector3(-33, -40, 0)   # low sun: relief casts shadows
 	sun.shadow_enabled = true
 	sun.directional_shadow_max_distance = 140.0
 	add_child(sun)
 	# cool bounce from the opposite side so shadowed cliffs read
 	var fill := DirectionalLight3D.new()
-	fill.light_color = Color(0.45, 0.5, 0.8)
-	fill.light_energy = 0.25
+	fill.light_color = Color(0.55, 0.42, 0.85)
+	fill.light_energy = 0.55
 	fill.rotation_degrees = Vector3(-30, 150, 0)
 	add_child(fill)
 
@@ -1014,19 +1011,23 @@ func _stuck_reason(c: int, p: AlienPool, i: int) -> String:
 func _showcase() -> void:
 	target_count = 0
 	swarm.paused = true
-	var row := map.core_center + Vector3(-8.0, 0, -26.0)
-	var poses := [0.0, 0.5, 1.0, -2.0, -1.0]
+	var row := map.core_center + Vector3(-8.5, 0, -11.0)
+	var poses := [0.6, -2.0, -1.0]
 	for t in swarm.pools.size():
 		var p := swarm.pools[t]
+		var x := row.x + t * 3.4
 		for k in poses.size():
-			var x := row.x + t * 3.2
-			var z := row.z + k * 2.6 - (1.5 if t == 5 else 0.0)
+			var z := row.z + k * 2.8 - (1.5 if t == 5 else 0.0) * k
 			var i := p.spawn(x, z, swarm.rng)
 			var o := i * AlienPool.STRIDE
 			p.buf[o] = 1.0; p.buf[o + 2] = 0.0; p.buf[o + 8] = 0.0; p.buf[o + 10] = 1.0
 			p.buf[o + 5] = 1.0
 			p.buf[o + 7] = map.height_at(x, z)
+			p.buf[o + 14] = 0.8 + k * 1.7
 			p.buf[o + 15] = poses[k]
+		# a corpse of each strain in the front row (its death pose)
+		corpses.add(t, x, row.z + 3 * 2.8 + (2.0 if t == 5 else 0.0), PI * 0.15, 1.0, 0.1, false)
+	corpses.upload()
 	# photo mode: no UI, close low camera (pick the strain pair with --pair=N)
 	hud.visible = false
 	build.visible = false

@@ -166,7 +166,7 @@ func arc(from: Vector3, to: Vector3, col: Color) -> void:
 		prev = p
 
 
-func splat(pos: Vector3, col: Color, radius: float) -> void:
+func splat(pos: Vector3, col: Color, radius: float, glow := 0.0) -> void:
 	if not gore:
 		return
 	var i := _s_next
@@ -182,8 +182,8 @@ func splat(pos: Vector3, col: Color, radius: float) -> void:
 	_sbuf[o + 4] = 0.0; _sbuf[o + 5] = 1.0; _sbuf[o + 6] = 0.0; _sbuf[o + 7] = gy + 0.03 + rng.randf() * 0.02
 	_sbuf[o + 8] = -s * sx; _sbuf[o + 9] = 0.0; _sbuf[o + 10] = c * sz; _sbuf[o + 11] = pos.z
 	# dark, saturated acid stain (no glow) so puddles read as ground decals
-	var dcol := Color.from_hsv(col.h, minf(1.0, col.s * 1.2), col.v * 0.38)
-	_sbuf[o + 12] = dcol.r; _sbuf[o + 13] = dcol.g; _sbuf[o + 14] = dcol.b; _sbuf[o + 15] = 0.0
+	var dcol := Color.from_hsv(col.h, minf(1.0, col.s * 1.2), col.v * (0.38 + glow * 0.4))
+	_sbuf[o + 12] = dcol.r; _sbuf[o + 13] = dcol.g; _sbuf[o + 14] = dcol.b; _sbuf[o + 15] = glow
 	_s_dirty = true
 
 

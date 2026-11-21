@@ -1,10 +1,10 @@
 {
-	"_comment": "Alien strain definitions. Order = type id. weak = 150% damage taken, resists = 50%. structure_dps: damage per second to structures they are blocked by; door_mult multiplies that vs blast doors. core_dps: damage to the outpost core while gnawing it. corpse_height: metres added to the corpse pile of the cell it dies in. ichor: blood colour. abducts: drags exposed colonists to the map edge. mauls: strikes exposed colonists for maul_damage (colonists have 100 HP; at 0 they die, leaving remains). hunts: Snatcher - senses colonists (incl. turret crews) and goes for them. feed_rate: chance per second to stop and eat a corpse it stands on.",
+	"_comment": "Alien strain definitions. Order = type id. weak = 150% damage taken, resists = 50%. structure_dps: damage per second to structures they are blocked by; door_mult multiplies that vs blast doors. core_dps: damage to the outpost core while gnawing it. corpse_height: metres added to the corpse pile of the cell it dies in. ichor: acid-green blood colour. abducts: drags exposed colonists to the map edge. mauls: strikes exposed colonists for maul_damage (colonists have 100 HP; at 0 they die, leaving remains). hunts: Snatcher - senses colonists (incl. turret crews) and goes for them. feed_rate: chance per second to stop and eat a corpse it stands on.",
 	"aliens": [
 		{
 			"id": "stalker",
 			"name": "Stalker",
-			"trait": "Fast pack hunter, low HP. Arrives in floods.",
+			"trait": "Small, low, six-legged pack hunter. Floods in fast, low HP.",
 			"hp": 22,
 			"speed": 7.0,
 			"steer": 6.0,
@@ -15,7 +15,7 @@
 			"structure_dps": 6,
 			"core_dps": 4,
 			"corpse_height": 0.14,
-			"ichor": "#c8e04a",
+			"ichor": "#7dff2a",
 			"weak": [
 				"incendiary",
 				"shock"
@@ -29,7 +29,7 @@
 		{
 			"id": "mauler",
 			"name": "Mauler",
-			"trait": "Armoured bruiser. Smashes blast doors (x4). Mauls colonists to death.",
+			"trait": "Huge front-heavy brute: plated shell, club forelimbs. Smashes blast doors (x4). Mauls colonists.",
 			"hp": 260,
 			"speed": 3.4,
 			"steer": 3.0,
@@ -41,7 +41,7 @@
 			"door_mult": 4.0,
 			"core_dps": 30,
 			"corpse_height": 0.45,
-			"ichor": "#e0c030",
+			"ichor": "#8aff3a",
 			"weak": [
 				"piercing"
 			],
@@ -55,7 +55,7 @@
 		{
 			"id": "spitter",
 			"name": "Spitter",
-			"trait": "Stops at range and lobs acid at structures. Fragile sac.",
+			"trait": "Tall four-legged stilt-walker. Stops at range and lobs acid at structures from its throat sac.",
 			"hp": 35,
 			"speed": 4.2,
 			"steer": 4.0,
@@ -71,7 +71,7 @@
 				"cooldown": 2.4,
 				"damage": 28
 			},
-			"ichor": "#7dff3a",
+			"ichor": "#5cff10",
 			"weak": [
 				"explosive"
 			],
@@ -83,7 +83,7 @@
 		{
 			"id": "snatcher",
 			"name": "Snatcher",
-			"trait": "Fast, dodges 35% of aimed shots. Hunts colonists - even pulls crews out of turrets.",
+			"trait": "Lean crouched sprinter with hooked arms. Dodges 35% of aimed shots, hunts colonists and drags them off.",
 			"hp": 48,
 			"speed": 6.6,
 			"steer": 7.0,
@@ -95,7 +95,7 @@
 			"core_dps": 6,
 			"corpse_height": 0.15,
 			"dodge": 0.35,
-			"ichor": "#b07aff",
+			"ichor": "#90ff40",
 			"weak": [
 				"shock",
 				"ballistic"
@@ -110,7 +110,7 @@
 		{
 			"id": "burrower",
 			"name": "Burrower",
-			"trait": "Tunnels under walls. Only Seismic hits it underground; surfaces near the core or when shaken.",
+			"trait": "Segmented worm with a drill-tooth maw. Tunnels under walls; only Seismic reaches it underground.",
 			"hp": 90,
 			"speed": 4.6,
 			"steer": 4.0,
@@ -122,7 +122,7 @@
 			"core_dps": 12,
 			"corpse_height": 0.25,
 			"burrows": true,
-			"ichor": "#ffb040",
+			"ichor": "#a0ff30",
 			"weak": [
 				"seismic"
 			],
@@ -135,7 +135,7 @@
 		{
 			"id": "brood_mother",
 			"name": "Brood Mother",
-			"trait": "Boss. Births Stalker broods; gorges on corpses to grow.",
+			"trait": "Boss. Four times a Stalker, egg-sac abdomen, crown of horns. Births broods, gorges to grow.",
 			"hp": 3000,
 			"speed": 2.2,
 			"steer": 1.5,
@@ -151,7 +151,7 @@
 				"count": 4,
 				"type": "stalker"
 			},
-			"ichor": "#ff4aa0",
+			"ichor": "#70ff20",
 			"weak": [
 				"piercing",
 				"explosive"

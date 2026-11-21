@@ -50,7 +50,9 @@ func set_tier(t: int) -> void:
 	dmg = float(def.damage) * float(td.get("damage", 1.0))
 	rng = float(def.range) * float(td.get("range", 1.0))
 	crew_efficiency = float(td.get("crew_efficiency", 1.0))
-	head.scale = Vector3.ONE * (1.0 + 0.1 * (t - 1))
+	# tiers II/III: armour plating and +10% size per tier
+	scale = Vector3.ONE * (1.0 + 0.1 * (t - 1))
+	TurretModels.set_tier_armor(head, t)
 	if t > 1:
 		TurretModels.set_tier_pips(self, t, accent)
 
@@ -73,7 +75,7 @@ func tick(dt: float, combat: Combat) -> void:
 	var rate := fire_rate()
 	var fired := false
 	match def.id:
-		"autocannon": fired = _fire_single(combat, Color(1.0, 0.85, 0.35, 0.9), 0.06, 0.05)
+		"autocannon": fired = _fire_single(combat, Color(1.0, 0.55, 0.15, 1.0), 0.06, 0.05)
 		"railgun": fired = _fire_rail(combat)
 		"flamethrower": fired = _fire_flame(combat)
 		"shock_grid": fired = _fire_shock(combat)
@@ -101,7 +103,8 @@ func _fire_single(combat: Combat, col: Color, width: float, life: float) -> bool
 	combat.fx.beam(from, tp, col, width, life)
 	if combat.damage(h, dmg, dtype, bool(def.get("dodgeable", false)), self):
 		pass
-	combat.fx.burst(tp, Color(1.0, 0.8, 0.3, 1.0), 2, 3.0, 0.06, 0.15, 0.5)
+	combat.fx.burst(muzzle.global_position, Color(1.0, 0.6, 0.15, 1.0), 2, 2.0, 0.08, 0.06, 0.0)
+	combat.fx.burst(tp, Color(1.0, 0.6, 0.2, 1.0), 2, 3.0, 0.06, 0.15, 0.5)
 	return true
 
 
@@ -114,8 +117,8 @@ func _fire_rail(combat: Combat) -> bool:
 	var from := muzzle.global_position
 	var to := from + dir * rng
 	combat.damage_line(p, dir, rng, float(def.width), int(def.pierce), dmg, dtype, bool(def.get("dodgeable", false)), self)
-	combat.fx.beam(from, Vector3(to.x, 0.5, to.z), Color(0.45, 0.8, 1.0, 1.0), 0.22, 0.3)
-	combat.fx.burst(from, Color(0.6, 0.9, 1.0, 1.0), 6, 4.0, 0.08, 0.25, 0.0)
+	combat.fx.beam(from, Vector3(to.x, from.y - 0.2, to.z), Color(0.18, 0.9, 1.0, 1.0), 0.22, 0.3)
+	combat.fx.burst(from, Color(0.3, 0.95, 1.0, 1.0), 6, 4.0, 0.08, 0.25, 0.0)
 	return true
 
 
@@ -132,7 +135,7 @@ func _fire_flame(combat: Combat) -> bool:
 	for k in 4:
 		var a := fx.rng.randf_range(-half, half)
 		var d := dir.rotated(Vector3.UP, a)
-		var col := Color(1.0, fx.rng.randf_range(0.3, 0.7), 0.1, 1.0)
+		var col := Color(1.0, fx.rng.randf_range(0.12, 0.4), 0.06, 1.0)
 		fx.particle(from, d * rng * fx.rng.randf_range(1.4, 2.0) + Vector3(0, 0.6, 0), col, 0.3, 0.45, -0.15)
 	return true
 
@@ -163,7 +166,7 @@ func _fire_mortar(combat: Combat) -> bool:
 	var tp := combat.pos_of(h)
 	_aim(tp)
 	combat.launch_shell(muzzle.global_position, tp, float(def.shell_time), dmg, float(def.aoe), dtype, self)
-	combat.fx.burst(muzzle.global_position, Color(1.0, 0.8, 0.4, 1.0), 5, 3.0, 0.1, 0.25, 0.0)
+	combat.fx.burst(muzzle.global_position, Color(1.0, 0.85, 0.15, 1.0), 5, 3.0, 0.1, 0.25, 0.0)
 	return true
 
 
@@ -182,5 +185,5 @@ func _fire_seismic(combat: Combat) -> bool:
 	for k in 28:
 		var a := TAU * k / 28.0
 		var d := Vector3(cos(a), 0, sin(a))
-		fx.particle(p + d * 0.6 + Vector3(0, 0.1, 0), d * r * 1.6 + Vector3(0, 1.5, 0), Color(0.5, 0.38, 0.25, 0.0), 0.35, 0.5, 1.0)
+		fx.particle(p + d * 0.6 + Vector3(0, 0.1, 0), d * r * 1.6 + Vector3(0, 1.5, 0), Color(0.6, 0.42, 0.24, 0.0), 0.35, 0.5, 1.0)
 	return true
