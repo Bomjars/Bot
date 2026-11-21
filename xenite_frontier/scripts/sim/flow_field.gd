@@ -229,6 +229,8 @@ func _compute(cst: PackedByteArray, goal_list: PackedInt32Array) -> void:
 		var cx := c % ww
 		var cz := c / ww
 		if cx == 0 or cz == 0 or cx == ww - 1 or cz == hh - 1:
+			# map edge (canyon mouths open onto it): bounds-checked slow path
+			_edge_dir(c, cx, cz, d, blk, dx, dz, inside)
 			continue
 		var fl := blk[c - 1] == 0
 		var fr := blk[c + 1] == 0
@@ -257,6 +259,34 @@ func _compute(cst: PackedByteArray, goal_list: PackedInt32Array) -> void:
 		dz[c] = bz
 	_smooth(blk, dx, dz)
 	_b_usec = Time.get_ticks_usec() - t0
+
+
+## Direction for a cell on the map border (neighbours may be off-map).
+func _edge_dir(c: int, cx: int, cz: int, d: PackedInt32Array, blk: PackedByteArray,
+		dx: PackedFloat32Array, dz: PackedFloat32Array, inside: bool) -> void:
+	var best := UNREACHABLE if inside else d[c]
+	var bx := 0.0
+	var bz := 0.0
+	for oz in range(-1, 2):
+		for ox in range(-1, 2):
+			if ox == 0 and oz == 0:
+				continue
+			var nx := cx + ox
+			var nz := cz + oz
+			if nx < 0 or nz < 0 or nx >= w or nz >= h:
+				continue
+			var nc := nz * w + nx
+			if blk[nc]:
+				continue
+			if ox != 0 and oz != 0 and not inside and (blk[cz * w + nx] or blk[nz * w + cx]):
+				continue
+			if d[nc] < best:
+				best = d[nc]
+				var l := sqrt(float(ox * ox + oz * oz))
+				bx = ox / l
+				bz = oz / l
+	dx[c] = bx
+	dz[c] = bz
 
 
 ## One box-blur pass over free cells turns the 8-way "lanes" Dijkstra produces

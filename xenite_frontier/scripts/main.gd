@@ -9,7 +9,7 @@ extends Node3D
 ##
 ## Command line (after `--`):
 ##   --benchmark[=N]   scripted benchmark with N aliens, then quit
-##   --aliens=N        start swarm pressure at N
+##   --aliens=N        sandbox swarm pressure: N aliens spawned per minute
 ##   --combat-test[=S] headless combat soak for S seconds, prints stats, quits
 ##   --free-build      sandbox: building costs nothing (toggle in game: F11)
 ##   --screenshot=PATH dev: warm up, save a frame, quit (with --cam=x,z,dist)
@@ -31,7 +31,12 @@ var cam: RTSCamera
 var hud: Hud
 var build: BuildBar
 var bench: BenchmarkRunner
-var target_count := 1500
+## sandbox swarm pressure: aliens spawned per minute (ramps up at start)
+var target_count := 240
+var max_alive := 20000
+var _spawn_acc := 0.0
+var _unstick_timer := 0.0
+var unstuck_total := 0
 var overrun := false
 
 var _heat_on := false
@@ -50,6 +55,7 @@ var _bot_timer := 0.0
 var _bot_plan: Array = []
 var _bot_planned := false
 var _test_seconds := 0.0
+var _stuck_report := false
 var _test_t := 0.0
 
 
@@ -160,7 +166,8 @@ func _ready() -> void:
 	_make_ghost()
 	RenderingServer.viewport_set_measure_render_time(get_viewport().get_viewport_rid(), true)
 
-	target_count = int(GameConfig.section("swarm").get("start_aliens", 500))
+	target_count = int(GameConfig.section("swarm").get("spawn_per_minute", 240))
+	max_alive = int(GameConfig.section("swarm").get("max_alive", 20000))
 	_ramp_seconds = float(GameConfig.section("swarm").get("ramp_seconds", 90.0))
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--benchmark"):
@@ -173,6 +180,8 @@ func _ready() -> void:
 			_bot = true
 		elif arg == "--free-build":
 			economy.free_build = true
+		elif arg == "--stuck-report":
+			_stuck_report = true
 		elif arg.begins_with("--combat-test"):
 			var parts := arg.split("=")
 			_test_seconds = float(parts[1]) if parts.size() > 1 else 40.0
@@ -249,6 +258,8 @@ func _process(delta: float) -> void:
 		_test_t += delta
 		if _test_t >= _test_seconds:
 			_print_test_report()
+			if _stuck_report:
+				_print_stuck_report()
 			get_tree().quit()
 
 
@@ -269,14 +280,25 @@ func _step(dt: float) -> void:
 		combat.tick_projectiles(dt)
 		harvester.tick(dt)
 		colonists.tick(dt)
+		_unstick_timer -= dt
+		if _unstick_timer <= 0.0:
+			_unstick_timer = 1.0
+			unstuck_total += combat.unstick()
 	combat.flush_deaths()
 	_run_time += dt
 	var want := bench.desired_population()
-	if want < 0:
-		# sandbox: the swarm builds up over the first minute and a half
-		want = int(target_count * clampf(_run_time / maxf(_ramp_seconds, 0.01), 0.05, 1.0))
-	if not overrun:
+	if want >= 0:
+		# benchmark: hold a fixed population
 		swarm.approach_population(want)
+	elif not overrun and not swarm.paused:
+		# sandbox: spawn at a rate (aliens per minute) that ramps up over the
+		# first 90 s. Killing fast genuinely thins the swarm.
+		var ramp := clampf(_run_time / maxf(_ramp_seconds, 0.01), 0.1, 1.0)
+		_spawn_acc += target_count / 60.0 * ramp * dt
+		var n := int(_spawn_acc)
+		if n > 0:
+			_spawn_acc -= n
+			swarm.spawn_random(mini(n, maxi(0, max_alive - swarm.total())))
 	if _bot:
 		_bot_tick(dt)
 	swarm.upload()
@@ -344,17 +366,17 @@ func _unhandled_input(event: InputEvent) -> void:
 		economy.free_build = not economy.free_build
 		build.toast("Sandbox free build: %s" % ("ON" if economy.free_build else "OFF"))
 	elif event.is_action_pressed("bench_more"):
-		target_count += 500
+		target_count += 60
 	elif event.is_action_pressed("bench_less"):
-		target_count = maxi(0, target_count - 500)
+		target_count = maxi(0, target_count - 60)
 	elif event.is_action_pressed("bench_preset_1"):
-		target_count = 1000
+		target_count = 120
 	elif event.is_action_pressed("bench_preset_2"):
-		target_count = 5000
+		target_count = 600
 	elif event.is_action_pressed("bench_preset_3"):
-		target_count = 10000
+		target_count = 3000
 	elif event.is_action_pressed("bench_preset_4"):
-		target_count = 20000
+		target_count = 12000
 	elif event.is_action_pressed("pause"):
 		swarm.paused = not swarm.paused
 	elif event.is_action_pressed("debug_flowfield"):
@@ -534,6 +556,7 @@ func reset_outpost() -> void:
 	structures.reset()
 	colonists.reset()
 	_run_time = 0.0
+	_spawn_acc = 0.0
 	overrun = false
 	hud.show_banner("")
 
@@ -562,11 +585,18 @@ func _bot_tick(dt: float) -> void:
 	var core := map.world_to_cell(map.core_center)
 	if not _bot_planned:
 		_bot_planned = true
-		_bot_plan = [
-			[0, -11, "railgun"], [-14, 3, "shock_grid"], [14, -3, "shock_grid"], [-3, 4, "seismic_spike"],
-			[-6, -11, "harvester_bay"], [6, -11, "autocannon"], [-15, -2, "flamethrower"], [15, 2, "mortar"],
-			[0, 11, "railgun"], [3, -3, "seismic_spike"],
-		]
+		# seal three airlocks with walls (the swarm will bash or reroute),
+		# keep every turret inside: the north airlock becomes the kill zone
+		_bot_plan = []
+		for o in range(-2, 3):
+			_bot_plan.append([o, 9, "wall"])
+			_bot_plan.append([-13, o, "wall"])
+			_bot_plan.append([13, o, "wall"])
+		_bot_plan.append_array([
+			[-2, -7, "shock_grid"], [2, -5, "seismic_spike"], [0, -3, "railgun"],
+			[-3, -2, "harvester_bay"], [3, -8, "shock_grid"], [-10, 0, "mortar"],
+			[8, -2, "autocannon"], [-2, -3, "flamethrower"], [10, 0, "railgun"],
+		])
 	# build next planned item if affordable
 	if not _bot_plan.is_empty():
 		var e: Array = _bot_plan[0]
@@ -594,7 +624,7 @@ func _bot_tick(dt: float) -> void:
 
 
 func _print_test_report() -> void:
-	var lines := PackedStringArray(["=== combat test (%.0fs, pressure %d) ===" % [_test_seconds, target_count]])
+	var lines := PackedStringArray(["=== combat test (%.0fs, pressure %d aliens/min) ===" % [_test_seconds, target_count]])
 	lines.append("alive %d  kills %d  dodges %d  corpses %d (charred %d)  climbable %d" % [swarm.total(), combat.kills, combat.dodges, corpses.count, corpses.charred_count, map.climbable_count()])
 	var kb: PackedStringArray = []
 	for p in swarm.pools:
@@ -629,6 +659,80 @@ func _print_test_report() -> void:
 	lines.append("turrets crewed %d/%d  meals %d (human %d)  biggest alien x%.2f  remains on field %d" % [crewed, structures.turrets.size(), combat.meals, corpses.humans_eaten, combat.biggest, corpses.human_remains()])
 	lines.append("sim %.2f ms  combat %.2f ms  fx %.2f ms  fps %d" % [swarm.sim_usec / 1000.0, combat.combat_usec / 1000.0, fx.update_usec / 1000.0, Engine.get_frames_per_second()])
 	print("\n".join(lines))
+
+
+## Diagnostics: where are aliens stuck (not moving >4 s with no reason)?
+func _print_stuck_report() -> void:
+	var by_cell := {}
+	var total := 0
+	var alive := 0
+	var reasons := {}
+	for p in swarm.pools:
+		for i in p.count:
+			alive += 1
+			if p.stuck[i] < 4.0:
+				continue
+			total += 1
+			var c := map.cell_of(Vector3(p.px[i], 0, p.pz[i]))
+			if not by_cell.has(c):
+				by_cell[c] = {}
+			var key: String = p.def.id + ("(burrowed)" if p.aux[i] > 0.5 else "") + ("(carrying)" if p.carry[i] >= 0 else "")
+			by_cell[c][key] = by_cell[c].get(key, 0) + 1
+			var why := _stuck_reason(c, p, i)
+			reasons[why] = reasons.get(why, 0) + 1
+	print("=== stuck report: %d of %d aliens stuck >4s  (safety net moved/removed %d during the run) ===" % [total, alive, unstuck_total])
+	for r in reasons:
+		print("  reason %-34s %d" % [r, reasons[r]])
+	var cells := by_cell.keys()
+	cells.sort_custom(func(a, b):
+		var na := 0
+		var nb := 0
+		for v in by_cell[a].values(): na += v
+		for v in by_cell[b].values(): nb += v
+		return na > nb)
+	for k in mini(8, cells.size()):
+		var c: int = cells[k]
+		var wp := map.cell_center(c)
+		print("cell %d (grid %d,%d world %.0f,%.0f) kind %d dist %d dir (%.2f,%.2f) pile %.2f  %s" % [c, c % map.w, c / map.w, wp.x, wp.z, map.kind[c], field.dist[c], field.dir_x[c], field.dir_z[c], map.pile[c], str(by_cell[c])])
+		var rows: PackedStringArray = []
+		for oz in range(-3, 4):
+			var row := ""
+			for ox in range(-3, 4):
+				var x := (c % map.w) + ox
+				var z := (c / map.w) + oz
+				if not map.in_bounds(x, z):
+					row += " "
+					continue
+				var cc := map.idx(x, z)
+				var ch := "."
+				if map.kind[cc] == OutpostMap.Kind.ROCK: ch = "#"
+				elif map.kind[cc] == OutpostMap.Kind.STRUCT: ch = "W" if map.climb[cc] == 0 else "w"
+				elif map.is_goal(cc): ch = "C"
+				if ox == 0 and oz == 0: ch = "@"
+				row += ch
+			rows.append("    " + row)
+		print("\n".join(rows))
+
+
+func _stuck_reason(c: int, p: AlienPool, i: int) -> String:
+	if c < 0:
+		return "off-grid"
+	var burrowed := p.aux[i] > 0.5
+	var f := bfield if burrowed else (rfield if p.carry[i] >= 0 else field)
+	if f.dist[c] >= FlowField.UNREACHABLE:
+		return "unreachable cell (no path)"
+	if f.dir_x[c] == 0.0 and f.dir_z[c] == 0.0:
+		return "zero direction"
+	if map.kind[c] != OutpostMap.Kind.GROUND:
+		return "inside rock/structure"
+	var ax := int(p.px[i] - map.origin.x + f.dir_x[c] * 0.8)
+	var az := int(p.pz[i] - map.origin.y + f.dir_z[c] * 0.8)
+	var ac := map.idx(ax, az)
+	if map.kind[ac] == OutpostMap.Kind.ROCK:
+		return "flow points into rock"
+	if map.kind[ac] == OutpostMap.Kind.STRUCT:
+		return "pressing structure (no bash)"
+	return "crowd / other"
 
 
 ## Dev helper: `-- --aliens=N --screenshot=path.png [--cam=x,z,dist]`.

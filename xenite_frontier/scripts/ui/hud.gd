@@ -37,7 +37,7 @@ func _ready() -> void:
 	_help = _panel_label(col, Vector2.ZERO)
 	_help.add_theme_font_size_override("font_size", 14)
 	_help.add_theme_color_override("font_color", Color(0.75, 0.8, 0.85))
-	_help.text = "1-9,0 / LB RB build tool    LMB (A) build / select    RMB (B) sell\nU (X) upgrade selected    R (Y) repair selected    I intel\n+/- (D-pad) swarm pressure    F5-F8 1k/5k/10k/20k\nB benchmark   Space (Start) pause   F10 reset   F11 free build\nPan WASD/stick/edge/MMB    Zoom wheel/Q,E/triggers\nF flow field   G gore   F1 (Back) toggle details + help"
+	_help.text = "1-9,0 / LB RB build tool    LMB (A) build / select    RMB (B) sell\nU (X) upgrade selected    R (Y) repair selected    I intel\n+/- (D-pad) pressure ±60/min   F5-F8 120/600/3k/12k per min\nB benchmark   Space (Start) pause   F10 reset   F11 free build\nPan WASD/stick/edge/MMB    Zoom wheel/Q,E/triggers\nF flow field   G gore   F1 (Back) toggle details + help"
 	var lp2 := PanelContainer.new()
 	lp2.add_theme_stylebox_override("panel", UiStyle.panel(0.7, Color(1.0, 0.55, 0.2, 0.6)))
 	col.add_child(lp2)
@@ -173,7 +173,7 @@ func _process(delta: float) -> void:
 	var fps := Engine.get_frames_per_second()
 	var txt := "XENITE FRONTIER  -  M4 colony sandbox\n"
 	txt += "FPS %d   (%.1f ms)\n" % [fps, 1000.0 / maxf(fps, 1)]
-	txt += "Aliens: %d   swarm pressure %d\n" % [swarm.total(), main.target_count]
+	txt += "Aliens: %d   swarm pressure %d/min\n" % [swarm.total(), main.target_count]
 	txt += "Kills: %d   dodged shots: %d\n" % [combat.kills, combat.dodges]
 	txt += "Corpses: %d (%d charred)   climbable walls: %d\n" % [main.corpses.count, main.corpses.charred_count, main.map.climbable_count()]
 	txt += "Structures lost: %d   turrets: %d\n" % [st.destroyed_count, st.turrets.size()]

@@ -24,7 +24,7 @@
 				"piercing"
 			],
 			"abducts": false,
-			"feed_rate": 0.35
+			"feed_rate": 0.15
 		},
 		{
 			"id": "mauler",
@@ -49,7 +49,7 @@
 				"ballistic"
 			],
 			"mauls": true,
-			"feed_rate": 0.25,
+			"feed_rate": 0.15,
 			"maul_damage": 70
 		},
 		{
@@ -78,7 +78,7 @@
 			"resists": [
 				"shock"
 			],
-			"feed_rate": 0.15
+			"feed_rate": 0.1
 		},
 		{
 			"id": "snatcher",
@@ -130,7 +130,7 @@
 				"incendiary"
 			],
 			"abducts": true,
-			"feed_rate": 0.3
+			"feed_rate": 0.15
 		},
 		{
 			"id": "brood_mother",
@@ -169,7 +169,7 @@
 		"feed_time": 1.8,
 		"growth_per_meal": 0.12,
 		"max_size": 1.9,
-		"hp_per_meal": 0.35,
+		"hp_per_meal": 0.25,
 		"human_meal_mult": 3.0
 	}
 }

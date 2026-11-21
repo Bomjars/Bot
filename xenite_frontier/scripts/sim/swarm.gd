@@ -158,6 +158,13 @@ func spawn_at(type_id: int, x: float, z: float) -> void:
 	pools[type_id].spawn(x, z, rng)
 
 
+## Spawns n aliens of random strains (spawn weights) at the canyon mouths.
+func spawn_random(n: int) -> void:
+	for k in n:
+		var p := _spawn_point()
+		pools[_random_type()].spawn(p.x, p.y, rng)
+
+
 ## Spawns/despawns gradually toward `target` (spawning is rate limited so the
 ## horde pours in through the canyon mouths).
 func approach_population(target: int) -> void:
@@ -354,6 +361,7 @@ func _sim_chunk(ci: int) -> void:
 	var ftime := feed_time
 	var cmult := carrier_mult
 	var sense := hunt_sense
+	var stk := pool.stuck
 
 	for i in range(i0, i1):
 		var o := i * 16
@@ -412,6 +420,7 @@ func _sim_chunk(ci: int) -> void:
 		var tz := fdz * s + fdx * wv
 
 		# ---- strain behaviour
+		var legit := false   # standing still on purpose (eating, bashing, shelling, gnawing)
 		var fd := feed[i]
 		if not burrowed:
 			var ac := int(gz + fdz * 0.8) * w + int(gx + fdx * 0.8)
@@ -429,6 +438,7 @@ func _sim_chunk(ci: int) -> void:
 				fd -= dt
 				tx = 0.0
 				tz = 0.0
+				legit = true
 				if fd <= 0.0:
 					eat.append(hbase | i); eat.append(c)
 			elif feed_chance > 0 and not carrying and ccount[c] > 0 \
@@ -440,6 +450,7 @@ func _sim_chunk(ci: int) -> void:
 				hit_d.append(sdps * (door_mult if stype[ac] == OutpostMap.SType.DOOR else 1.0))
 				tx *= 0.15
 				tz *= 0.15
+				legit = true
 			elif rr > 0:
 				var tg := tgt[i]
 				if ((i + frame) & 7) == 0:
@@ -462,6 +473,7 @@ func _sim_chunk(ci: int) -> void:
 					else:
 						tx = 0.0
 						tz = 0.0
+						legit = true
 						if tm <= 0.0:
 							tm = rcd
 							spit.append(px[i]); spit.append(pz[i])
@@ -542,7 +554,14 @@ func _sim_chunk(ci: int) -> void:
 				cvz = 0.0
 			else:
 				core_dmg += cdps
+				legit = true
 
+		var mvx := nx - gx
+		var mvz := nz - gz
+		if legit or mvx * mvx + mvz * mvz > 0.04 * s * s * dt * dt:
+			stk[i] = 0.0
+		else:
+			stk[i] += dt
 		vx[i] = cvx
 		vz[i] = cvz
 		px[i] = nx + ox

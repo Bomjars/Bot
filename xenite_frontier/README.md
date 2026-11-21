@@ -128,8 +128,8 @@ xenite_frontier\run_benchmark.bat "C:\path\to\Godot_v4.4.1-stable_win64_console.
 | Sell (50% refund) | Right click (drag with a tool) | B |
 | Deselect | Esc / right click elsewhere | – |
 | Intel: counter table | I | D-pad right |
-| Swarm pressure ±500 | + / − | D-pad up / down |
-| Swarm pressure 1k / 5k / 10k / 20k | F5 / F6 / F7 / F8 | – |
+| Swarm pressure ±60 aliens/min | + / − | D-pad up / down |
+| Swarm pressure 120 / 600 / 3,000 / 12,000 per min | F5 / F6 / F7 / F8 | – |
 | Pan camera | WASD / arrows / screen edge / middle-drag | Left stick |
 | Fast pan | Shift | L3 |
 | Zoom | Mouse wheel / Q, E | LT / RT |
@@ -184,6 +184,23 @@ shown in game in the build card and the Intel panel (**I**).
   8 m from the core or when a Seismic Spike slams them.
   **Brood Mothers** spawn 4 Stalkers every 7 s.
 * Losing the core = **OUTPOST OVERRUN**. Press **R** to rebuild.
+
+### Swarm pressure (sandbox)
+Until waves arrive in M5, the sandbox spawns aliens at a **rate**. The default is 240
+per minute (`swarm.spawn_per_minute`), ramping up over the first 90 s, with at
+most 20,000 alive. Killing fast genuinely thins the swarm. In headless 3-minute
+tests, a sensible layout holds 240/min with every colonist alive, an idle
+outpost falls, and 480/min breaks a decent defence.
+
+### Stuck-alien diagnostics
+```bash
+godot --headless --path xenite_frontier -- --bot --combat-test=180 --stuck-report
+```
+This lists aliens that have not moved for 4 s without a reason (eating, bashing,
+shelling and gnawing don't count). It groups them by cell, gives the likely cause,
+and draws an ASCII map of each spot. A safety net also runs once a second
+in game: an alien stuck over 6 s inside rock, or somewhere with no path, is moved
+to the nearest reachable cell.
 
 ### Benchmark
 

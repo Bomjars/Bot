@@ -102,7 +102,14 @@ func process_swarm_events() -> void:
 	for k in range(0, br.size(), 3):
 		var mother: AlienPool = swarm.pools[int(br[k + 2])]
 		for n in mother.brood_count:
-			swarm.spawn_at(mother.brood_type, br[k] + rng.randf_range(-1.5, 1.5), br[k + 1] + rng.randf_range(-1.5, 1.5))
+			# brood only lands on open ground (never inside rock or walls)
+			var bx := br[k] + rng.randf_range(-1.5, 1.5)
+			var bz := br[k + 1] + rng.randf_range(-1.5, 1.5)
+			var bc := map.cell_of(Vector3(bx, 0, bz))
+			if bc < 0 or map.blocked[bc] or swarm.field.dist[bc] >= FlowField.UNREACHABLE:
+				bx = br[k]
+				bz = br[k + 1]
+			swarm.spawn_at(mother.brood_type, bx, bz)
 		fx.burst(Vector3(br[k], 1.0, br[k + 1]), mother.ichor, 8, 3.0, 0.12, 0.6)
 	combat_usec = Time.get_ticks_usec() - t0
 
@@ -177,6 +184,53 @@ func _grow(h: int, meals_eaten: float) -> void:
 	for k in [0, 2, 5, 8, 10]:
 		p.buf[o + k] *= r
 	fx.burst(Vector3(p.px[i], 0.3, p.pz[i]), Color(0.55, 0.05, 0.05, 0.0), 4, 2.0, 0.08, 0.5, 1.0)
+
+
+## Safety net (call ~once a second): an alien stuck >6 s inside rock or in a
+## cell with no path to anything is moved to the nearest reachable open cell,
+## or removed if there is none. Returns how many were rescued/removed.
+func unstick() -> int:
+	var fixed := 0
+	var gf := swarm.field
+	for p in swarm.pools:
+		for i in p.count:
+			if p.stuck[i] < 6.0 or p.aux[i] > 0.5:
+				continue
+			var c := map.cell_of(Vector3(p.px[i], 0, p.pz[i]))
+			if c >= 0 and map.kind[c] != OutpostMap.Kind.ROCK and gf.dist[c] < FlowField.UNREACHABLE:
+				continue  # crowded but on a valid cell: leave it to the crowd
+			var to := _nearest_reachable(c)
+			p.stuck[i] = 0.0
+			fixed += 1
+			if to < 0:
+				_despawn.append((p.type_id << SHIFT) | i)
+				continue
+			var wp := map.cell_center(to)
+			p.px[i] = wp.x
+			p.pz[i] = wp.z
+			p.vx[i] = 0.0
+			p.vz[i] = 0.0
+	return fixed
+
+
+func _nearest_reachable(c: int) -> int:
+	if c < 0:
+		return -1
+	var cx := c % map.w
+	var cz := c / map.w
+	for r in range(1, 7):
+		for oz in range(-r, r + 1):
+			for ox in range(-r, r + 1):
+				if maxi(absi(ox), absi(oz)) != r:
+					continue
+				var x := cx + ox
+				var z := cz + oz
+				if not map.in_bounds(x, z):
+					continue
+				var n := map.idx(x, z)
+				if map.kind[n] == OutpostMap.Kind.GROUND and swarm.field.dist[n] < FlowField.UNREACHABLE:
+					return n
+	return -1
 
 
 ## Removes an alien without a corpse (carrier escaped off the map).

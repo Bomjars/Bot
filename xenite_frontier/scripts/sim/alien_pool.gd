@@ -41,6 +41,7 @@ var aux := PackedFloat32Array()    # burrowers: 1 = underground
 var tgt := PackedInt32Array()      # spitters: structure cell being shelled
 var carry := PackedInt32Array()    # colonist id being dragged off, -1 none
 var feed := PackedFloat32Array()   # seconds left eating a corpse
+var stuck := PackedFloat32Array()  # seconds not moving without a reason (diagnostics / unstick)
 var bucket := PackedInt32Array()   # spatial grid bucket (written by sim)
 var lnext := PackedInt32Array()    # spatial grid linked list
 var buf := PackedFloat32Array()
@@ -84,7 +85,7 @@ func _init(id: int, d: Dictionary, mesh: Mesh, material: Material) -> void:
 
 func _grow(new_cap: int) -> void:
 	capacity = new_cap
-	for a: PackedFloat32Array in [px, pz, vx, vz, hp, speed, size, timer, slow, burn, aux, feed]:
+	for a: PackedFloat32Array in [px, pz, vx, vz, hp, speed, size, timer, slow, burn, aux, feed, stuck]:
 		a.resize(capacity)
 	for a: PackedInt32Array in [tgt, bucket, lnext, carry]:
 		a.resize(capacity)
@@ -113,6 +114,7 @@ func spawn(x: float, z: float, rng: RandomNumberGenerator) -> int:
 	tgt[i] = -1
 	carry[i] = -1
 	feed[i] = 0.0
+	stuck[i] = 0.0
 	bucket[i] = 0
 	var o := i * STRIDE
 	buf[o] = s; buf[o + 1] = 0.0; buf[o + 2] = 0.0; buf[o + 3] = x
@@ -130,7 +132,7 @@ func remove(i: int) -> void:
 		hp[i] = hp[last]; speed[i] = speed[last]; size[i] = size[last]
 		timer[i] = timer[last]; slow[i] = slow[last]; burn[i] = burn[last]
 		aux[i] = aux[last]; tgt[i] = tgt[last]; bucket[i] = bucket[last]
-		carry[i] = carry[last]; feed[i] = feed[last]
+		carry[i] = carry[last]; feed[i] = feed[last]; stuck[i] = stuck[last]
 		var o := i * STRIDE
 		var ol := last * STRIDE
 		for k in STRIDE:

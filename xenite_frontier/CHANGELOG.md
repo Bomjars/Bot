@@ -1,5 +1,30 @@
 # Changelog
 
+## M4.1 – Stuck-alien fix and rebalance (from playtest feedback)
+
+### Fixed
+- **Aliens stuck at the canyon mouths.** The flow field's optimised direction pass skipped map-border cells, but the canyon mouths open onto the map edge. Any alien that spawned on an edge cell had direction (0, 0) and never moved. They also counted toward the swarm-pressure limit, so over a few minutes much of the "swarm" sat idle at the mouths. Border cells now get a bounds-checked direction pass. Measured: 88 of 676 aliens stuck before, 0 after.
+- **Sandbox spawning could never be out-killed.** "Swarm pressure N" meant "keep N alive", so every kill was replaced instantly. Pressure is now a **spawn rate** (aliens per minute, default 240, ramping over 90 s, cap 20,000 alive). The benchmark keeps its fixed-population mode.
+- **Brood spawned inside rock** when a Brood Mother hugged a cliff. Brood now only lands on open, reachable ground.
+
+### Added
+- Per-alien stuck timer, counting only time spent not moving without a reason. Eating, bashing, shelling and gnawing the core don't count.
+- Unstick safety net: once a second, aliens stuck over 6 s inside rock or in a no-path cell are moved to the nearest reachable cell, or removed.
+- `--stuck-report` diagnostics, grouped by cell with the likely cause and an ASCII map.
+
+### Rebalanced
+The M2 to M4 numbers were tuned against a partly frozen swarm.
+- Feeding: Stalker / Mauler / Burrower feed rate 0.35 / 0.25 / 0.3 → 0.15, Spitter 0.15 → 0.1, HP per meal 35% → 25%. Brood Mothers still gorge.
+- Soak-test bot now plays sensibly: it seals three airlocks, keeps turrets inside, and uses the north airlock as the kill zone.
+
+| 3 minutes, headless | Result |
+|---|---|
+| 240/min, bot | core 6000/6000, 10/10 colonists crewing, 0 stuck |
+| 240/min, no player | overrun |
+| 480/min, bot | overrun |
+| 1,200/min | overrun, 0 stuck |
+
+
 ## M4 – Colonists, abduction, feeding
 
 ### Added
