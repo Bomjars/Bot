@@ -46,7 +46,7 @@ var _dirty := PackedByteArray()
 var _rng := RandomNumberGenerator.new()
 
 
-func setup(m: OutpostMap, pools: Array[AlienPool], material: Material) -> void:
+func setup(m: OutpostMap, pools: Array[AlienPool], _material: Material = null) -> void:
 	map = m
 	total_cap = int(GameConfig.section("combat").get("corpse_cap", total_cap))
 	_charred_yield = float(GameConfig.econ("biomass").get("charred_yield", 0.0))
@@ -75,12 +75,12 @@ func setup(m: OutpostMap, pools: Array[AlienPool], material: Material) -> void:
 		var mm := MultiMesh.new()
 		mm.transform_format = MultiMesh.TRANSFORM_3D
 		mm.use_custom_data = true
-		mm.mesh = p.multimesh.mesh
+		mm.mesh = p.mesh_far
 		mm.instance_count = c
 		var mmi := MultiMeshInstance3D.new()
 		mmi.name = "Corpses_%s" % p.def.id
 		mmi.multimesh = mm
-		mmi.material_override = material
+		mmi.material_override = p.instance.material_override
 		mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		mmi.custom_aabb = AABB(Vector3(-1000, -10, -1000), Vector3(2000, 40, 2000))
 		add_child(mmi)
@@ -119,7 +119,7 @@ func add(t: int, x: float, z: float, yaw: float, size: float, height: float, cha
 	var o := i * STRIDE
 	var buf := _buf[t]
 	buf[o] = b.x.x; buf[o + 1] = b.y.x; buf[o + 2] = b.z.x; buf[o + 3] = x
-	buf[o + 4] = b.x.y; buf[o + 5] = b.y.y; buf[o + 6] = b.z.y; buf[o + 7] = rest * 0.85 + 0.15 * size
+	buf[o + 4] = b.x.y; buf[o + 5] = b.y.y; buf[o + 6] = b.z.y; buf[o + 7] = map.height_at(x, z) + rest * 0.85 + 0.15 * size
 	buf[o + 8] = b.x.z; buf[o + 9] = b.y.z; buf[o + 10] = b.z.z; buf[o + 11] = z
 	buf[o + 12] = 0.0; buf[o + 13] = 1.0; buf[o + 14] = 1.0 if charred else 0.0; buf[o + 15] = 0.0
 	_dirty[t] = 1
@@ -265,7 +265,7 @@ func add_human(pos: Vector3) -> void:
 		_blood_mat = TurretModels.mat(Color(0.35, 0.02, 0.02), 0.0, 0.0)
 		_blood_mat.roughness = 0.2
 	var n := Node3D.new()
-	n.position = Vector3(pos.x, map.pile[c] * 0.85, pos.z)
+	n.position = Vector3(pos.x, map.height_at(pos.x, pos.z) + map.pile[c] * 0.85, pos.z)
 	n.rotation.y = randf() * TAU
 	add_child(n)
 	TurretModels.part(n, TurretModels.cyl(0.7, 0.02, -1.0, 10), _blood_mat, Vector3(0, 0.02, 0))

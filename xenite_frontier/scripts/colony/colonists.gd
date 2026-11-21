@@ -83,9 +83,9 @@ func setup(m: OutpostMap, st: Structures, c: Corpses, effects: Fx, hf: FlowField
 	hunt_interval = float(cfg.get("hunt_field_interval", hunt_interval))
 	max_hp = float(cfg.get("hp", max_hp))
 	immunity = float(cfg.get("grab_immunity_seconds", immunity))
-	_suit = TurretModels.mat(Color(0.95, 0.45, 0.08), 0.0, 0.1)
-	_helmet = TurretModels.mat(Color(0.9, 0.9, 0.88), 0.0, 0.3)
-	_visor = TurretModels.mat(Color(0.3, 0.9, 1.0), 1.5, 0.0)
+	_suit = TurretModels.mat(Color(0.95, 0.45, 0.08), 0.0, 0.1)     # orange trim
+	_helmet = TurretModels.mat(Color(0.88, 0.88, 0.86), 0.0, 0.15)  # white EVA suit
+	_visor = TurretModels.mat(Color(1.0, 0.72, 0.25), 0.6, 0.9)     # gold visor
 	astar.region = Rect2i(0, 0, map.w, map.h)
 	astar.cell_size = Vector2.ONE
 	astar.diagonal_mode = AStarGrid2D.DIAGONAL_MODE_ONLY_IF_NO_OBSTACLES
@@ -143,15 +143,49 @@ func reset() -> void:
 		t.crewed = false
 
 
+## Space-suited colonist: white EVA suit with orange panels, bubble helmet
+## with a gold visor, life-support backpack. Arms and legs hang from pivots
+## so they can swing while walking.
 func _make_node() -> Node3D:
 	var n := Node3D.new()
-	TurretModels.part(n, TurretModels.box(0.32, 0.42, 0.22), _suit, Vector3(0, 0.62, 0))
-	for sx in [-0.09, 0.09]:
-		TurretModels.part(n, TurretModels.box(0.11, 0.42, 0.12), _suit, Vector3(sx, 0.21, 0))
-	TurretModels.part(n, SphereMesh.new(), _helmet, Vector3(0, 0.98, 0)).scale = Vector3.ONE * 0.26
-	TurretModels.part(n, TurretModels.box(0.18, 0.07, 0.06), _visor, Vector3(0, 0.99, 0.12))
-	TurretModels.part(n, TurretModels.box(0.24, 0.3, 0.12), _helmet, Vector3(0, 0.66, -0.16))
+	var suit := _helmet
+	var trim := _suit
+	var dark := TurretModels.mat(Color(0.18, 0.19, 0.2), 0.0, 0.4)
+	TurretModels.part(n, MeshAcc.capsule(0.17, 0.5, 8, 2), suit, Vector3(0, 0.72, 0))                 # torso
+	TurretModels.part(n, MeshAcc.box(0.36, 0.1, 0.24), trim, Vector3(0, 0.9, 0))                    # chest band
+	TurretModels.part(n, MeshAcc.box(0.3, 0.38, 0.16), suit, Vector3(0, 0.78, -0.17))               # backpack
+	TurretModels.part(n, MeshAcc.cyl(0.05, 0.3, -1.0, 6), trim, Vector3(0.09, 0.8, -0.26))         # oxygen tanks
+	TurretModels.part(n, MeshAcc.cyl(0.05, 0.3, -1.0, 6), trim, Vector3(-0.09, 0.8, -0.26))
+	TurretModels.part(n, MeshAcc.ball(0.17, 10, 6), suit, Vector3(0, 1.12, 0))                     # helmet
+	TurretModels.part(n, MeshAcc.box(0.22, 0.12, 0.08), _visor, Vector3(0, 1.13, 0.13))            # visor
+	for side in [-1.0, 1.0]:
+		var leg := Node3D.new()
+		leg.name = "LegL" if side < 0 else "LegR"
+		leg.position = Vector3(side * 0.09, 0.5, 0)
+		n.add_child(leg)
+		TurretModels.part(leg, MeshAcc.capsule(0.075, 0.46, 6, 1), suit, Vector3(0, -0.22, 0))
+		TurretModels.part(leg, MeshAcc.box(0.12, 0.08, 0.2), dark, Vector3(0, -0.46, 0.03))          # boot
+		TurretModels.part(leg, MeshAcc.box(0.13, 0.06, 0.13), trim, Vector3(0, -0.24, 0.02))         # knee pad
+		var arm := Node3D.new()
+		arm.name = "ArmL" if side < 0 else "ArmR"
+		arm.position = Vector3(side * 0.23, 0.9, 0)
+		n.add_child(arm)
+		TurretModels.part(arm, MeshAcc.capsule(0.06, 0.42, 6, 1), suit, Vector3(0, -0.18, 0))
+		TurretModels.part(arm, MeshAcc.ball(0.06, 6, 3), dark, Vector3(0, -0.4, 0))                   # glove
 	return n
+
+
+## Walk cycle: legs and arms swing in opposition; still otherwise.
+func _animate(col: Colonist, walking: bool, _dt: float) -> void:
+	var t := Time.get_ticks_msec() * 0.011 + col.id * 1.7
+	var amp := 0.6 if walking else 0.0
+	if col.wounded and walking:
+		amp = 0.35
+	var sw := sin(t) * amp
+	col.node.get_node("LegL").rotation.x = sw
+	col.node.get_node("LegR").rotation.x = -sw
+	col.node.get_node("ArmL").rotation.x = -sw * 0.8
+	col.node.get_node("ArmR").rotation.x = sw * 0.8
 
 
 # ------------------------------------------------------------ counts
@@ -197,7 +231,7 @@ func on_structure_removed(c: int, _id: String) -> void:
 			# turret gone: the crew bails out, exposed
 			col.state = S.DOWNED
 			col.timer = stun_time
-			col.pos = map.cell_center(c)
+			col.pos = map.cell_ground(c)
 		elif col.state == S.MOVING:
 			_send_home(col)
 
@@ -450,7 +484,7 @@ func _tick_colonist(col: Colonist, dt: float) -> void:
 		S.CREWING:
 			if not structures.turrets.has(col.post):
 				return
-			col.pos = map.cell_center(col.post) + Vector3(0, 1.05, -0.28)
+			col.pos = map.cell_ground(col.post) + Vector3(0, 1.05, -0.28)
 		S.DOWNED:
 			col.node.rotation = Vector3(-PI * 0.5, col.node.rotation.y, 0.0)
 			col.timer -= dt
@@ -486,10 +520,12 @@ func _tick_colonist(col: Colonist, dt: float) -> void:
 				# carrier vanished without dying (despawned): drop where last seen
 				drop(col.id, col.pos)
 	if col.node.visible:
-		var bob := 0.0
-		if col.state == S.MOVING or col.state == S.RETURNING:
-			bob = absf(sin(Time.get_ticks_msec() * 0.012 + col.id)) * 0.06
-		col.node.position = col.pos + Vector3(0, bob, 0)
+		var walking := col.state == S.MOVING or col.state == S.RETURNING
+		var p := col.pos
+		if col.state != S.CREWING:
+			p.y = map.height_at(p.x, p.z) + (0.3 if col.state == S.CARRIED else 0.0)
+		col.node.position = p
+		_animate(col, walking, dt)
 
 
 func _write_grids() -> void:

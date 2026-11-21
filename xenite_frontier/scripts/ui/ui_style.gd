@@ -2,9 +2,10 @@ class_name UiStyle
 extends RefCounted
 ## Shared colony-terminal look. Sizes chosen for 1280x800 (Steam Deck).
 
+## strain identity colours = their glowing eyes / markings
 const ALIEN_COLORS := {
-	"stalker": "#dcc775", "mauler": "#c0301a", "spitter": "#73ff33",
-	"snatcher": "#8a44e0", "burrower": "#eb8c24", "brood_mother": "#e01a72",
+	"stalker": "#ffa01a", "mauler": "#ff2a14", "spitter": "#7dff40",
+	"snatcher": "#b45aff", "burrower": "#ff8c1a", "brood_mother": "#ff4aa0",
 }
 
 

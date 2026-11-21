@@ -72,7 +72,7 @@ func bay_range(tier: int) -> float:
 func add_bay(cell: int, tier := 1) -> void:
 	var b := Bay.new()
 	b.cell = cell
-	b.pos = map.cell_center(cell)
+	b.pos = map.cell_ground(cell)
 	b.tier = tier
 	bays[cell] = b
 	_sync_drones(b)
@@ -177,7 +177,7 @@ func _tick_drone(d: Drone, b: Bay, r: float, dt: float) -> void:
 					d.state = S.RETURN if d.cargo > 0.0 else S.IDLE
 				return
 			var tp := corpses.position_of(d.target) + Vector3(0, 1.6, 0)
-			var cruise := Vector3(tp.x, maxf(altitude, tp.y), tp.z)
+			var cruise := Vector3(tp.x, maxf(altitude + map.height_at(d.pos.x, d.pos.z), tp.y), tp.z)
 			var flat := Vector2(tp.x - d.pos.x, tp.z - d.pos.z).length()
 			var goal := cruise if flat > 1.5 else tp
 			d.pos = d.pos.move_toward(goal, spd * dt)
@@ -203,7 +203,7 @@ func _tick_drone(d: Drone, b: Bay, r: float, dt: float) -> void:
 					d.state = S.OUTBOUND
 		S.RETURN:
 			var flat := Vector2(home.x - d.pos.x, home.z - d.pos.z).length()
-			var goal := Vector3(home.x, altitude, home.z) if flat > 1.0 else home
+			var goal := Vector3(home.x, altitude + map.height_at(d.pos.x, d.pos.z), home.z) if flat > 1.0 else home
 			d.pos = d.pos.move_toward(goal, spd * dt)
 			if d.pos.distance_to(home) < 0.3:
 				d.state = S.DEPOSIT

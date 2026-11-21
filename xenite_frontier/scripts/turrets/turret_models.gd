@@ -45,12 +45,19 @@ static func cyl(r: float, hgt: float, top := -1.0, seg := 8) -> CylinderMesh:
 
 ## Builds the model under `root`; returns [base_material, head, muzzle].
 static func build(root: Node3D, id: String, accent: Color) -> Array:
-	var steel := mat(Color(0.32, 0.35, 0.38), 0.0, 0.6)
-	var base_mat := mat(Color(0.42, 0.45, 0.48), 0.0, 0.5)
+	var steel := mat(Color(0.78, 0.79, 0.78), 0.0, 0.35)          # white composite body
+	var base_mat := mat(Color(0.5, 0.52, 0.55), 0.0, 0.5)         # grey mount (damage tint)
 	var acc := mat(accent, 0.6, 0.2)
 	var dark := mat(Color(0.12, 0.13, 0.14), 0.0, 0.7)
-	part(root, box(0.94, 0.45, 0.94), base_mat, Vector3(0, 0.225, 0))
-	part(root, box(0.96, 0.08, 0.96), acc, Vector3(0, 0.42, 0))
+	var hazard := mat(Color(0.95, 0.45, 0.08), 0.0, 0.2)
+	# round mounting pad on four struts, accent ring, hazard collar
+	part(root, cyl(0.5, 0.12, 0.48, 12), dark, Vector3(0, 0.06, 0))
+	for k in 4:
+		var ang := k * PI * 0.5 + PI * 0.25
+		part(root, box(0.1, 0.35, 0.1), base_mat, Vector3(cos(ang) * 0.32, 0.25, sin(ang) * 0.32))
+	part(root, cyl(0.42, 0.22, 0.38, 12), base_mat, Vector3(0, 0.3, 0))
+	part(root, cyl(0.44, 0.06, -1.0, 12), acc, Vector3(0, 0.43, 0))
+	part(root, cyl(0.3, 0.06, -1.0, 12), hazard, Vector3(0, 0.48, 0))
 	var head := Node3D.new()
 	head.name = "Head"
 	head.position = Vector3(0, 0.55, 0)
@@ -95,29 +102,41 @@ static func build(root: Node3D, id: String, accent: Color) -> Array:
 	return [base_mat, head, muzzle]
 
 
-## Harvester Bay: landing pad with a glowing biomass tank.
+## Harvester Bay: octagonal drone landing pad with hazard ring, a glowing
+## biomass tank and a docking gantry.
 static func build_bay(root: Node3D) -> StandardMaterial3D:
-	var base_mat := mat(Color(0.42, 0.45, 0.48), 0.0, 0.5)
-	var green := mat(Color(0.4, 1.0, 0.35), 1.4, 0.0)
-	var dark := mat(Color(0.15, 0.16, 0.17), 0.0, 0.6)
-	part(root, cyl(0.62, 0.5, 0.56, 8), base_mat, Vector3(0, 0.25, 0))
-	part(root, cyl(0.66, 0.05, -1.0, 8), green, Vector3(0, 0.5, 0))
-	part(root, cyl(0.22, 0.9, -1.0, 8), dark, Vector3(0.0, 0.95, 0.0))
-	part(root, cyl(0.18, 0.7, -1.0, 8), green, Vector3(0.0, 1.0, 0.0))
-	for k in 4:
-		var a := k * PI * 0.5 + PI * 0.25
-		part(root, box(0.1, 0.9, 0.1), dark, Vector3(cos(a) * 0.45, 0.9, sin(a) * 0.45))
+	var base_mat := mat(Color(0.5, 0.52, 0.55), 0.0, 0.5)
+	var white := mat(Color(0.8, 0.8, 0.78), 0.0, 0.3)
+	var green := mat(Color(0.4, 1.0, 0.35), 1.0, 0.0)
+	var dark := mat(Color(0.14, 0.15, 0.16), 0.0, 0.6)
+	var hazard := mat(Color(0.95, 0.75, 0.1), 0.3, 0.1)
+	part(root, cyl(0.75, 0.16, 0.72, 8), dark, Vector3(0, 0.08, 0))
+	part(root, cyl(0.68, 0.04, -1.0, 8), hazard, Vector3(0, 0.17, 0))
+	part(root, cyl(0.58, 0.05, -1.0, 8), base_mat, Vector3(0, 0.19, 0))
+	part(root, box(0.36, 0.02, 0.08), hazard, Vector3(0, 0.22, 0))
+	part(root, box(0.08, 0.02, 0.36), hazard, Vector3(0, 0.22, 0))
+	# biomass tank + gantry
+	part(root, cyl(0.17, 0.75, -1.0, 10), white, Vector3(0.55, 0.55, -0.45))
+	part(root, cyl(0.13, 0.55, -1.0, 10), green, Vector3(0.55, 0.58, -0.45))
+	part(root, box(0.08, 1.3, 0.08), base_mat, Vector3(-0.55, 0.65, -0.45))
+	part(root, box(0.7, 0.08, 0.08), base_mat, Vector3(-0.25, 1.28, -0.45))
+	part(root, box(0.12, 0.1, 0.12), green, Vector3(0.08, 1.22, -0.45))
 	return base_mat
 
 
-## Floodlight: mast with a lamp head and a real light.
+## Floodlight: lattice mast with a lamp bar and a real light.
 static func build_floodlight(root: Node3D, radius: float) -> StandardMaterial3D:
-	var base_mat := mat(Color(0.42, 0.45, 0.48), 0.0, 0.5)
+	var base_mat := mat(Color(0.5, 0.52, 0.55), 0.0, 0.5)
+	var white := mat(Color(0.8, 0.8, 0.78), 0.0, 0.3)
 	var lamp := mat(Color(1.0, 0.95, 0.8), 3.0, 0.0)
-	part(root, box(0.6, 0.3, 0.6), base_mat, Vector3(0, 0.15, 0))
-	part(root, cyl(0.07, 3.0, -1.0, 6), base_mat, Vector3(0, 1.6, 0))
-	part(root, box(0.55, 0.22, 0.35), base_mat, Vector3(0, 3.1, 0))
-	part(root, box(0.48, 0.05, 0.28), lamp, Vector3(0, 2.98, 0))
+	part(root, cyl(0.35, 0.2, 0.3, 8), base_mat, Vector3(0, 0.1, 0))
+	for k in 3:
+		var ang := k * TAU / 3.0
+		part(root, box(0.05, 3.0, 0.05), white, Vector3(cos(ang) * 0.12, 1.6, sin(ang) * 0.12))
+	for k in 5:
+		part(root, cyl(0.15, 0.03, -1.0, 6), base_mat, Vector3(0, 0.5 + k * 0.6, 0))
+	part(root, box(0.8, 0.18, 0.3), white, Vector3(0, 3.15, 0))
+	part(root, box(0.72, 0.05, 0.24), lamp, Vector3(0, 3.04, 0.02))
 	var light := OmniLight3D.new()
 	light.position = Vector3(0, 3.0, 0)
 	light.omni_range = radius * 1.15

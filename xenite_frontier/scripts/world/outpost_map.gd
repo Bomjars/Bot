@@ -43,7 +43,15 @@ var max_pile := 2.6
 
 var _ground: MeshInstance3D
 var _heat: MeshInstance3D
-var _rock_mmi: MultiMeshInstance3D
+var _terrain: MeshInstance3D
+var terrain_material: ShaderMaterial
+
+## Terrain heightfield at half-cell resolution: vertex (i, j) sits at world
+## (origin.x + i * 0.5, origin.y + j * 0.5). Rock cells rise into cliffs,
+## walkable ground is gently uneven with craters; the base pad is levelled.
+var hgrid := PackedFloat32Array()
+var hw := 0
+var hh := 0
 
 
 func idx(x: int, z: int) -> int:
@@ -248,6 +256,7 @@ func generate_test_range(width: int, height: int, seed_value: int) -> void:
 					_set_terrain(m.x + ox, m.y + oz, Kind.GROUND)
 
 	_plan_compound(core)
+	_build_heights(seed_value, core)
 
 	spawn_cells = PackedInt32Array()
 	for m: Vector2i in mouths:
@@ -314,64 +323,263 @@ func _plan_compound(core: Vector2i) -> void:
 	core_center = cell_center(idx(core.x, core.y))
 
 
+# ---------------------------------------------------------------- terrain
+
+## Ground height (bilinear over the heightfield) at world (x, z).
+func height_at(x: float, z: float) -> float:
+	var fx := clampf((x - origin.x) * 2.0, 0.0, hw - 1.001)
+	var fz := clampf((z - origin.y) * 2.0, 0.0, hh - 1.001)
+	var i := int(fx)
+	var j := int(fz)
+	var tx := fx - i
+	var tz := fz - j
+	var k := j * hw + i
+	var a := lerpf(hgrid[k], hgrid[k + 1], tx)
+	var b := lerpf(hgrid[k + hw], hgrid[k + hw + 1], tx)
+	return lerpf(a, b, tz)
+
+
+func cell_height(c: int) -> float:
+	var p := cell_center(c)
+	return height_at(p.x, p.z)
+
+
+## World position of a cell centre standing on the terrain.
+func cell_ground(c: int) -> Vector3:
+	var p := cell_center(c)
+	p.y = height_at(p.x, p.z)
+	return p
+
+
+func _build_heights(seed_value: int, core: Vector2i) -> void:
+	hw = 2 * w + 1
+	hh = 2 * h + 1
+	hgrid.resize(hw * hh)
+	var n_ground := FastNoiseLite.new()
+	n_ground.seed = seed_value + 11
+	n_ground.frequency = 0.035
+	n_ground.fractal_octaves = 3
+	var n_rock := FastNoiseLite.new()
+	n_rock.seed = seed_value + 23
+	n_rock.frequency = 0.07
+	n_rock.fractal_octaves = 2
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_value + 5
+	# craters: bowl + raised rim, kept off the base pad
+	var craters: Array[Vector3] = []
+	var core_w := Vector2(origin.x + core.x + 0.5, origin.y + core.y + 0.5)
+	for k in 60:
+		var cx := rng.randf_range(origin.x + 6, origin.x + w - 6)
+		var cz := rng.randf_range(origin.y + 6, origin.y + h - 6)
+		if Vector2(cx, cz).distance_to(core_w) < 26.0:
+			continue
+		craters.append(Vector3(cx, cz, rng.randf_range(1.5, 5.5)))
+	var rock_h := PackedFloat32Array()
+	rock_h.resize(w * h)
+	for c in w * h:
+		var p := cell_center(c)
+		rock_h[c] = 3.2 + (n_rock.get_noise_2d(p.x, p.z) * 0.5 + 0.5) * 3.2
+	for j in hh:
+		for i in hw:
+			var wx := origin.x + i * 0.5
+			var wz := origin.y + j * 0.5
+			# cells sharing this vertex
+			var xs: Array[int] = []
+			var zs: Array[int] = []
+			if i % 2 == 1:
+				xs.append((i - 1) / 2)
+			else:
+				xs.append(i / 2 - 1)
+				xs.append(i / 2)
+			if j % 2 == 1:
+				zs.append((j - 1) / 2)
+			else:
+				zs.append(j / 2 - 1)
+				zs.append(j / 2)
+			var all_rock := true
+			var any_rock := false
+			var rsum := 0.0
+			var rn := 0
+			for cz in zs:
+				for cx in xs:
+					if not in_bounds(cx, cz):
+						continue
+					var c := idx(cx, cz)
+					if kind[c] == Kind.ROCK:
+						any_rock = true
+						rsum += rock_h[c]
+						rn += 1
+					else:
+						all_rock = false
+			var hgt: float
+			if all_rock and rn > 0:
+				hgt = rsum / rn
+			else:
+				hgt = (n_ground.get_noise_2d(wx, wz) * 0.5 + 0.5) * 0.9
+				hgt += n_rock.get_noise_2d(wx * 3.1, wz * 3.1) * 0.22   # lumpy, uneven regolith
+				for cr in craters:
+					var d := Vector2(wx - cr.x, wz - cr.y).length() / cr.z
+					if d < 1.25:
+						# bowl inside, rim just outside the radius
+						hgt += -0.55 * cr.z * 0.25 * maxf(0.0, 1.0 - d * d) + 0.25 * exp(-pow((d - 1.0) * 5.0, 2.0))
+				if any_rock:
+					hgt += 0.35  # rubble at the cliff foot
+				# levelled base pad around the outpost
+				var dc := Vector2(wx, wz).distance_to(core_w)
+				hgt = lerpf(0.12, hgt, smoothstep(17.0, 24.0, dc))
+			hgrid[j * hw + i] = hgt
+
+
+func _build_terrain_mesh() -> void:
+	var verts := PackedVector3Array()
+	var norms := PackedVector3Array()
+	var uvs := PackedVector2Array()
+	var idxs := PackedInt32Array()
+	verts.resize(hw * hh)
+	norms.resize(hw * hh)
+	uvs.resize(hw * hh)
+	for j in hh:
+		for i in hw:
+			var k := j * hw + i
+			verts[k] = Vector3(origin.x + i * 0.5, hgrid[k], origin.y + j * 0.5)
+			var hl := hgrid[k - 1] if i > 0 else hgrid[k]
+			var hr := hgrid[k + 1] if i < hw - 1 else hgrid[k]
+			var hu := hgrid[k - hw] if j > 0 else hgrid[k]
+			var hd := hgrid[k + hw] if j < hh - 1 else hgrid[k]
+			norms[k] = Vector3(hl - hr, 1.0, hu - hd).normalized()
+			uvs[k] = Vector2(i * 0.5, j * 0.5)
+	idxs.resize((hw - 1) * (hh - 1) * 6)
+	var t := 0
+	for j in hh - 1:
+		for i in hw - 1:
+			var a := j * hw + i
+			var b := a + 1
+			var c := a + hw
+			var d := c + 1
+			# split quads along the shorter diagonal for nicer cliffs
+			if absf(hgrid[a] - hgrid[d]) < absf(hgrid[b] - hgrid[c]):
+				idxs[t] = a; idxs[t + 1] = b; idxs[t + 2] = d
+				idxs[t + 3] = a; idxs[t + 4] = d; idxs[t + 5] = c
+			else:
+				idxs[t] = a; idxs[t + 1] = b; idxs[t + 2] = c
+				idxs[t + 3] = b; idxs[t + 4] = d; idxs[t + 5] = c
+			t += 6
+	var arr := []
+	arr.resize(Mesh.ARRAY_MAX)
+	arr[Mesh.ARRAY_VERTEX] = verts
+	arr[Mesh.ARRAY_NORMAL] = norms
+	arr[Mesh.ARRAY_TEX_UV] = uvs
+	arr[Mesh.ARRAY_INDEX] = idxs
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
+	_terrain = MeshInstance3D.new()
+	_terrain.name = "Terrain"
+	_terrain.mesh = mesh
+	terrain_material = ShaderMaterial.new()
+	terrain_material.shader = preload("res://scripts/render/terrain.gdshader")
+	_terrain.material_override = terrain_material
+	add_child(_terrain)
+
+
+## Build-grid overlay strength (brighter while a build tool is selected).
+func set_grid_visible(on: bool) -> void:
+	if terrain_material:
+		terrain_material.set_shader_parameter("grid_strength", 0.35 if on else 0.0)
+
+
+## Scattered boulders at cliff feet and glowing Xenite crystal clusters on
+## the plateaus. Purely visual.
+func _build_scatter(seed_value: int) -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_value + 99
+	var boulders: Array[Transform3D] = []
+	var crystals: Array[Transform3D] = []
+	for c in w * h:
+		var x := c % w
+		var z := c / w
+		if x < 1 or z < 1 or x >= w - 1 or z >= h - 1:
+			continue
+		var near_rock := kind[c - 1] == Kind.ROCK or kind[c + 1] == Kind.ROCK or kind[c - w] == Kind.ROCK or kind[c + w] == Kind.ROCK
+		if kind[c] == Kind.GROUND:
+			var chance := 0.22 if near_rock else 0.012
+			if is_goal(c) or cell_center(c).distance_to(core_center) < 20.0:
+				chance = 0.0
+			if rng.randf() < chance:
+				var p := cell_center(c) + Vector3(rng.randf_range(-0.4, 0.4), 0, rng.randf_range(-0.4, 0.4))
+				p.y = height_at(p.x, p.z) - 0.05
+				var sc := rng.randf_range(0.18, 0.55) * (1.4 if near_rock else 1.0)
+				var b := Basis.from_euler(Vector3(rng.randf() * 0.6, rng.randf() * TAU, rng.randf() * 0.6)).scaled(Vector3(sc * rng.randf_range(0.8, 1.4), sc * rng.randf_range(0.5, 0.9), sc))
+				boulders.append(Transform3D(b, p))
+		elif kind[c] == Kind.ROCK and near_rock and rng.randf() < 0.05:
+			var p := cell_center(c)
+			p.y = height_at(p.x, p.z) - 0.1
+			var sc := rng.randf_range(0.5, 1.1)
+			crystals.append(Transform3D(Basis.from_euler(Vector3(0, rng.randf() * TAU, 0)).scaled(Vector3.ONE * sc), p))
+	_scatter_mmi(StationModels.boulder_mesh(), boulders, StationModels.rock_material())
+	_scatter_mmi(StationModels.crystal_mesh(), crystals, StationModels.crystal_material())
+
+
+func _scatter_mmi(mesh: Mesh, xfs: Array[Transform3D], mat: Material) -> void:
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.mesh = mesh
+	mm.instance_count = xfs.size()
+	for i in xfs.size():
+		mm.set_instance_transform(i, xfs[i])
+	var mmi := MultiMeshInstance3D.new()
+	mmi.multimesh = mm
+	mmi.material_override = mat
+	add_child(mmi)
+
+
 # ---------------------------------------------------------------- visuals
 
 func _build_visuals() -> void:
-	_ground = MeshInstance3D.new()
-	var pm := PlaneMesh.new()
-	pm.size = Vector2(w, h)
-	_ground.mesh = pm
-	_ground.position = Vector3(origin.x + w * 0.5, 0.0, origin.y + h * 0.5)
-	var gm := ShaderMaterial.new()
-	gm.shader = preload("res://scripts/render/ground.gdshader")
-	_ground.material_override = gm
-	add_child(_ground)
+	_build_terrain_mesh()
+	_build_scatter(int(GameConfig.section("test_range").get("seed", 1337)))
+	var core := Node3D.new()
+	core.name = "HabDome"
+	core.position = cell_ground(idx(int(core_center.x - origin.x), int(core_center.z - origin.y)))
+	add_child(core)
+	StationModels.build_hab_dome(core)
+	_place_props()
 
-	_rock_mmi = MultiMeshInstance3D.new()
-	var mm := MultiMesh.new()
-	mm.transform_format = MultiMesh.TRANSFORM_3D
-	mm.use_colors = true
-	var bm := BoxMesh.new()
-	mm.mesh = bm
-	_rock_mmi.multimesh = mm
-	var mat := StandardMaterial3D.new()
-	mat.vertex_color_use_as_albedo = true
-	mat.albedo_color = Color(0.27, 0.24, 0.28)
-	mat.roughness = 0.95
-	_rock_mmi.material_override = mat
-	_rock_mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	add_child(_rock_mmi)
-	var rocks: Array[int] = []
-	for c in kind.size():
-		if kind[c] == Kind.ROCK:
-			rocks.append(c)
-	mm.instance_count = rocks.size()
-	for i in rocks.size():
-		var c := rocks[i]
-		var hsh := float((c * 2654435761) % 1000) / 1000.0
-		var hgt := 1.6 + hsh * 2.4
-		mm.set_instance_transform(i, Transform3D(Basis.from_scale(Vector3(1.0, hgt, 1.0)), cell_center(c) + Vector3(0, hgt * 0.5, 0)))
-		var shade := 0.75 + hsh * 0.35
-		mm.set_instance_color(i, Color(shade, shade, shade))
 
-	var core_mi := MeshInstance3D.new()
-	var cyl := CylinderMesh.new()
-	cyl.top_radius = 0.9; cyl.bottom_radius = 1.4; cyl.height = 3.0; cyl.radial_segments = 8
-	core_mi.mesh = cyl
-	var cm := StandardMaterial3D.new()
-	cm.albedo_color = Color(0.1, 0.5, 0.6)
-	cm.emission_enabled = true
-	cm.emission = Color(0.1, 0.85, 1.0)
-	cm.emission_energy_multiplier = 2.5
-	core_mi.material_override = cm
-	core_mi.position = core_center + Vector3(0, 1.5, 0)
-	add_child(core_mi)
-	var core_light := OmniLight3D.new()
-	core_light.light_color = Color(0.3, 0.9, 1.0)
-	core_light.omni_range = 18.0
-	core_light.light_energy = 2.0
-	core_light.position = core_center + Vector3(0, 4, 0)
-	add_child(core_light)
+## A few Mars-base props (solar arrays, tanks, comms towers) on the rock
+## plateaus overlooking the outpost.
+func _place_props() -> void:
+	var placed: Array[Vector3] = []
+	var k := 0
+	for c in w * h:
+		if placed.size() >= 7:
+			break
+		var x := c % w
+		var z := c / w
+		if x < 3 or z < 3 or x >= w - 3 or z >= h - 3 or kind[c] != Kind.ROCK:
+			continue
+		var p := cell_ground(c)
+		var d := p.distance_to(core_center)
+		if d < 22.0 or d > 45.0:
+			continue
+		var solid := true
+		for oz in range(-2, 3):
+			for ox in range(-2, 3):
+				if kind[idx(x + ox, z + oz)] != Kind.ROCK:
+					solid = false
+		if not solid:
+			continue
+		var far := true
+		for q in placed:
+			if q.distance_to(p) < 8.0:
+				far = false
+		if not far:
+			continue
+		var prop := StationModels.plateau_prop(k)
+		prop.position = p
+		prop.rotation.y = float(k) * 1.3
+		add_child(prop)
+		placed.append(p)
+		k += 1
 
 
 ## Debug overlay: colours each cell by flow-field distance to the core.
@@ -381,7 +589,7 @@ func show_heatmap(field: FlowField, visible_on: bool) -> void:
 		var pm := PlaneMesh.new()
 		pm.size = Vector2(w, h)
 		_heat.mesh = pm
-		_heat.position = Vector3(origin.x + w * 0.5, 0.03, origin.y + h * 0.5)
+		_heat.position = Vector3(origin.x + w * 0.5, 0.9, origin.y + h * 0.5)
 		var m := StandardMaterial3D.new()
 		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA

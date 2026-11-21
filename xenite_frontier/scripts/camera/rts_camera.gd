@@ -15,6 +15,7 @@ var _target_distance := 60.0
 var bounds := Rect2(-100, -70, 200, 140)
 var camera: Camera3D
 var _dragging := false
+var photo_lock := false
 
 
 func _ready() -> void:
@@ -68,6 +69,9 @@ func _process(delta: float) -> void:
 		_target_distance *= 1.0 + z * 1.6 * delta
 	_target_distance = clampf(_target_distance, min_distance, max_distance)
 	distance = lerpf(distance, _target_distance, minf(1.0, delta * 10.0))
+	if photo_lock:
+		_apply()
+		return
 	position.x = clampf(position.x, bounds.position.x, bounds.end.x)
 	position.z = clampf(position.z, bounds.position.y, bounds.end.y)
 	_apply()
@@ -84,7 +88,7 @@ func ground_point(screen_pos: Vector2) -> Variant:
 	var dir := camera.project_ray_normal(screen_pos)
 	if absf(dir.y) < 1e-4:
 		return null
-	var t := -from.y / dir.y
+	var t := (0.15 - from.y) / dir.y  # the base pad is levelled at ~0.15 m
 	if t < 0.0:
 		return null
 	return from + dir * t

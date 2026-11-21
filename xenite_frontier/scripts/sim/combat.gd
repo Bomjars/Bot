@@ -58,8 +58,8 @@ func setup(s: Swarm, m: OutpostMap, st: Structures, effects: Fx, c: Corpses) -> 
 	_growth = float(fd.get("growth_per_meal", _growth))
 	_max_size = float(fd.get("max_size", _max_size))
 	_hp_per_meal = float(fd.get("hp_per_meal", _hp_per_meal))
-	var cols := {"stalker": Color(0.86, 0.78, 0.46), "mauler": Color(0.7, 0.14, 0.06), "spitter": Color(0.38, 0.36, 0.42),
-		"snatcher": Color(0.5, 0.22, 0.82), "burrower": Color(0.92, 0.55, 0.14), "brood_mother": Color(0.82, 0.1, 0.42)}
+	var cols := {"stalker": Color(0.58, 0.6, 0.63), "mauler": Color(0.36, 0.37, 0.4), "spitter": Color(0.52, 0.57, 0.52),
+		"snatcher": Color(0.68, 0.65, 0.74), "burrower": Color(0.5, 0.45, 0.4), "brood_mother": Color(0.74, 0.68, 0.68)}
 	for p in swarm.pools:
 		_body_colors.append(cols.get(p.def.id, Color.GRAY))
 
@@ -91,7 +91,7 @@ func process_swarm_events() -> void:
 	for k in range(0, sp.size(), 4):
 		var from := Vector3(sp[k], 0.9, sp[k + 1])
 		var cell := int(sp[k + 2])
-		var to := map.cell_center(cell) + Vector3(0, map.sheight[cell] * 0.7, 0)
+		var to := map.cell_ground(cell) + Vector3(0, map.sheight[cell] * 0.7, 0)
 		_acid.append({"from": from, "to": to, "t": 0.0, "T": 0.6 + from.distance_to(to) * 0.05, "cell": cell, "dmg": sp[k + 3]})
 	var ev := swarm.out_eat
 	for k in range(0, ev.size(), 2):

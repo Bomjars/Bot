@@ -44,6 +44,7 @@ var _text_life := PackedFloat32Array()
 var _text_next := 0
 
 var gore := true
+var map: OutpostMap   # terrain height for gibs and splats
 var rng := RandomNumberGenerator.new()
 var update_usec := 0
 
@@ -177,7 +178,8 @@ func splat(pos: Vector3, col: Color, radius: float) -> void:
 	var c := cos(a)
 	var s := sin(a)
 	_sbuf[o] = c * sx; _sbuf[o + 1] = 0.0; _sbuf[o + 2] = s * sz; _sbuf[o + 3] = pos.x
-	_sbuf[o + 4] = 0.0; _sbuf[o + 5] = 1.0; _sbuf[o + 6] = 0.0; _sbuf[o + 7] = pos.y + 0.012 + rng.randf() * 0.01
+	var gy := map.height_at(pos.x, pos.z) if map else pos.y
+	_sbuf[o + 4] = 0.0; _sbuf[o + 5] = 1.0; _sbuf[o + 6] = 0.0; _sbuf[o + 7] = gy + 0.03 + rng.randf() * 0.02
 	_sbuf[o + 8] = -s * sx; _sbuf[o + 9] = 0.0; _sbuf[o + 10] = c * sz; _sbuf[o + 11] = pos.z
 	# dark, saturated acid stain (no glow) so puddles read as ground decals
 	var dcol := Color.from_hsv(col.h, minf(1.0, col.s * 1.2), col.v * 0.38)
@@ -234,6 +236,11 @@ func _update_particles(dt: float) -> void:
 	var active := 0
 	var buf := _pbuf
 	var g := 14.0 * dt
+	var hg := map.hgrid if map else PackedFloat32Array()
+	var hgw := map.hw if map else 0
+	var hgh := map.hh if map else 0
+	var ox := map.origin.x if map else 0.0
+	var oz := map.origin.y if map else 0.0
 	for i in p_cap:
 		var l := _plife[i]
 		if l <= 0.0:
@@ -250,8 +257,13 @@ func _update_particles(dt: float) -> void:
 		var y := _ppy[i] + vy * dt
 		var x := _ppx[i]
 		var z := _ppz[i]
-		if y < 0.04 and _pgrav[i] > 0.0:
-			y = 0.04
+		var ground := 0.04
+		if hgw > 0 and _pgrav[i] > 0.0:
+			var gi := clampi(int((x - ox) * 2.0 + 0.5), 0, hgw - 1)
+			var gj := clampi(int((_ppz[i] - oz) * 2.0 + 0.5), 0, hgh - 1)
+			ground = hg[gj * hgw + gi] + 0.04
+		if y < ground and _pgrav[i] > 0.0:
+			y = ground
 			vy = 0.0
 			_pvx[i] *= 0.5
 			_pvz[i] *= 0.5

@@ -55,6 +55,7 @@ var _bot_timer := 0.0
 var _bot_plan: Array = []
 var _bot_planned := false
 var _test_seconds := 0.0
+var _showcase_on := false
 var _stuck_report := false
 var _test_t := 0.0
 
@@ -72,6 +73,8 @@ func _ready() -> void:
 	fx.name = "Fx"
 	add_child(fx)
 	fx.setup()
+	fx.map = map
+	map.terrain_material.set_shader_parameter("core_pos", map.core_center)
 
 	economy = Economy.new()
 	economy.name = "Economy"
@@ -160,6 +163,7 @@ func _ready() -> void:
 	add_child(build)
 	build.tool_changed.connect(func(id):
 		_last_paint = -1
+		map.set_grid_visible(id != "")
 		if id != "": _select(-1))
 	build.inspector_action.connect(_inspector_action)
 
@@ -185,35 +189,61 @@ func _ready() -> void:
 		elif arg.begins_with("--combat-test"):
 			var parts := arg.split("=")
 			_test_seconds = float(parts[1]) if parts.size() > 1 else 40.0
+		elif arg == "--showcase":
+			_showcase.call_deferred()
 		elif arg.begins_with("--screenshot="):
 			_screenshot_after(arg.split("=")[1])
 
 
 func _build_environment() -> void:
+	# alien sky: violet zenith, dusty salmon horizon, a small hot white sun
+	var sky_mat := ProceduralSkyMaterial.new()
+	sky_mat.sky_top_color = Color(0.10, 0.06, 0.16)
+	sky_mat.sky_horizon_color = Color(0.62, 0.36, 0.30)
+	sky_mat.ground_bottom_color = Color(0.12, 0.07, 0.06)
+	sky_mat.ground_horizon_color = Color(0.5, 0.3, 0.24)
+	sky_mat.sun_angle_max = 8.0
+	var sky := Sky.new()
+	sky.sky_material = sky_mat
 	var env := Environment.new()
-	env.background_mode = Environment.BG_COLOR
-	env.background_color = Color(0.05, 0.03, 0.04)
-	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	env.background_mode = Environment.BG_SKY
+	env.sky = sky
+	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
+	env.ambient_light_sky_contribution = 0.65
 	env.ambient_light_color = Color(0.55, 0.42, 0.5)
-	env.ambient_light_energy = 0.55
-	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	env.ambient_light_energy = 0.7
+	env.tonemap_mode = Environment.TONE_MAPPER_ACES
+	env.tonemap_exposure = 1.05
 	env.glow_enabled = true
 	env.glow_intensity = 0.35
-	env.glow_hdr_threshold = 1.2
+	env.glow_hdr_threshold = 1.1
+	env.ssao_enabled = true
+	env.ssao_radius = 1.2
+	env.ssao_intensity = 1.6
 	env.fog_enabled = true
-	env.fog_light_color = Color(0.25, 0.12, 0.12)
-	env.fog_density = 0.004
+	env.fog_light_color = Color(0.55, 0.32, 0.25)
+	env.fog_density = 0.0035
+	env.fog_sky_affect = 0.4
+	env.adjustment_enabled = true
+	env.adjustment_saturation = 1.08
+	env.adjustment_contrast = 1.05
 	var we := WorldEnvironment.new()
 	we.environment = env
 	add_child(we)
 
 	var sun := DirectionalLight3D.new()
-	sun.light_color = Color(1.0, 0.78, 0.62)
-	sun.light_energy = 1.1
-	sun.rotation_degrees = Vector3(-52, -35, 0)
+	sun.light_color = Color(1.0, 0.82, 0.68)
+	sun.light_energy = 1.25
+	sun.rotation_degrees = Vector3(-33, -40, 0)   # low sun: relief casts shadows
 	sun.shadow_enabled = true
-	sun.directional_shadow_max_distance = 120.0
+	sun.directional_shadow_max_distance = 140.0
 	add_child(sun)
+	# cool bounce from the opposite side so shadowed cliffs read
+	var fill := DirectionalLight3D.new()
+	fill.light_color = Color(0.45, 0.5, 0.8)
+	fill.light_energy = 0.25
+	fill.rotation_degrees = Vector3(-30, 150, 0)
+	add_child(fill)
 
 
 func _make_ghost() -> void:
@@ -248,6 +278,7 @@ func _process(delta: float) -> void:
 	var dt := minf(delta, 1.0 / 30.0)
 	_step(dt)
 	_update_ghost()
+	swarm.set_far_lod(cam.distance > 70.0)
 	_insp_timer -= delta
 	if _insp_timer <= 0.0:
 		_insp_timer = 0.25
@@ -496,7 +527,7 @@ func _update_ghost() -> void:
 		var hgt := float(d.get("height", 1.4))
 		_ghost.visible = true
 		_ghost.scale = Vector3(0.98, hgt, 0.98)
-		_ghost.position = map.cell_center(c) + Vector3(0, hgt * 0.5, 0)
+		_ghost.position = map.cell_ground(c) + Vector3(0, hgt * 0.5, 0)
 		_ghost_mat.albedo_color = Color(0.3, 1.0, 0.5, 0.35) if ok else Color(1.0, 0.25, 0.2, 0.35)
 		show_range = _range_of(build.selected, 1, -1)
 	else:
@@ -508,7 +539,7 @@ func _update_ghost() -> void:
 			show_range = _range_of(structures.id_at(c), structures.tier_at(c), c)
 	_ring.visible = show_range > 0.0
 	if _ring.visible:
-		_ring.position = map.cell_center(c) + Vector3(0, 0.05, 0)
+		_ring.position = map.cell_ground(c) + Vector3(0, 0.08, 0)
 		_ring.scale = Vector3(show_range, 1.0, show_range)
 
 
@@ -733,6 +764,38 @@ func _stuck_reason(c: int, p: AlienPool, i: int) -> String:
 	if map.kind[ac] == OutpostMap.Kind.STRUCT:
 		return "pressing structure (no bash)"
 	return "crowd / other"
+
+
+## Dev: line up every strain on the pad in four poses (idle, walk, sprint on
+## all fours, attack) facing the camera, plus a feeding one. `-- --showcase`
+func _showcase() -> void:
+	target_count = 0
+	swarm.paused = true
+	var row := map.core_center + Vector3(-8.0, 0, -26.0)
+	var poses := [0.0, 0.5, 1.0, -2.0, -1.0]
+	for t in swarm.pools.size():
+		var p := swarm.pools[t]
+		for k in poses.size():
+			var x := row.x + t * 3.2
+			var z := row.z + k * 2.6 - (1.5 if t == 5 else 0.0)
+			var i := p.spawn(x, z, swarm.rng)
+			var o := i * AlienPool.STRIDE
+			p.buf[o] = 1.0; p.buf[o + 2] = 0.0; p.buf[o + 8] = 0.0; p.buf[o + 10] = 1.0
+			p.buf[o + 5] = 1.0
+			p.buf[o + 7] = map.height_at(x, z)
+			p.buf[o + 15] = poses[k]
+	# photo mode: no UI, close low camera (pick the strain pair with --pair=N)
+	hud.visible = false
+	build.visible = false
+	var pair := 0
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--pair="):
+			pair = int(arg.split("=")[1])
+	cam.position = row + Vector3(1.6 + pair * 6.4, 1.0, 6.0)
+	cam.pitch_deg = 24.0
+	cam.photo_lock = true
+	cam._target_distance = 9.0
+	cam.distance = 9.0
 
 
 ## Dev helper: `-- --aliens=N --screenshot=path.png [--cam=x,z,dist]`.

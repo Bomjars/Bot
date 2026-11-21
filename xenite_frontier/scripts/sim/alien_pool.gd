@@ -48,6 +48,8 @@ var buf := PackedFloat32Array()
 
 var multimesh: MultiMesh
 var instance: MultiMeshInstance3D
+var mesh_near: Mesh
+var mesh_far: Mesh
 
 
 func _init(id: int, d: Dictionary, mesh: Mesh, material: Material) -> void:

@@ -118,14 +118,32 @@ func setup(m: OutpostMap, f: FlowField, bf: FlowField, rf: FlowField, hf: FlowFi
 		if t.id == "flamethrower":
 			_burn_dps = float(t.get("burn_dps", _burn_dps))
 
-	var mat := ShaderMaterial.new()
-	mat.shader = preload("res://scripts/render/alien.gdshader")
+	var shader := preload("res://scripts/render/alien.gdshader")
 	for i in defs.size():
-		var pool := AlienPool.new(i, defs[i], AlienMeshes.build(defs[i].id), mat)
+		# per-strain material: joint pivots and gait for the GPU animation
+		var mat := ShaderMaterial.new()
+		mat.shader = shader
+		var rig := AlienMeshes.rig(defs[i].id)
+		for k: String in rig:
+			mat.set_shader_parameter(k, rig[k])
+		var near := AlienMeshes.build(defs[i].id, 0)
+		var pool := AlienPool.new(i, defs[i], near, mat)
+		pool.mesh_near = near
+		pool.mesh_far = AlienMeshes.build(defs[i].id, 1)
 		pools.append(pool)
 		add_child(pool.instance)
 		_weights.append(float(defs[i].get("spawn_weight", 1)))
 		_weight_total += _weights[i]
+
+
+## Swap to the low-detail meshes when the camera is far out.
+var far_lod := false
+func set_far_lod(far: bool) -> void:
+	if far == far_lod:
+		return
+	far_lod = far
+	for p in pools:
+		p.multimesh.mesh = p.mesh_far if far else p.mesh_near
 
 
 func total() -> int:
@@ -291,6 +309,8 @@ func _sim_chunk(ci: int) -> void:
 	var pile := map.pile
 	var sheight := map.sheight
 	var stype := map.stype
+	var hg := map.hgrid
+	var hgw := map.hw
 	var dens := _dens
 	var dnext := _dens_next
 	var dw := _dw
@@ -421,6 +441,7 @@ func _sim_chunk(ci: int) -> void:
 
 		# ---- strain behaviour
 		var legit := false   # standing still on purpose (eating, bashing, shelling, gnawing)
+		var pose := 0.0      # render: -1 feeding, -2 attacking, else speed ratio
 		var fd := feed[i]
 		if not burrowed:
 			var ac := int(gz + fdz * 0.8) * w + int(gx + fdx * 0.8)
@@ -439,6 +460,7 @@ func _sim_chunk(ci: int) -> void:
 				tx = 0.0
 				tz = 0.0
 				legit = true
+				pose = -1.0
 				if fd <= 0.0:
 					eat.append(hbase | i); eat.append(c)
 			elif feed_chance > 0 and not carrying and ccount[c] > 0 \
@@ -451,6 +473,7 @@ func _sim_chunk(ci: int) -> void:
 				tx *= 0.15
 				tz *= 0.15
 				legit = true
+				pose = -2.0
 			elif rr > 0:
 				var tg := tgt[i]
 				if ((i + frame) & 7) == 0:
@@ -474,6 +497,7 @@ func _sim_chunk(ci: int) -> void:
 						tx = 0.0
 						tz = 0.0
 						legit = true
+						pose = -2.0
 						if tm <= 0.0:
 							tm = rcd
 							spit.append(px[i]); spit.append(pz[i])
@@ -555,6 +579,7 @@ func _sim_chunk(ci: int) -> void:
 			else:
 				core_dmg += cdps
 				legit = true
+				pose = -2.0
 
 		var mvx := nx - gx
 		var mvz := nz - gz
@@ -581,16 +606,26 @@ func _sim_chunk(ci: int) -> void:
 			buf[o + 10] = cs
 		buf[o + 3] = nx + ox
 		buf[o + 11] = nz + oz
-		var y := 0.0
+		# terrain height: bilinear over the half-metre heightfield
+		var hx := nx * 2.0
+		var hz := nz * 2.0
+		var hi := int(hx)
+		var hj := int(hz)
+		var htx := hx - hi
+		var hk := hj * hgw + hi
+		var h0 := hg[hk] + (hg[hk + 1] - hg[hk]) * htx
+		var h1 := hg[hk + hgw] + (hg[hk + hgw + 1] - hg[hk + hgw]) * htx
+		var y := h0 + (h1 - h0) * (hz - hj)
 		if burrowed:
-			y = -0.55 * sz[i]
+			y -= 0.55 * sz[i]
 		elif kind[ncell] == OutpostMap.Kind.STRUCT:
-			y = sheight[ncell]
+			y += sheight[ncell]
 		else:
-			y = pile[ncell] * 0.85
+			y += pile[ncell] * 0.85
 		buf[o + 7] = y
 		var fl := buf[o + 12]
 		if fl > 0.0:
 			buf[o + 12] = maxf(0.0, fl - dt * 7.0)
+		buf[o + 15] = pose if pose < 0.0 else minf(sqrt(sp2) / maxf(s, 0.1), 1.2)
 	_c_reached[ci] = reached
 	_c_core[ci] = core_dmg

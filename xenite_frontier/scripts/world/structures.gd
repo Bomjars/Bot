@@ -29,7 +29,8 @@ var built_count := 0
 var destroyed_count := 0
 var light_radius_mult := 1.0  # Colony Charter: Engineering (M6)
 
-var _wall_mmi: MultiMeshInstance3D
+var _post_mmi: MultiMeshInstance3D
+var _panel_mmi: MultiMeshInstance3D
 var _door_mmi: MultiMeshInstance3D
 var _visual_dirty := true
 var _visual_timer := 0.0
@@ -50,23 +51,19 @@ func setup(m: OutpostMap, effects: Fx, econ: Economy) -> void:
 	_turret_height = float(GameConfig.structures.get("turret_height", 1.6))
 	core_max = float(GameConfig.structures.get("core", {}).get("hp", 6000))
 	core_hp = core_max
-	_wall_mmi = _make_mmi(Color(0.5, 0.56, 0.62))
-	_door_mmi = _make_mmi(Color(0.75, 0.62, 0.2))
+	_post_mmi = _make_mmi(StationModels.wall_post_mesh())
+	_panel_mmi = _make_mmi(StationModels.wall_panel_mesh())
+	_door_mmi = _make_mmi(StationModels.door_mesh())
 
 
-func _make_mmi(col: Color) -> MultiMeshInstance3D:
+func _make_mmi(mesh: Mesh) -> MultiMeshInstance3D:
 	var mmi := MultiMeshInstance3D.new()
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
 	mm.use_colors = true
-	mm.mesh = BoxMesh.new()
+	mm.mesh = mesh
 	mmi.multimesh = mm
-	var mat := StandardMaterial3D.new()
-	mat.vertex_color_use_as_albedo = true
-	mat.albedo_color = col
-	mat.roughness = 0.8
-	mat.metallic = 0.3
-	mmi.material_override = mat
+	mmi.material_override = StationModels.station_material()
 	add_child(mmi)
 	return mmi
 
@@ -127,7 +124,7 @@ func place(c: int, id: String, emit := true) -> bool:
 	if not defs.has(id) or not map.can_build(c):
 		return false
 	var d: Dictionary = defs[id]
-	var pos := map.cell_center(c)
+	var pos := map.cell_ground(c)
 	if is_turret(id):
 		map.put_structure(c, OutpostMap.SType.TURRET, float(d.hp), _turret_height, _turret_nav)
 		var t := Turret.new()
@@ -175,7 +172,7 @@ func sell(c: int) -> bool:
 	if c < 0 or not ids.has(c):
 		return false
 	economy.refund(sell_value(c))
-	fx.burst(map.cell_center(c) + Vector3(0, 0.8, 0), Color(0.4, 0.9, 1.0, 1.0), 8, 3.0, 0.08, 0.4, 0.2)
+	fx.burst(map.cell_ground(c) + Vector3(0, 0.8, 0), Color(0.4, 0.9, 1.0, 1.0), 8, 3.0, 0.08, 0.4, 0.2)
 	_remove(c)
 	nav_changed.emit()
 	return true
@@ -229,7 +226,7 @@ func upgrade(c: int) -> String:
 		turrets[c].set_tier(tier)
 	elif nodes.has(c):
 		TurretModels.set_tier_pips(nodes[c], tier, Color(0.4, 1.0, 0.35))
-	fx.burst(map.cell_center(c) + Vector3(0, 1.0, 0), Color(1.0, 0.9, 0.4, 1.0), 14, 4.0, 0.1, 0.6, 0.0)
+	fx.burst(map.cell_ground(c) + Vector3(0, 1.0, 0), Color(1.0, 0.9, 0.4, 1.0), 14, 4.0, 0.1, 0.6, 0.0)
 	upgraded.emit(c, id, tier)
 	_visual_dirty = true
 	return ""
@@ -250,7 +247,7 @@ func repair(c: int) -> String:
 	economy.spend(cost)
 	map.shp[c] = map.smax[c]
 	invested[c] = invested.get(c, 0.0)
-	fx.burst(map.cell_center(c) + Vector3(0, 1.0, 0), Color(0.4, 0.8, 1.0, 1.0), 8, 2.5, 0.08, 0.5, 0.0)
+	fx.burst(map.cell_ground(c) + Vector3(0, 1.0, 0), Color(0.4, 0.8, 1.0, 1.0), 8, 2.5, 0.08, 0.5, 0.0)
 	_visual_dirty = true
 	return ""
 
@@ -269,7 +266,7 @@ func damage(c: int, amount: float) -> void:
 
 
 func _destroy(c: int) -> void:
-	var p := map.cell_center(c)
+	var p := map.cell_ground(c)
 	var hgt := map.sheight[c]
 	fx.burst(p + Vector3(0, hgt * 0.5, 0), Color(0.45, 0.47, 0.5, 0.0), 14, 6.0, 0.25, 2.0, 1.0)
 	fx.burst(p + Vector3(0, hgt * 0.5, 0), Color(1.0, 0.6, 0.2, 1.0), 8, 5.0, 0.12, 0.4, 0.3)
@@ -313,19 +310,60 @@ func _refresh_visuals() -> void:
 			OutpostMap.SType.DOOR: doors.append(c)
 		if _node_mats.has(c):
 			var r := map.shp[c] / maxf(1.0, map.smax[c])
-			_node_mats[c].albedo_color = Color(0.42, 0.45, 0.48).lerp(Color(0.5, 0.12, 0.05), 1.0 - r)
-	_fill(_wall_mmi.multimesh, walls)
-	_fill(_door_mmi.multimesh, doors)
+			_node_mats[c].albedo_color = Color(0.5, 0.52, 0.55).lerp(Color(0.55, 0.12, 0.05), 1.0 - r)
+	# posts on every wall cell, panels joining it to wall/door neighbours
+	# east and south (each joint drawn once), so lines read as continuous
+	# barriers instead of blocks
+	var post_xf: Array[Transform3D] = []
+	var post_col: Array[Color] = []
+	var panel_xf: Array[Transform3D] = []
+	var panel_col: Array[Color] = []
+	for c in walls:
+		var p := map.cell_ground(c)
+		var col := _tint(c)
+		post_xf.append(Transform3D(Basis(), p))
+		post_col.append(col)
+		var x := c % map.w
+		var z := c / map.w
+		for o: Vector2i in [Vector2i(1, 0), Vector2i(0, 1)]:
+			if not map.in_bounds(x + o.x, z + o.y):
+				continue
+			var n := map.idx(x + o.x, z + o.y)
+			var st := map.stype[n]
+			if map.kind[n] != OutpostMap.Kind.STRUCT or (st != OutpostMap.SType.WALL and st != OutpostMap.SType.DOOR):
+				continue
+			var q := map.cell_ground(n)
+			var b := Basis() if o.x == 1 else Basis(Vector3.UP, -PI * 0.5)
+			panel_xf.append(Transform3D(b, Vector3(p.x, minf(p.y, q.y), p.z)))
+			panel_col.append(col if st == OutpostMap.SType.WALL else col.lerp(_tint(n), 0.5))
+	_fill_xf(_post_mmi.multimesh, post_xf, post_col)
+	_fill_xf(_panel_mmi.multimesh, panel_xf, panel_col)
+	var door_xf: Array[Transform3D] = []
+	var door_col: Array[Color] = []
+	for c in doors:
+		var x := c % map.w
+		var z := c / map.w
+		# slab runs along the wall line (neighbours east/west = along X)
+		var along_x := false
+		for o in [-1, 1]:
+			if map.in_bounds(x + o, z) and map.kind[map.idx(x + o, z)] == OutpostMap.Kind.STRUCT:
+				along_x = true
+		var b := Basis() if along_x else Basis(Vector3.UP, PI * 0.5)
+		door_xf.append(Transform3D(b, map.cell_ground(c)))
+		door_col.append(_tint(c))
+	_fill_xf(_door_mmi.multimesh, door_xf, door_col)
 
 
-func _fill(mm: MultiMesh, cells: Array[int]) -> void:
-	mm.instance_count = cells.size()
-	for i in cells.size():
-		var c := cells[i]
-		var hgt := map.sheight[c]
-		mm.set_instance_transform(i, Transform3D(Basis.from_scale(Vector3(0.98, hgt, 0.98)), map.cell_center(c) + Vector3(0, hgt * 0.5, 0)))
-		var r := map.shp[c] / maxf(1.0, map.smax[c])
-		var col := Color(1, 1, 1).lerp(Color(0.55, 0.18, 0.1), 1.0 - r)
-		if map.climb[c]:
-			col = col.lerp(Color(0.6, 0.9, 0.3), 0.25)  # tinted where the swarm can climb over
-		mm.set_instance_color(i, col)
+func _tint(c: int) -> Color:
+	var r := map.shp[c] / maxf(1.0, map.smax[c])
+	var col := Color(1, 1, 1).lerp(Color(0.55, 0.18, 0.1), 1.0 - r)
+	if map.climb[c]:
+		col = col.lerp(Color(0.6, 0.9, 0.3), 0.3)  # the swarm can climb over here
+	return col
+
+
+func _fill_xf(mm: MultiMesh, xfs: Array[Transform3D], cols: Array[Color]) -> void:
+	mm.instance_count = xfs.size()
+	for i in xfs.size():
+		mm.set_instance_transform(i, xfs[i])
+		mm.set_instance_color(i, cols[i])
