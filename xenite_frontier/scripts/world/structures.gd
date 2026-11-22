@@ -24,6 +24,7 @@ var tiers := {}              # cell -> tier (1-based)
 var invested := {}           # cell -> Biomass spent on it (refund basis)
 var sites := {}              # cell -> {work, need}: under construction (workers build it)
 var staff := {}              # cell -> colonist id working there (rigs, refinery, ...)
+var cell_owner := {}              # every occupied cell -> its structure's anchor cell
 var instant_build := false   # tests / free build: skip construction
 var defs := {}               # id -> def
 var core_hp := 6000.0
@@ -72,6 +73,61 @@ func _make_mmi(mesh: Mesh) -> MultiMeshInstance3D:
 	return mmi
 
 
+## Footprint: colony buildings are N x N (the anchor is the -x/-z corner).
+func footprint(id: String) -> int:
+	return int(defs.get(id, {}).get("footprint", 1))
+
+
+func footprint_cells(anchor: int, id: String) -> Array[int]:
+	var out: Array[int] = []
+	var n := footprint(id)
+	var ax := anchor % map.w
+	var az := anchor / map.w
+	for dz in n:
+		for dx in n:
+			if map.in_bounds(ax + dx, az + dz):
+				out.append(map.idx(ax + dx, az + dz))
+	return out
+
+
+## Anchor of the structure covering `c` (-1 = none).
+func anchor_of(c: int) -> int:
+	return cell_owner.get(c, -1)
+
+
+## Ground position at the middle of a structure's footprint.
+func center_of(anchor: int) -> Vector3:
+	var n := footprint(ids.get(anchor, ""))
+	var p := map.cell_center(anchor) + Vector3((n - 1) * 0.5, 0.0, (n - 1) * 0.5)
+	p.y = map.height_at(p.x, p.z)
+	return p
+
+
+func can_place(c: int, id: String) -> bool:
+	if c < 0:
+		return false
+	var cells := footprint_cells(c, id)
+	if cells.size() != footprint(id) * footprint(id):
+		return false
+	for k in cells:
+		if not map.can_build(k):
+			return false
+	return true
+
+
+func on_deposit(c: int, id: String) -> bool:
+	for k in footprint_cells(c, id):
+		if map.deposit[k]:
+			return true
+	return false
+
+
+func _occupy(c: int, id: String, st: int, hp: float, hgt: float, nav: int) -> void:
+	for k in footprint_cells(c, id):
+		map.put_structure(k, st, hp, hgt, nav)
+		cell_owner[k] = c
+
+
 func is_turret(id: String) -> bool:
 	return defs.has(id) and defs[id].has("damage_type")
 
@@ -114,10 +170,10 @@ func reset() -> void:
 func try_build(c: int, id: String) -> String:
 	if not defs.has(id):
 		return "Unknown structure"
-	if not map.can_build(c):
-		return "Can't build there"
+	if not can_place(c, id):
+		return "Can't build there" if footprint(id) == 1 else "Needs a clear %dx%d area" % [footprint(id), footprint(id)]
 	var d: Dictionary = defs[id]
-	if d.get("needs_deposit", false) and not map.deposit[c]:
+	if d.get("needs_deposit", false) and not on_deposit(c, id):
 		return "Build Mining Rigs on a glowing Xenite deposit"
 	var cost := cost_of(id)
 	if not economy.can_afford(cost):
@@ -149,16 +205,16 @@ func _place_site(c: int, id: String) -> void:
 	var st := _stype_of(id)
 	var hgt := _turret_height if is_turret(id) else float(d.height)
 	var nav := _turret_nav if is_turret(id) else int(d.nav_cost)
-	map.put_structure(c, st, hp, hgt, nav)
 	ids[c] = id
+	_occupy(c, id, st, hp, hgt, nav)
 	tiers[c] = 1
 	invested[c] = 0.0
 	sites[c] = {"work": 0.0, "need": float(d.get("build_time", 5.0))}
 	var n := Node3D.new()
 	n.name = "site_%d" % c
-	n.position = map.cell_ground(c)
+	n.position = center_of(c)
 	add_child(n)
-	StationModels.build_scaffold(n, hgt)
+	StationModels.build_scaffold(n, hgt, footprint(id))
 	nodes[c] = n
 	_visual_dirty = true
 	site_placed.emit(c, id)
@@ -195,12 +251,14 @@ func _complete(c: int) -> void:
 	if nodes.has(c):
 		nodes[c].queue_free()
 		nodes.erase(c)
+	for k in footprint_cells(c, id):
+		map.clear_structure(k)
+		cell_owner.erase(k)
 	ids.erase(c)
-	map.clear_structure(c)
 	place(c, id, false)
 	invested[c] = paid
 	map.shp[c] = map.smax[c] * ratio  # keeps damage the site took
-	fx.burst(map.cell_ground(c) + Vector3(0, 1.0, 0), Color(0.5, 0.9, 1.0, 1.0), 10, 3.0, 0.08, 0.5, 0.0)
+	fx.burst(center_of(c) + Vector3(0, 1.0, 0), Color(0.5, 0.9, 1.0, 1.0), 10, 3.0, 0.08, 0.5, 0.0)
 
 
 func _stype_of(id: String) -> int:
@@ -250,12 +308,13 @@ func cells_of(id: String) -> Array[int]:
 
 ## Places without cost (starting layout, sandbox).
 func place(c: int, id: String, emit := true) -> bool:
-	if not defs.has(id) or not map.can_build(c):
+	if not defs.has(id) or not can_place(c, id):
 		return false
 	var d: Dictionary = defs[id]
-	var pos := map.cell_ground(c)
+	ids[c] = id
+	var pos := center_of(c)
 	if is_turret(id):
-		map.put_structure(c, OutpostMap.SType.TURRET, float(d.hp), _turret_height, _turret_nav)
+		_occupy(c, id, OutpostMap.SType.TURRET, float(d.hp), _turret_height, _turret_nav)
 		var t := Turret.new()
 		t.name = "Turret_%s_%d" % [id, c]
 		add_child(t)
@@ -264,7 +323,7 @@ func place(c: int, id: String, emit := true) -> bool:
 		nodes[c] = t
 		_node_mats[c] = t.base_mat
 	else:
-		map.put_structure(c, _stype_of(id), float(d.hp), float(d.height), int(d.nav_cost))
+		_occupy(c, id, _stype_of(id), float(d.hp), float(d.height), int(d.nav_cost))
 		if id != "wall" and id != "blast_door":
 			var n := Node3D.new()
 			n.name = "%s_%d" % [id, c]
@@ -272,12 +331,12 @@ func place(c: int, id: String, emit := true) -> bool:
 			add_child(n)
 			nodes[c] = n
 			if id == "harvester_bay":
-				_node_mats[c] = TurretModels.build_bay(n)
+				StationModels.build_bay(n)
 			elif id == "floodlight":
-				_node_mats[c] = TurretModels.build_floodlight(n, light_radius())
+				StationModels.build_floodlight(n, light_radius())
 				map.add_light(c, light_radius(), 1)
 			else:
-				StationModels.build_building(n, id)
+				StationModels.build_building(n, id, footprint(id))
 	ids[c] = id
 	tiers[c] = 1
 	invested[c] = 0.0
@@ -297,10 +356,11 @@ func sell_value(c: int) -> int:
 
 ## Player removal: refunds part of everything invested in it.
 func sell(c: int) -> bool:
+	c = anchor_of(c) if c >= 0 and cell_owner.has(c) else c
 	if c < 0 or not ids.has(c):
 		return false
 	economy.refund(sell_value(c))
-	fx.burst(map.cell_ground(c) + Vector3(0, 0.8, 0), Color(0.4, 0.9, 1.0, 1.0), 8, 3.0, 0.08, 0.4, 0.2)
+	fx.burst(center_of(c) + Vector3(0, 0.8, 0), Color(0.4, 0.9, 1.0, 1.0), 8, 3.0, 0.08, 0.4, 0.2)
 	_remove(c)
 	nav_changed.emit()
 	return true
@@ -317,10 +377,12 @@ func _remove(c: int) -> void:
 		nodes.erase(c)
 	turrets.erase(c)
 	_node_mats.erase(c)
+	for k in footprint_cells(c, id if id != "" else "wall"):
+		map.clear_structure(k)
+		cell_owner.erase(k)
 	ids.erase(c)
 	tiers.erase(c)
 	invested.erase(c)
-	map.clear_structure(c)
 	_visual_dirty = true
 	if id != "":
 		removed.emit(c, id)
@@ -398,7 +460,8 @@ func repair(c: int) -> String:
 # ------------------------------------------------------------ damage
 
 func damage(c: int, amount: float) -> void:
-	if map.kind[c] != OutpostMap.Kind.STRUCT:
+	c = cell_owner.get(c, c)
+	if map.kind[c] != OutpostMap.Kind.STRUCT or not ids.has(c):
 		return
 	var hp := map.shp[c] - amount
 	map.shp[c] = hp
@@ -409,7 +472,7 @@ func damage(c: int, amount: float) -> void:
 
 
 func _destroy(c: int) -> void:
-	var p := map.cell_ground(c)
+	var p := center_of(c)
 	var hgt := map.sheight[c]
 	fx.burst(p + Vector3(0, hgt * 0.5, 0), Color(0.45, 0.47, 0.5, 0.0), 14, 6.0, 0.25, 2.0, 1.0)
 	fx.burst(p + Vector3(0, hgt * 0.5, 0), Color(1.0, 0.6, 0.2, 1.0), 8, 5.0, 0.12, 0.4, 0.3)

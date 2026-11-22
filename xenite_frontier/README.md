@@ -87,6 +87,12 @@ Buildings marked "needs 1 worker" only work while staffed.
   * Snatcher: on its back, arms up.
   * Burrower: face-first, segments drifting apart.
   * Brood Mother: face-first, sac ruptured, dead young spilled, huge ichor pool.
+* **Buildings:** built from your concept sheet *"industrial/frontier – Outpost
+  Buildings v1"* (`docs/concept_outpost_buildings_v1.svg`), in its palette
+  (off-white, worn greys, hazard yellow on black, red stripes and beacons,
+  blue windows). The Command Hab is a solid 3x3 block; colony buildings take
+  2x2 cells, defences 1 cell. Floodlights cast a real spotlight cone.
+  Unfinished buildings stand as yellow scaffolds with a crane arm.
 * **Ichor** is acid green; **human blood** dark red.
 * **Humans and buildings** are industrial: off-white, hazard yellow, worn grey.
   **Dragged colonists flail and kick.**

@@ -127,6 +127,13 @@ func has_base() -> bool:
 	return base_cell.x >= 0
 
 
+## Inside the Command Hab's 3x3 footprint.
+func is_core(c: int) -> bool:
+	if not has_base() or c < 0:
+		return false
+	return absi(c % w - base_cell.x) <= 1 and absi(c / w - base_cell.y) <= 1
+
+
 ## Adds (+1) or removes (-1) a floodlight's coverage.
 func add_light(center: int, radius: float, sign_: int) -> void:
 	var cx := center % w
@@ -329,7 +336,7 @@ func classic_layout() -> void:
 	put.call(core.x + 3, core.y - 2, "harvester_bay")
 	put.call(core.x - 4, core.y - 7, "autocannon")
 	put.call(core.x + 4, core.y - 7, "flamethrower")
-	put.call(core.x + 2, core.y + 2, "mortar")
+	put.call(core.x + 3, core.y + 3, "mortar")
 	put.call(core.x - 9, core.y - 3, "floodlight")
 	put.call(core.x + 9, core.y + 3, "floodlight")
 	for c in planned:
@@ -358,11 +365,22 @@ func landing_problem(cell: Vector2i) -> String:
 
 ## Founds the outpost: goal cells, levelled pad, terrain/scatter rebuilt.
 func set_base(cell: Vector2i) -> void:
+	# a re-landing frees the previous hab's cells
+	if base_cell.x >= 0:
+		for oz in range(-1, 2):
+			for ox in range(-1, 2):
+				_set_terrain(base_cell.x + ox, base_cell.y + oz, Kind.GROUND)
 	base_cell = cell
-	goal_cells = PackedInt32Array()
+	# the Command Hab is a solid 3x3 building; the swarm gnaws at its walls
+	# from the ring of cells around it (the flow-field goal)
 	for oz in range(-1, 2):
 		for ox in range(-1, 2):
-			goal_cells.append(idx(cell.x + ox, cell.y + oz))
+			_set_terrain(cell.x + ox, cell.y + oz, Kind.ROCK)
+	goal_cells = PackedInt32Array()
+	for oz in range(-2, 3):
+		for ox in range(-2, 3):
+			if maxi(absi(ox), absi(oz)) == 2:
+				goal_cells.append(idx(cell.x + ox, cell.y + oz))
 	core_center = cell_center(idx(cell.x, cell.y))
 	# level a pad around the landing site (blend into the raw terrain)
 	var cw := Vector2(core_center.x, core_center.z)
@@ -611,7 +629,7 @@ func _build_scatter(seed_value: int) -> void:
 				var sc := rng.randf_range(0.18, 0.55) * (1.4 if near_rock else 1.0)
 				var b := Basis.from_euler(Vector3(rng.randf() * 0.6, rng.randf() * TAU, rng.randf() * 0.6)).scaled(Vector3(sc * rng.randf_range(0.8, 1.4), sc * rng.randf_range(0.5, 0.9), sc))
 				boulders.append(Transform3D(b, p))
-		elif kind[c] == Kind.ROCK and near_rock and rng.randf() < 0.05:
+		elif kind[c] == Kind.ROCK and near_rock and not is_core(c) and rng.randf() < 0.05:
 			var p := cell_center(c)
 			p.y = height_at(p.x, p.z) - 0.1
 			var sc := rng.randf_range(0.5, 1.1)
@@ -682,7 +700,7 @@ func _rebuild_dressing() -> void:
 		core.name = "HabDome"
 		core.position = cell_ground(idx(base_cell.x, base_cell.y))
 		_dressing.add_child(core)
-		StationModels.build_hab_dome(core)
+		StationModels.build_command_hab(core)
 		_place_props()
 
 

@@ -1,5 +1,30 @@
 # Changelog
 
+## M5a.2 – Outpost Buildings v1 (concept sheet)
+
+### Changed
+- **All 15 outpost structures rebuilt from the concept sheet** "industrial/frontier – Outpost Buildings v1" (saved as `docs/concept_outpost_buildings_v1.svg`). They use the sheet's palette: off-white #cfcbbf, white #e8e6df, greys #7a7d78 / #3a3b38 / #5d5f5b, hazard yellow #e3b51b on black, red #d42a26, window blue #6fd6ec, green #45d24a, orange #ef8a22, teal #4fe6d2.
+  - **Command Hab:** low square block with a roof dome, window strips, an antenna with a red beacon, and a hazard-striped pad.
+  - **Walls:** dark posts with yellow lights; pale seamed panels with a hazard band and a barbed rail.
+  - **Blast Door:** black slab with yellow chevrons, dark pillars, red lights.
+  - **Floodlight:** tripod mast and a three-lamp head that casts a real spotlight cone.
+  - **Guard Post:** cabin on four legs with a slit window, hazard band, red light and a yellow ladder.
+  - **Harvester Bay:** hangar with a red-lit intake, a landing ring, a tank and a lamp. **Drones:** white body, four rotors, a claw, and red cargo.
+  - **Mining Rig:** lattice tower with a red beacon, a black drill, teal crystals and a yellow crate.
+  - **Hab Module:** rounded capsule with windows and a yellow stripe; tank with a green light.
+  - **Barracks:** grey gable with a red stripe, red flag and crates.
+  - **Bio-Refinery:** chimney, white and grey tanks, orange-lit unit.
+  - **Fabricator:** workshop with stacks, a blue-lit bay and a yellow robot arm.
+  - **Armory:** dark bunker with a red stripe and hazard door.
+  - **Medbay:** white with a green stripe and green cross.
+  - **Construction scaffold:** yellow frame, crane arm with a crate, orange work light.
+- **Footprints:** colony buildings (Harvester Bay, Mining Rig, Hab Module, Barracks, Bio-Refinery, Fabricator, Armory, Medbay) now take **2x2** cells. The ghost, placement checks, selection, crews and drones all use the whole footprint.
+- **The Command Hab is a solid 3x3 block.** Aliens attack it from the ring of cells around it.
+- Dev photo mode `-- --buildings` lines up every building next to the Command Hab.
+
+### Fixed
+- Workers could not finish 2x2 sites: the colonists' path grid only marked the anchor cell, so paths ran through the rest of the site. The whole footprint now updates, on site placement too.
+
 ## M5a.1 – Humanoid Lineup v3 (concept sheet)
 
 ### Changed

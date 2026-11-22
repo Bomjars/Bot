@@ -69,10 +69,10 @@ func bay_range(tier: int) -> float:
 	return float(range_per_tier[clampi(tier - 1, 0, range_per_tier.size() - 1)]) * range_mult
 
 
-func add_bay(cell: int, tier := 1) -> void:
+func add_bay(cell: int, tier := 1, pos := Vector3.INF) -> void:
 	var b := Bay.new()
 	b.cell = cell
-	b.pos = map.cell_ground(cell)
+	b.pos = pos if pos != Vector3.INF else map.cell_ground(cell)
 	b.tier = tier
 	bays[cell] = b
 	_sync_drones(b)
@@ -137,15 +137,14 @@ func _sync_drones(b: Bay) -> void:
 
 func _make_drone_node() -> Node3D:
 	var n := Node3D.new()
-	TurretModels.part(n, TurretModels.box(0.5, 0.18, 0.5), _drone_mat, Vector3.ZERO)
-	for sx in [-0.38, 0.38]:
-		for sz in [-0.38, 0.38]:
-			TurretModels.part(n, TurretModels.cyl(0.2, 0.03, -1.0, 8), _drone_mat, Vector3(sx, 0.1, sz))
-	var cargo := TurretModels.part(n, SphereMesh.new(), _cargo_mat, Vector3(0, -0.22, 0))
+	var body := MeshInstance3D.new()
+	body.mesh = StationModels.drone_mesh()
+	body.material_override = StationModels.station_material()
+	n.add_child(body)
+	# carried biomass chunk (dark red), grows with the load
+	var cargo := TurretModels.part(n, MeshAcc.ball(1.0, 5, 3), TurretModels.mat(Color("8a2b2b"), 0.0, 0.1), Vector3(0, -0.4, 0))
 	cargo.name = "Cargo"
 	cargo.scale = Vector3.ONE * 0.01
-	var lamp := TurretModels.part(n, TurretModels.box(0.12, 0.06, 0.12), _cargo_mat, Vector3(0, 0.12, 0.2))
-	lamp.name = "Lamp"
 	return n
 
 
@@ -220,7 +219,7 @@ func _tick_drone(d: Drone, b: Bay, r: float, dt: float) -> void:
 	# visuals
 	d.node.position = d.pos + Vector3(0, sin(d.bob) * 0.08, 0)
 	var cg: Node3D = d.node.get_node("Cargo")
-	cg.scale = Vector3.ONE * (0.01 + 0.45 * clampf(d.cargo / capacity, 0.0, 1.0))
+	cg.scale = Vector3.ONE * (0.01 + 0.16 * clampf(d.cargo / capacity, 0.0, 1.0))
 
 
 func _pick_target(d: Drone, b: Bay, r: float) -> bool:

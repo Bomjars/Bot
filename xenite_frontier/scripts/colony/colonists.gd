@@ -360,12 +360,18 @@ func _tick_training(dt: float) -> void:
 
 # ------------------------------------------------------------ structures
 
-func on_structure_built(c: int, _id: String) -> void:
-	refresh_cell(c)
+## Walkability changes for the structure's whole footprint (sites included).
+func refresh_footprint(c: int, id: String) -> void:
+	for k in structures.footprint_cells(c, id):
+		refresh_cell(k)
 
 
-func on_structure_removed(c: int, _id: String) -> void:
-	refresh_cell(c)
+func on_structure_built(c: int, id: String) -> void:
+	refresh_footprint(c, id)
+
+
+func on_structure_removed(c: int, id: String) -> void:
+	refresh_footprint(c, id)
 	for col in colonists:
 		if col.job_cell != c:
 			continue
@@ -719,23 +725,28 @@ func _go_idle(c: Colonist) -> void:
 	_plan_path(c, map.world_to_cell(map.core_center))
 
 
+## Closest walkable cell next to a structure's whole footprint.
 func _adjacent_free(cell: int, from: Vector3) -> Vector2i:
-	var cx := cell % map.w
-	var cz := cell / map.w
-	var best := Vector2i(cx, cz)
+	var cells: Array[int] = [cell]
+	if structures.ids.has(cell):
+		cells = structures.footprint_cells(cell, structures.ids[cell])
+	var best := Vector2i(cell % map.w, cell / map.w)
 	var best_d := INF
-	for oz in range(-1, 2):
-		for ox in range(-1, 2):
-			if ox == 0 and oz == 0:
-				continue
-			var x := cx + ox
-			var z := cz + oz
-			if not map.in_bounds(x, z) or not _walkable(map.idx(x, z)):
-				continue
-			var d := Vector2(x + map.origin.x, z + map.origin.y).distance_squared_to(Vector2(from.x, from.z))
-			if d < best_d:
-				best_d = d
-				best = Vector2i(x, z)
+	for fc in cells:
+		var cx := fc % map.w
+		var cz := fc / map.w
+		for oz in range(-1, 2):
+			for ox in range(-1, 2):
+				if ox == 0 and oz == 0:
+					continue
+				var x := cx + ox
+				var z := cz + oz
+				if not map.in_bounds(x, z) or not _walkable(map.idx(x, z)):
+					continue
+				var d := Vector2(x + map.origin.x, z + map.origin.y).distance_squared_to(Vector2(from.x, from.z))
+				if d < best_d:
+					best_d = d
+					best = Vector2i(x, z)
 	return best
 
 
@@ -841,10 +852,10 @@ func _tick_colonist(col: Colonist, dt: float) -> void:
 							slot += 1
 					col.pos = map.cell_ground(col.job_cell) + Vector3(-0.22 + slot * 0.44, 2.28, 0)
 				Job.STAFF:
-					col.pos = map.cell_ground(col.job_cell)
+					col.pos = structures.center_of(col.job_cell)
 				Job.BUILD:
 					working_anim = true
-					_face(col, map.cell_center(col.job_cell))
+					_face(col, structures.center_of(col.job_cell))
 					var rate := float(GameConfig.econ("construction").get("work_rate", 1.0))
 					if structures.work_on(col.job_cell, rate * dt):
 						event.emit("%s finished the %s" % [col.name, structures.defs[structures.ids[col.job_cell]].name], Color(0.6, 0.9, 1.0), col.pos)
@@ -877,7 +888,7 @@ func _tick_colonist(col: Colonist, dt: float) -> void:
 			var arrived := _walk(col, dt)
 			if col.path.is_empty() or (not arrived and _blocked_ahead(col)):
 				_plan_path(col, map.world_to_cell(map.core_center))
-			if arrived or col.pos.distance_to(map.core_center) < 1.6:
+			if arrived or Vector2(col.pos.x - map.core_center.x, col.pos.z - map.core_center.z).length() < 2.7:
 				col.node.visible = false
 				col.node.rotation = Vector3.ZERO
 				if col.wounded:
@@ -959,5 +970,9 @@ func _write_grids() -> void:
 				map.colonist_at[c] = col.id + 1
 				_exposed_written.append(c)
 		elif col.state == S.WORKING and col.job in [Job.CREW, Job.GARRISON, Job.STAFF]:
-			map.crew_at[col.job_cell] = col.id + 1
-			_crew_written.append(col.job_cell)
+			var cells: Array[int] = [col.job_cell]
+			if structures.ids.has(col.job_cell):
+				cells = structures.footprint_cells(col.job_cell, structures.ids[col.job_cell])
+			for fc in cells:
+				map.crew_at[fc] = col.id + 1
+				_crew_written.append(fc)

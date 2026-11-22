@@ -112,7 +112,7 @@ func _ready() -> void:
 	harvester.name = "Harvesters"
 	add_child(harvester)
 	harvester.setup(map, corpses, economy, fx)
-	structures.built.connect(func(c, id): if id == "harvester_bay": harvester.add_bay(c, structures.tier_at(c)))
+	structures.built.connect(func(c, id): if id == "harvester_bay": harvester.add_bay(c, structures.tier_at(c), structures.center_of(c) + Vector3(-0.48, 0, 0.42)))
 	structures.removed.connect(func(c, id):
 		if id == "harvester_bay": harvester.remove_bay(c)
 		if c == _selected: _select(-1))
@@ -124,6 +124,7 @@ func _ready() -> void:
 	add_child(colonists)
 	colonists.setup(map, structures, corpses, fx, hfield, economy)
 	structures.built.connect(colonists.on_structure_built)
+	structures.site_placed.connect(colonists.on_structure_built)
 	structures.removed.connect(colonists.on_structure_removed)
 	colonists.event.connect(_on_colonist_event)
 
@@ -225,6 +226,10 @@ func _ready() -> void:
 			_auto_land = true
 			_classic = false
 			_showcase.call_deferred()
+		elif arg == "--buildings":
+			_auto_land = true
+			_classic = false
+			_building_showcase.call_deferred()
 		elif arg.begins_with("--screenshot="):
 			_auto_land = true
 	if _auto_land:
@@ -499,7 +504,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			if hit != null:
 				var n := colonists.order_move(hit)
 				fx.float_text(hit + Vector3(0, 1.5, 0), "MOVE (%d)" % n, Color(0.4, 1.0, 0.5))
-		elif build.selected == "" and _selected != -1 and not _pad_mode and _hover_cell() != _selected:
+		elif build.selected == "" and _selected != -1 and not _pad_mode and structures.anchor_of(_hover_cell()) != _selected:
 			_select(-1)
 		else:
 			structures.sell(_hover_cell())
@@ -572,10 +577,10 @@ func _click_select(additive: bool) -> void:
 			return
 	colonists.select_none()
 	var c := _hover_cell()
-	if c >= 0 and map.is_goal(c):
+	if c >= 0 and map.is_core(c):
 		_select(-2)
 	else:
-		_select(c if structures.ids.has(c) else -1)
+		_select(structures.anchor_of(c) if c >= 0 else -1)
 
 
 func _try_build(report := false) -> void:
@@ -726,14 +731,15 @@ func _update_ghost() -> void:
 	var c := _hover_cell()
 	var show_range := 0.0
 	if build.selected != "" and c >= 0:
-		var ok := map.can_build(c) and economy.can_afford(structures.cost_of(build.selected))
+		var ok := structures.can_place(c, build.selected) and economy.can_afford(structures.cost_of(build.selected))
 		if structures.defs[build.selected].get("needs_deposit", false):
-			ok = ok and map.deposit[c] == 1
+			ok = ok and structures.on_deposit(c, build.selected)
 		var d: Dictionary = structures.defs[build.selected]
 		var hgt := float(d.get("height", 1.4))
+		var fp := structures.footprint(build.selected)
 		_ghost.visible = true
-		_ghost.scale = Vector3(0.98, hgt, 0.98)
-		_ghost.position = map.cell_ground(c) + Vector3(0, hgt * 0.5, 0)
+		_ghost.scale = Vector3(fp - 0.02, hgt, fp - 0.02)
+		_ghost.position = map.cell_ground(c) + Vector3((fp - 1) * 0.5, hgt * 0.5, (fp - 1) * 0.5)
 		_ghost_mat.albedo_color = Color(0.3, 1.0, 0.5, 0.35) if ok else Color(1.0, 0.25, 0.2, 0.35)
 		show_range = _range_of(build.selected, 1, -1)
 	else:
@@ -743,11 +749,12 @@ func _update_ghost() -> void:
 		elif _selected >= 0:
 			c = _selected
 			show_range = _range_of(structures.id_at(c), structures.tier_at(c), c)
-		elif c >= 0 and structures.ids.has(c):
+		elif c >= 0 and structures.anchor_of(c) >= 0:
+			c = structures.anchor_of(c)
 			show_range = _range_of(structures.id_at(c), structures.tier_at(c), c)
 	_ring.visible = show_range > 0.0
 	if _ring.visible:
-		_ring.position = map.cell_ground(c) + Vector3(0, 0.08, 0)
+		_ring.position = (structures.center_of(c) if structures.ids.has(c) else map.cell_ground(c)) + Vector3(0, 0.08, 0)
 		_ring.scale = Vector3(show_range, 1.0, show_range)
 
 
@@ -843,7 +850,7 @@ func _bot_tick(dt: float) -> void:
 		_bot_plan.append_array([
 			[-2, -7, "shock_grid"], [2, -5, "seismic_spike"], [0, -3, "railgun"],
 			[-9, 2, "barracks"], [-5, -8, "guard_post"], [5, -8, "guard_post"],
-			[-3, -2, "harvester_bay"], [10, -5, "bio_refinery"], [-9, 5, "hab_module"],
+			[-5, -2, "harvester_bay"], [10, -5, "bio_refinery"], [-9, 5, "hab_module"],
 			[3, -8, "shock_grid"], [-10, 0, "mortar"], [-11, 5, "armory"],
 			[8, -2, "autocannon"], [-2, -3, "flamethrower"], [10, 0, "railgun"],
 		])
@@ -861,7 +868,7 @@ func _bot_tick(dt: float) -> void:
 	if not _bot_plan.is_empty():
 		var e: Array = _bot_plan[0]
 		var c := map.idx(core.x + e[0], core.y + e[1])
-		if not map.can_build(c):
+		if not structures.can_place(c, e[2]):
 			_bot_plan.pop_front()
 		elif economy.can_afford(GameConfig.build_cost(e[2])):
 			structures.try_build(c, e[2])
@@ -1040,6 +1047,41 @@ func _showcase() -> void:
 	cam.photo_lock = true
 	cam._target_distance = 9.0
 	cam.distance = 9.0
+
+
+## Dev: every building of the concept sheet in rows next to the Command Hab,
+## plus a construction site. `-- --buildings --screenshot=x.png`
+func _building_showcase() -> void:
+	target_count = 0
+	swarm.paused = true
+	var cc := map.world_to_cell(map.core_center)
+	var rows := [["wall", "wall", "blast_door", "wall", "floodlight", "guard_post"],
+		["harvester_bay", "mining_rig", "hab_module", "barracks"],
+		["bio_refinery", "fabricator", "armory", "medbay", "site:barracks"]]
+	for r in rows.size():
+		var x := cc.x - 7
+		for id: String in rows[r]:
+			var site := id.begins_with("site:")
+			var bid := id.substr(5) if site else id
+			var fp := structures.footprint(bid)
+			var c := map.idx(x, cc.y + 3 + r * 3)
+			if site:
+				structures._place_site(c, bid)
+			else:
+				structures.place(c, bid, false)
+			x += fp + (0 if bid == "wall" or bid == "blast_door" else 1)
+	structures.nav_changed.emit()
+	hud.visible = false
+	build.visible = false
+	var view := 0
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--pair="):
+			view = int(arg.split("=")[1])
+	cam.position = map.core_center + Vector3(-1.0 + view * 3.0, 0.0, 9.5)
+	cam.pitch_deg = 34.0
+	cam.photo_lock = true
+	cam._target_distance = 15.0
+	cam.distance = 15.0
 
 
 ## Dev helper: `-- --aliens=N --screenshot=path.png [--cam=x,z,dist]`.

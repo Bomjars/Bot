@@ -1,5 +1,5 @@
 {
-	"_comment": "Structures. nav_cost: metres of detour the swarm accepts before bashing through (x10 internally). build_time: worker-seconds to construct (more workers = faster). staff: workers needed for it to function. category: build bar tab.",
+	"_comment": "Structures. nav_cost: metres of detour the swarm accepts before bashing through (x10 internally). build_time: worker-seconds to construct (more workers = faster). staff: workers needed for it to function. category: build bar tab. footprint: N = occupies N x N cells (the clicked cell is the corner).",
 	"climb_height": 1.6,
 	"max_pile_height": 2.6,
 	"turret_nav_cost": 28,
@@ -44,7 +44,8 @@
 			"height": 1.8,
 			"nav_cost": 28,
 			"build_time": 8,
-			"category": "colony"
+			"category": "colony",
+			"footprint": 2
 		},
 		{
 			"id": "guard_post",
@@ -69,7 +70,8 @@
 			"build_time": 10,
 			"staff": 1,
 			"needs_deposit": true,
-			"xenite_per_minute": 14
+			"xenite_per_minute": 14,
+			"footprint": 2
 		},
 		{
 			"id": "hab_module",
@@ -80,7 +82,8 @@
 			"height": 1.8,
 			"nav_cost": 28,
 			"build_time": 8,
-			"pop_cap": 4
+			"pop_cap": 4,
+			"footprint": 2
 		},
 		{
 			"id": "barracks",
@@ -90,7 +93,8 @@
 			"hp": 650,
 			"height": 2.0,
 			"nav_cost": 28,
-			"build_time": 10
+			"build_time": 10,
+			"footprint": 2
 		},
 		{
 			"id": "bio_refinery",
@@ -103,7 +107,8 @@
 			"build_time": 10,
 			"staff": 1,
 			"biomass_bonus": 0.25,
-			"max_effect": 2
+			"max_effect": 2,
+			"footprint": 2
 		},
 		{
 			"id": "fabricator",
@@ -116,7 +121,8 @@
 			"build_time": 12,
 			"staff": 1,
 			"cost_reduction": 0.15,
-			"max_effect": 2
+			"max_effect": 2,
+			"footprint": 2
 		},
 		{
 			"id": "armory",
@@ -128,7 +134,8 @@
 			"nav_cost": 28,
 			"build_time": 12,
 			"staff": 1,
-			"soldier_damage_bonus": 0.25
+			"soldier_damage_bonus": 0.25,
+			"footprint": 2
 		},
 		{
 			"id": "medbay",
@@ -140,7 +147,8 @@
 			"nav_cost": 28,
 			"build_time": 10,
 			"staff": 1,
-			"recovery_mult": 0.5
+			"recovery_mult": 0.5,
+			"footprint": 2
 		}
 	],
 	"core": {

@@ -104,51 +104,6 @@ static func build(root: Node3D, id: String, accent: Color) -> Array:
 	return [base_mat, head, muzzle]
 
 
-## Harvester Bay: octagonal drone landing pad with hazard ring, a glowing
-## biomass tank and a docking gantry.
-static func build_bay(root: Node3D) -> StandardMaterial3D:
-	var base_mat := mat(Color(0.5, 0.52, 0.55), 0.0, 0.5)
-	var white := mat(Color(0.8, 0.8, 0.78), 0.0, 0.3)
-	var green := mat(Color(0.4, 1.0, 0.35), 1.0, 0.0)
-	var dark := mat(Color(0.14, 0.15, 0.16), 0.0, 0.6)
-	var hazard := mat(Color(0.95, 0.75, 0.1), 0.3, 0.1)
-	part(root, cyl(0.75, 0.16, 0.72, 8), dark, Vector3(0, 0.08, 0))
-	part(root, cyl(0.68, 0.04, -1.0, 8), hazard, Vector3(0, 0.17, 0))
-	part(root, cyl(0.58, 0.05, -1.0, 8), base_mat, Vector3(0, 0.19, 0))
-	part(root, box(0.36, 0.02, 0.08), hazard, Vector3(0, 0.22, 0))
-	part(root, box(0.08, 0.02, 0.36), hazard, Vector3(0, 0.22, 0))
-	# biomass tank + gantry
-	part(root, cyl(0.17, 0.75, -1.0, 10), white, Vector3(0.55, 0.55, -0.45))
-	part(root, cyl(0.13, 0.55, -1.0, 10), green, Vector3(0.55, 0.58, -0.45))
-	part(root, box(0.08, 1.3, 0.08), base_mat, Vector3(-0.55, 0.65, -0.45))
-	part(root, box(0.7, 0.08, 0.08), base_mat, Vector3(-0.25, 1.28, -0.45))
-	part(root, box(0.12, 0.1, 0.12), green, Vector3(0.08, 1.22, -0.45))
-	return base_mat
-
-
-## Floodlight: lattice mast with a lamp bar and a real light.
-static func build_floodlight(root: Node3D, radius: float) -> StandardMaterial3D:
-	var base_mat := mat(Color(0.5, 0.52, 0.55), 0.0, 0.5)
-	var white := mat(Color(0.8, 0.8, 0.78), 0.0, 0.3)
-	var lamp := mat(Color(1.0, 0.95, 0.8), 3.0, 0.0)
-	part(root, cyl(0.35, 0.2, 0.3, 8), base_mat, Vector3(0, 0.1, 0))
-	for k in 3:
-		var ang := k * TAU / 3.0
-		part(root, box(0.05, 3.0, 0.05), white, Vector3(cos(ang) * 0.12, 1.6, sin(ang) * 0.12))
-	for k in 5:
-		part(root, cyl(0.15, 0.03, -1.0, 6), base_mat, Vector3(0, 0.5 + k * 0.6, 0))
-	part(root, box(0.8, 0.18, 0.3), white, Vector3(0, 3.15, 0))
-	part(root, box(0.72, 0.05, 0.24), lamp, Vector3(0, 3.04, 0.02))
-	var light := OmniLight3D.new()
-	light.position = Vector3(0, 3.0, 0)
-	light.omni_range = radius * 1.15
-	light.light_energy = 1.6
-	light.light_color = Color(1.0, 0.93, 0.8)
-	light.omni_attenuation = 0.7
-	root.add_child(light)
-	return base_mat
-
-
 ## Tier II/III armour: extra plating on the head (scale +10%/tier is applied
 ## by the Turret itself).
 static func set_tier_armor(head: Node3D, tier: int) -> void:
