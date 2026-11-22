@@ -1,0 +1,112 @@
+{
+	"_comment": "General tuning. Economy values live in data/economy.json.",
+	"benchmark": {
+		"target_aliens": 10000,
+		"ramp_seconds": 6.0,
+		"hold_seconds": 20.0,
+		"pass_fps": 60.0
+	},
+	"swarm": {
+		"max_spawn_per_frame": 600,
+		"separation": 2.6,
+		"intra_cell_spread": 2.5,
+		"density_cell_size": 0.5,
+		"threaded": true,
+		"wander": 0.45,
+		"ramp_seconds": 90.0,
+		"spawn_per_minute": 240,
+		"max_alive": 20000
+	},
+	"test_range": {
+		"width": 200,
+		"height": 140,
+		"seed": 1337
+	},
+	"combat": {
+		"corpse_cap": 4000,
+		"particle_cap": 4000,
+		"splat_cap": 2500,
+		"grid_cell": 4.0,
+		"burrow_surface_distance": 8.0
+	},
+	"graphics": {
+		"_comment": "Graphics quality presets (F2 in game cycles them; the choice is saved in user://settings.cfg). msaa 0/2/4/8, fxaa = cheap edge smoothing, shadow_size = sun shadow map, shadow_soft 0-5 = soft shadow filter quality (3+ also softens shadows with distance), ssao = contact shadows, ssil = bounce light, volumetric_fog = ground haze, light shafts and visible floodlight beams (else a cheap height fog), dust = wind-blown dust motes near the camera (count; sand streaks are half), post = vignette + film grain, render_scale = 3D resolution (below 1 for weak GPUs / Steam Deck). terrain_detail = ground relief (ripples, pebbles, cracks, cliff ledges; 0 = flat shading), pebbles = the pebble fields.",
+		"default": "high",
+		"presets": {
+			"low": {
+				"name": "Low",
+				"msaa": 0,
+				"fxaa": true,
+				"shadow_size": 2048,
+				"shadow_soft": 1,
+				"shadow_distance": 100,
+				"ssao": false,
+				"ssao_quality": 0,
+				"ssil": false,
+				"glow": true,
+				"volumetric_fog": false,
+				"dust": 0,
+				"post": false,
+				"render_scale": 0.85,
+				"terrain_detail": 0.0,
+				"pebbles": false
+			},
+			"medium": {
+				"name": "Medium",
+				"msaa": 2,
+				"fxaa": false,
+				"shadow_size": 2048,
+				"shadow_soft": 2,
+				"shadow_distance": 130,
+				"ssao": true,
+				"ssao_quality": 1,
+				"ssil": false,
+				"glow": true,
+				"volumetric_fog": false,
+				"dust": 150,
+				"post": true,
+				"render_scale": 1.0,
+				"terrain_detail": 0.7,
+				"pebbles": true
+			},
+			"high": {
+				"name": "High",
+				"msaa": 4,
+				"fxaa": false,
+				"shadow_size": 4096,
+				"shadow_soft": 3,
+				"shadow_distance": 150,
+				"ssao": true,
+				"ssao_quality": 2,
+				"ssil": true,
+				"glow": true,
+				"volumetric_fog": true,
+				"fog_volume_size": 64,
+				"dust": 260,
+				"post": true,
+				"render_scale": 1.0,
+				"terrain_detail": 1.0,
+				"pebbles": true
+			},
+			"ultra": {
+				"name": "Ultra",
+				"msaa": 4,
+				"fxaa": false,
+				"shadow_size": 8192,
+				"shadow_soft": 4,
+				"shadow_distance": 170,
+				"ssao": true,
+				"ssao_quality": 3,
+				"ssil": true,
+				"glow": true,
+				"volumetric_fog": true,
+				"fog_volume_size": 128,
+				"dust": 450,
+				"post": true,
+				"render_scale": 1.0,
+				"terrain_detail": 1.0,
+				"pebbles": true
+			}
+		}
+	}
+}

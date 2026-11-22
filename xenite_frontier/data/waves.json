@@ -1,0 +1,21 @@
+{
+	"_comment": "Wave schedule. Count of a strain in wave w (w >= from_wave): round(base * (1 + growth_per_wave * (w - 1)) * size_multiplier). Strains with `every` only come every N waves. Stalkers hunt in their own packs of pack_min-pack_max (sheet v4: 20-50); everything else mixes into packs of pack_size_min-max. Waves arrive as packs spread over spawn_seconds from random canyon mouths. hp_growth_per_wave toughens every alien a little each wave.",
+	"size_multiplier": 0.7,
+	"growth_per_wave": 0.45,
+	"hp_growth_per_wave": 0.04,
+	"first_build_seconds": 90,
+	"build_seconds": 40,
+	"spawn_seconds": 28,
+	"pack_size_min": 5,
+	"pack_size_max": 14,
+	"straggler_timeout_seconds": 240,
+	"strains": {
+		"stalker":      { "base": 28, "from_wave": 1, "pack_min": 20, "pack_max": 50 },
+		"snatcher":     { "base": 3,  "from_wave": 2 },
+		"spitter":      { "base": 4,  "from_wave": 3 },
+		"mauler":       { "base": 2,  "from_wave": 3 },
+		"burrower":     { "base": 3,  "from_wave": 4 },
+		"elder":        { "base": 1,  "from_wave": 6, "every": 2 },
+		"brood_mother": { "base": 1,  "from_wave": 5, "every": 5 }
+	}
+}

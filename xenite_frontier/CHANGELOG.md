@@ -1,0 +1,459 @@
+# Changelog
+
+## M5a.6 – Stylized look from your reference art
+
+### Changed
+- **Buildings rebuilt from your outpost reference render:** chunky chamfered (bevelled) shapes that catch the light, built with a new `MeshAcc.add_bevel_box`.
+  - Every pad has orange lamps at the corners and along the front edge.
+  - Lit window bands, lamps over the doors, and wall icons: a gear on the Fabricator, bullets on the Armory, a fuel drop on the Bio-Refinery furnace, a green cross on the Medbay.
+  - Roof gear: AC units, vents, satellite dishes, antennas with red tips; crates and barrels.
+  - Specific buildings:
+    - Bio-Refinery: striped tanks joined by pipes, with a glowing furnace.
+    - Fabricator: hazard-framed door with a blue-lit interior and a crane rail.
+    - Armory: red light strip.
+    - Medbay: green trim, roof cross pad.
+    - Barracks: red stripe, flag and dish.
+    - Mining Rig: blue light column and a dish.
+    - Harvester Bay: glowing roll-up door and a marked landing pad (yellow ring and cross, corner lamps).
+  - Walls: posts with yellow lamps and blue light strips, grooved white panels. Blast doors have glowing chevrons and pillar lights. Guard Post: braced legs and a cabin with lit windows all round. Drone: rotor guards, skids and a blue underglow.
+- **Aliens restyled from your swarm reference render:**
+  - Each strain has its own palette: olive Spitters, purple Brood Mothers, dark stone Maulers and Elders, dark-brown Burrowers.
+  - Maulers and Elders: blocky bevelled stone plates, fists and forearm guards with glowing red seams, bone spikes and tusks.
+  - Spitters: bigger plated glowing sac, back-swept horns, long claws.
+  - Burrowers: a glowing maw wheel with dark spokes, on a hexagonal stone mound with ember cracks.
+  - Brood Mothers: a deep-purple crystal sac bristling with bone spikes and a taller crown.
+- Lighting: sun and exposure raised for the warmer, brighter look of the references.
+
+## M5a.5 – Graphics pass: lighting, atmosphere, planet surface, buildings, aliens
+
+### Added
+- **Graphics quality setting: Low / Medium / High / Ultra** (F2 cycles; saved in `user://settings.cfg`). The presets are data in `data/game_config.json` "graphics": anti-aliasing (MSAA / FXAA), sun shadow resolution and softness, ambient occlusion, bounce light, volumetric haze, terrain relief, pebble fields, blowing dust, post-effect and 3D render scale (Low renders at 85% for weak GPUs / Steam Deck). The default is High.
+- **Lighting and atmosphere** (`scripts/render/graphics.gd`):
+  - Volumetric ground haze with drifting density. The low sun throws light shafts, and floodlight beams will show at night (M5b).
+  - Soft sun shadows (4 cascades, PCSS on High+), ambient occlusion tuned for contact shadows, bounce light (SSIL).
+  - Softer, wider bloom on lamps, windows, eyes and acid.
+  - A colour grade (violet-lifted shadows, warm highlights).
+  - A screen post-effect under the UI: vignette, film grain, faint edge fringing.
+  - Wind-blown dust motes and sand streaks skimming the ground around the camera.
+- **Planet surface** (`terrain.gdshader`):
+  - The ground has real relief now: a procedural micro height field bends the normals. You get wind ripples in the sand, pebbles each with their own shade, dried-mud cracks in low basins, and rough ledges on the cliffs. It fades with distance, so it never shimmers.
+  - Broad ochre patches and dust drifts gathering in hollows.
+  - Creases at cliff feet are darkened from a baked concavity term.
+  - Dense **pebble fields** (chunked, culled with distance) and **abandoned mining kit** from an earlier crew: rusted pipes, crushed crates, drill bits, survey stakes, toppled panels and ore carts.
+- **Buildings and walls** (`station.gdshader`):
+  - Weathering: rust-brown dirt creeping up from the ground, regolith dust on roofs, grime streaks down light panels, per-surface wear.
+  - **Damage shows**: scorch marks spread as HP drops, glowing embers near destruction; damaged structures smoke (below 60%) and spark (below 35%).
+  - Every building and turret sits in a soft dark contact patch on the ground.
+- **Turrets**: world-space grime on every part.
+- **Aliens**:
+  - More detail up close: a spine of vertebrae, rib bands on the flanks, knobbed elbows and knees, faceted shoulder plates, a heavy brow, a hinged lower jaw with teeth, more fangs, toe claws. Near-camera models are 1,000–1,600 triangles; Brood Mother 2,260. Far models are unchanged, so the zoomed-out 10k swarm costs the same.
+  - Wet glossy chitin, matte olive bellies, polished claws, mottling and dark veins fixed to the body.
+  - A faint rim in each strain's identity colour so they read against the red ground.
+  - They flinch when hit.
+- Dev: `--quality=low|medium|high|ultra`, `--photo` (hide the UI for screenshots).
+
+### Fixed
+- Boulders and pebbles looked pale lavender (their vertex colours were treated as linear, not sRGB).
+
+## M5a.4 – Item pictures in the UI
+
+### Added
+- **Pictures of every building and turret** in the shop (build bar), the tool card and the Inspector. They're rendered once at startup from the real in-game models: an off-screen viewport per item, transparent background, three-quarter view, warm key light and cool fill. They always match the models (tier I), and the Command Hab gets one too. Each picture costs one frame at startup; headless runs skip rendering and fall back to text.
+- Shop buttons now show picture, `key  name` and the Biomass cost (red when you can't afford it).
+- Art hook: `"icon": "res://art/icons/<name>.png"` on a structure or turret replaces the rendered picture with your own image.
+- Dev: `-- --export-icons=<folder>` writes every picture as a PNG.
+
+### Changed
+- The tool card moved to the bottom-right (the Inspector's spot; they are never open together), clear of the help text and event log.
+- Picking a tool (keyboard, `--tool=`) switches the build bar to that tool's category.
+
+## M5a.3 – Lineup v4 movement notes (concept sheet)
+
+### Added
+- **Movement and AI from the concept sheet** "predatory/primal – Humanoid Lineup v4 · movement notes" (saved as `docs/concept_humanoid_lineup_v4.svg`).
+  - **Tells before attacks.** Spitters stop and inflate the throat sac for 1 s before every shot. Burrowers crack the ground for 2 s, with amber light leaking out, before they erupt. Mauler charges have a 0.7 s wind-up and Elder roars a 1.4 s rear-up, so every big hit can be seen coming.
+  - **Mauler charge:** locks onto the first door or wall 3–12 m ahead and runs at it in a straight line (×2.8 speed, no steering, no crowd push). Whatever it hits takes 260 damage. A blast door takes only 40% and leaves it stunned for 3.5 s, so you can bait it. Rock or a miss ends the charge too.
+  - **Mauler Elder** (new strain, from wave 6, every 2nd wave): spears in its back, fresh wounds. It stops to roar and enrages every alien within 11 m for 7 s (×1.4 speed, ×1.6 structure damage, red-burning eyes). Its fist sweeps hit the wall cells either side of the one it is smashing.
+  - **Snatcher:** ignores turrets and hunts the most isolated exposed colonist. The hunt field gives each goal a starting cost of 3.5 m per companion within 6 m and 7 m per turret within 8 m. It zig-zags for 1.5 s after every hit. It drags its catch backward at half speed, facing the base and walking in reverse, and leaves a blood trail.
+  - **Spitter:** prefers turrets, scanning five rays fanned around its path, and holds its range, wading back out if pushed closer than 55% of it. With nothing in between, it lobs at the Command Hab. Acid pools burn for 4 s, hurting structures and colonists standing in them. Three shots drain its sac, visibly, and it retreats for 6 s to refill.
+  - **Burrower:** tunnel → 2 s crack tell → erupt, rake (it now mauls instead of abducting) → sink after 3 s → tunnel at least 2.5 s → breach again. A Seismic hit while it is underground forces it up early, stunned for 2.5 s.
+  - **Brood Mother:** stops to eat every corpse she passes, stepping onto adjacent ones. Young cling to her egg sac (6 at the start, +2 per meal, 8 max, modelled and shown as she carries them) and drop off one every 3 s as **Stalker runts**, now their own strain. On death the sac spills six dying runts and a huge ichor pool; flies swarm over it after 2.5 s.
+  - **Stalker runt** (new strain): skitters in bursts, freezes, then pounces (×1.9) at walls, colonists or the core within 3 m. It climbs corpse piles at 45% of the normal height.
+  - **Stalkers** hunt in their own packs of 20–50 (`waves.json` `pack_min`/`pack_max`). Their heads twitch while idle or slow.
+  - **Heavy footfalls shake the camera** (Maulers, Elders), as do charge impacts, roars and breaches, fading over 30 m.
+- **SPEED and SIZE ratings as data.** `speed_rating` and `size_rating` (1–5, from the sheet) in `aliens.json`, converted through `ratings` (speed = rating × 1.65 m/s; height 1.2–2.7 m). Snatchers got faster (8.25 m/s), Spitters and Brood Mothers slower, Burrowers bigger.
+- Shader states for all of this: tell progress, charge, drag, stun, enraged glow, Spitter sac fill, clinging young, head twitch.
+- Test report line `v4 behaviour:` (shots, breaches, charges landed and on blast doors, roars). Dev flags `--strain=<id>`, `--start-wave=N`, `--mode-trace`.
+
+### Changed
+- **Particles are simulated on the GPU** (`fx_particle.gdshader`). The CPU writes a particle once when it spawns; flight, landing (gibs still stick to the ground) and fade are computed in the shader. Particle cost no longer grows with count: Combat + fx in the 10k benchmark is 0.34 ms, down from 0.57 ms before v4.
+- Big-swarm safety valves for the new behaviours: at most 160 acid globs fly with visuals (the rest land at once), 48 acid pools (new ones landing near a burning pool refresh it), a roar enrages at most 600 aliens, a few behaviour effects per frame, and Spitters and Maulers only scan for targets within 60 m of the base. Footfall shake is only reported near the camera.
+
+### Fixed
+- Effects (particles, tracers, splats) could draw garbage before the first effect spawned: their GPU buffers were never uploaded until then. They are now uploaded at startup.
+- The `--buildings` photo mode now draws walls and doors (visuals refresh while the sim is paused).
+
+### Measured (headless, slow 4-thread cloud CPU)
+- 10k benchmark: avg ~90 FPS, 1% low 59–61, sim 8.5–8.6 ms, Combat + fx 0.34 ms. The pre-v4 build on the same machine scored 1% low 63–65 and sim 8.0–8.2 ms. Six behaviour states for 10k aliens cost about 0.5 ms; GPU particles won back more than that elsewhere. This CPU sits right at the 60 FPS line; your Ryzen 9800X3D had 4x headroom before.
+- One strain per wave (`--strain`), 90 s each, 0 stuck in every run: Spitters 35 shots; Maulers 24 charges landed, 6 into blast doors; Burrowers 6 breaches; Elders 58 roars; Brood Mothers shed 185 runts; Snatchers 4 abductions, all 4 rescued.
+- Mixed bot soak (300 s, fast waves): wave 5, Command Hab 6000/6000, 10/10 colonists, every site finished, 0 stuck.
+
+## M5a.2 – Outpost Buildings v1 (concept sheet)
+
+### Changed
+- **All 15 outpost structures rebuilt from the concept sheet** "industrial/frontier – Outpost Buildings v1" (saved as `docs/concept_outpost_buildings_v1.svg`). They use the sheet's palette: off-white #cfcbbf, white #e8e6df, greys #7a7d78 / #3a3b38 / #5d5f5b, hazard yellow #e3b51b on black, red #d42a26, window blue #6fd6ec, green #45d24a, orange #ef8a22, teal #4fe6d2.
+  - **Command Hab:** low square block with a roof dome, window strips, an antenna with a red beacon, and a hazard-striped pad.
+  - **Walls:** dark posts with yellow lights; pale seamed panels with a hazard band and a barbed rail.
+  - **Blast Door:** black slab with yellow chevrons, dark pillars, red lights.
+  - **Floodlight:** tripod mast and a three-lamp head that casts a real spotlight cone.
+  - **Guard Post:** cabin on four legs with a slit window, hazard band, red light and a yellow ladder.
+  - **Harvester Bay:** hangar with a red-lit intake, a landing ring, a tank and a lamp. **Drones:** white body, four rotors, a claw, and red cargo.
+  - **Mining Rig:** lattice tower with a red beacon, a black drill, teal crystals and a yellow crate.
+  - **Hab Module:** rounded capsule with windows and a yellow stripe; tank with a green light.
+  - **Barracks:** grey gable with a red stripe, red flag and crates.
+  - **Bio-Refinery:** chimney, white and grey tanks, orange-lit unit.
+  - **Fabricator:** workshop with stacks, a blue-lit bay and a yellow robot arm.
+  - **Armory:** dark bunker with a red stripe and hazard door.
+  - **Medbay:** white with a green stripe and green cross.
+  - **Construction scaffold:** yellow frame, crane arm with a crate, orange work light.
+- **Footprints:** colony buildings (Harvester Bay, Mining Rig, Hab Module, Barracks, Bio-Refinery, Fabricator, Armory, Medbay) now take **2x2** cells. The ghost, placement checks, selection, crews and drones all use the whole footprint.
+- **The Command Hab is a solid 3x3 block.** Aliens attack it from the ring of cells around it.
+- Dev photo mode `-- --buildings` lines up every building next to the Command Hab.
+
+### Fixed
+- Workers could not finish 2x2 sites: the colonists' path grid only marked the anchor cell, so paths ran through the rest of the site. The whole footprint now updates, on site placement too.
+
+## M5a.1 – Humanoid Lineup v3 (concept sheet)
+
+### Changed
+- **All six aliens rebuilt from the concept sheet** "predatory/primal – Humanoid Lineup v3" (saved as `docs/concept_humanoid_lineup_v3.svg`).
+  - Gaunt, faceted, flat-shaded bipeds in the sheet's palette: charcoal, light olive front panel, bone claws, one identity colour each.
+  - Stalker: hunched long-jaw with back spikes. Mauler: boulder-shouldered gorilla with rock fists. Spitter: glowing throat sac. Snatcher: long dragging claws, yellow spines. Burrower: legless segmented torso with a circular orange maw and a dirt mound. Brood Mother: egg sac on her back, white spike crown.
+- **Biped GPU rig:** per-vertex joint pivots for hips, knees, shoulders, elbows and neck. Posture blends to all fours when sprinting. Feeding crouch, attack rear-up, Spitter hunch-and-spit.
+- **Burrowers breach:** while tunnelling the shader sinks the body so only the head and a widening dirt mound show. The mound disappears on death.
+- **Brood young are runts:** small (x0.62), weaker Stalkers.
+- Corpse poses per the brief. Mauler boulders crack off.
+- Alien triangles: 620–930 near, 390–540 far (lighter than before).
+- HUD and Intel strain colours use the sheet's swatches.
+
+
+## M5a – Waves with a build timer, landing site, workers & soldiers, finance, art direction
+
+### Added
+- **Waves** (`game/wave_director.gd`, `data/waves.json`).
+  - Run flow: landing, then a build countdown (90 s / 40 s), then a wave, then payday.
+  - **Call the wave early** (N) for +3 Biomass per second remaining.
+  - Waves arrive as packs from random canyon mouths. Sizes are **x0.7 (30% fewer enemies)** via `size_multiplier`.
+  - Waves grow 45% per wave, with +4% alien HP per wave.
+  - **Threat Level** +0.25 per wave. Stragglers time out so a wave can't soft-lock.
+- **Choose the landing site.** Click to drop the Command Hab on any valid 7x7 open area away from the canyon mouths. The pad is levelled and the scenery rebuilt around it. Runs start empty.
+- **Xenite deposits** (10 glowing outcrops) and **Mining Rigs** on them. The company buys mined Xenite after every wave (x3 Biomass); 25% is banked for the Colony Charter.
+- **Workers.**
+  - Construction is no longer instant: sites with scaffolding, build time in work-seconds, up to 2 builders each. Cancelling a site gives a full refund.
+  - Workers repair automatically (paying Biomass per HP), staff economy buildings and rigs, and crew spare turrets.
+- **Soldiers.**
+  - Trained at a **Barracks**. They crew turrets, garrison **Guard Posts** (+4 m range) and fire rifles (ballistic; Armory +25%).
+  - **Squad control:** click or drag-select, right-click to move and hold, H to release.
+- **Finance.**
+  - Company bounty x Threat Level after every wave, ore sales, early-call bonus.
+  - **Wages** per worker and soldier per wave. Unpaid wages mean low morale: crews and soldiers fire at 80%.
+  - Upgrade buildings: Bio-Refinery (+25% Biomass), Fabricator (-15% costs), Armory (tier III gate + soldier damage), Medbay (2x recovery), Hab Module (+4 population).
+  - Recruitment from the Command Hab (workers) and Barracks (soldiers), with a population cap.
+- **UI.**
+  - Build bar categories (Defence / Turrets / Colony; Tab).
+  - Wave panel with countdown and a call-early button; payday report popup.
+  - Worker/soldier breakdown, Xenite mined/banked, wages.
+  - Inspector actions: recruit, train, cancel construction, staff and garrison names.
+  - Drag-select box.
+- **More realistic horde:** stride synced to the distance actually walked (no foot sliding), packs with shared lanes, sniff pauses out in the open, wider size and speed variation, stronger separation.
+- **Art direction pass.**
+  - Six new dark-chitin alien body plans with a general GPU rig: per-vertex joint pivots and phases for hexapod, quadruped, knuckle-walk and worm motion, pulsing sacs, cracking shells.
+  - Custom corpse looks and death effects: plates scatter, acid pool, the Brood Mother's dead young plus a huge ichor pool.
+  - Acid-green ichor; industrial off-white / hazard-yellow / worn-grey palette.
+  - Damage-type turret accents and matching muzzle effects; tier II/III armour plating and +10% size per tier.
+  - New worker and soldier suits; dragged colonists flail and kick.
+  - Rust-orange planet under a dim violet sky with a ringed gas giant and a small moon. The camera tilts toward the horizon when zoomed in.
+  - Map-edge plateau so the world never ends in a void.
+
+### Changed
+- Runs no longer start with a pre-built compound. Tests and the benchmark use `--classic` / `--auto-land`.
+- The old continuous spawning is now `--sandbox` only.
+- `--fast-waves` dev flag for soak tests.
+
+### Measured (headless, slow 4-thread cloud CPU)
+- Bot soak (fast timers) reached wave 5 with the core intact. Guard Posts, Mining Rig, Hab Module, Barracks and Bio-Refinery were all active. Bounties 510, ore sales 123, wages 152. 0 stuck aliens.
+- 10k benchmark: 1% low 67 fps, sim 8.4 ms. PASS.
+
+
+## M4.5 – Visual pass: grey aliens, space suits, Mars-base outpost, alien planet
+
+### Added
+- **Grey alien family** (`render/alien_meshes.gd`, `render/alien.gdshader`).
+  - Bald, big-headed predatory greys with glowing almond eyes, toothed mouths and long clawed limbs.
+  - Every strain is redesigned in this style with its own silhouette, posture and identity colour.
+  - **GPU joint rig:** vertices carry a part id (UV.x), and the shader rotates parts about the hip, knee, shoulder, elbow and neck.
+  - Aliens walk upright and **drop to all fours to sprint** (posture blends with speed). They crouch and peck when feeding, and rear up and slash when attacking.
+  - The swarm sim writes each alien's state (speed / feeding / attacking) into `INSTANCE_CUSTOM.a`.
+  - Near and far meshes: about 1,000–1,500 triangles zoomed in, 430–670 zoomed out. Corpses use the far mesh.
+- **Space-suited colonists**: white EVA suit, orange trim, gold visor, life-support pack, oxygen tanks, boots, and a walk cycle.
+- **Mars-base outpost** (`render/station_models.gd`, `render/station.gdshader`).
+  - Hab dome core with window band, airlock tunnel, side module and comms dish.
+  - Barrier walls: posts, plus composite panels on regolith berms that **join neighbouring walls and doors into continuous lines**, with damage tint and climbable tint.
+  - Chevron airlock blast doors, oriented to the wall line.
+  - Octagonal Harvester Bay landing pad with a biomass tank and gantry; lattice floodlight masts.
+  - Turrets on round strut-mounted pads.
+  - Solar arrays, tanks and comms towers on the mesas.
+- **Alien planet terrain**.
+  - Half-metre heightfield replacing the stacked cubes.
+  - Basalt mesas with cliff faces and strata bands, uneven lumpy regolith, 60 craters, dark gravel fields.
+  - A levelled base pad, boulders at cliff feet, teal Xenite crystal clusters on the mesas.
+  - Violet-to-salmon procedural sky, dusty fog, SSAO, ACES tonemap, low sun with a cool fill light.
+  - The build grid shows only while a build tool is selected.
+- Everything follows the terrain height (bilinear sampling, inside the threaded swarm loop as well).
+- **Custom model hook:** `"mesh": "res://art/x.glb"` per strain in `aliens.json`; see `art/README.md`.
+- Dev `--showcase [--pair=N]`: lineup of every strain in five poses, in photo mode.
+
+### Fixed
+- Vertex colours are now treated as sRGB in the alien, station and fx shaders. Before, everything rendered washed out.
+
+### Measured (headless, slow 4-thread cloud CPU)
+- 10k benchmark: 1% low 66–76 fps, sim 6.5–7.1 ms (terrain sampling adds about 0.5 ms). PASS.
+- 3-min soak at 240/min, bot: core 5997/6000, 10/10 colonists, 0 stuck aliens.
+- GPU cost depends on your card. Press B in game.
+
+
+## M4.1 – Stuck-alien fix and rebalance (from playtest feedback)
+
+### Fixed
+- **Aliens stuck at the canyon mouths.** The flow field's optimised direction pass skipped map-border cells, but the canyon mouths open onto the map edge. Any alien that spawned on an edge cell had direction (0, 0) and never moved. They also counted toward the swarm-pressure limit, so over a few minutes much of the "swarm" sat idle at the mouths. Border cells now get a bounds-checked direction pass. Measured: 88 of 676 aliens stuck before, 0 after.
+- **Sandbox spawning could never be out-killed.** "Swarm pressure N" meant "keep N alive", so every kill was replaced instantly. Pressure is now a **spawn rate** (aliens per minute, default 240, ramping over 90 s, cap 20,000 alive). The benchmark keeps its fixed-population mode.
+- **Brood spawned inside rock** when a Brood Mother hugged a cliff. Brood now only lands on open, reachable ground.
+
+### Added
+- Per-alien stuck timer, counting only time spent not moving without a reason. Eating, bashing, shelling and gnawing the core don't count.
+- Unstick safety net: once a second, aliens stuck over 6 s inside rock or in a no-path cell are moved to the nearest reachable cell, or removed.
+- `--stuck-report` diagnostics, grouped by cell with the likely cause and an ASCII map.
+
+### Rebalanced
+The M2 to M4 numbers were tuned against a partly frozen swarm.
+- Feeding: Stalker / Mauler / Burrower feed rate 0.35 / 0.25 / 0.3 → 0.15, Spitter 0.15 → 0.1, HP per meal 35% → 25%. Brood Mothers still gorge.
+- Soak-test bot now plays sensibly: it seals three airlocks, keeps turrets inside, and uses the north airlock as the kill zone.
+
+| 3 minutes, headless | Result |
+|---|---|
+| 240/min, bot | core 6000/6000, 10/10 colonists crewing, 0 stuck |
+| 240/min, no player | overrun |
+| 480/min, bot | overrun |
+| 1,200/min | overrun, 0 stuck |
+
+
+## M4 – Colonists, abduction, feeding
+
+### Added
+- **Colonists** (`colony/colonists.gd`, `data/colonists.json`). There are 10 named contract workers.
+  - They shelter in the core and automatically walk out to crew the most valuable uncrewed turrets.
+  - **Uncrewed turrets fire at 40%.** Crewed turrets fire at tier crew efficiency (100 / 115 / 130%).
+  - Walking uses `AStarGrid2D`. **Blast Doors let colonists through but not aliens.** Unreachable posts are reported.
+- **Abduction.**
+  - Snatchers and Burrowers grab exposed colonists: anyone walking, bailed out of a destroyed turret, or limping home.
+  - The carrier drags them along a **retreat flow field** to the nearest canyon mouth at 70% speed, leaving a blood trail.
+  - **Snatchers hunt.** A dedicated hunt flow field around exposed colonists and crewed turrets (rebuilt only when someone moves, radius-capped) leads them in, and they **pull crews out of turrets**.
+  - **Turrets prioritise carriers.** Killing a carrier drops the colonist, wounded. They recover in the core for 40 s before returning to duty.
+  - If the carrier reaches the edge, the colonist is lost for the run.
+- **Mauling.** Maulers (70 damage) and Brood Mothers (250) strike exposed colonists, who have 100 HP.
+  - Survivors are knocked down and wounded. The dead leave human remains.
+  - Grab immunity (1.5 s) after a rescue or knockdown.
+- **Feeding.**
+  - Aliens standing on corpses stop to eat (per-strain `feed_rate`; Brood Mothers gorge).
+  - Each meal: x1.12 size (cap x1.9) and +35% base HP. **Human remains = 3 meals**, eaten first.
+  - Eaten corpses yield nothing and lower piles. Grown aliens leave bigger corpses worth more Biomass.
+- **UI.**
+  - Colonist bar (alive, crewed/turrets, reserve, carried, recovering, lost).
+  - Colony event feed: seized, rescued, mauled, dragged off, back on duty.
+  - The Inspector shows the crew name or "UNCREWED – firing at 40%".
+- Corpse per-cell index (`corpse_count` grid) so the threaded swarm knows where it can feed.
+- Soak report adds colonist and feeding stats.
+
+### Changed
+- **Flow-field rebuilds now run as low-priority worker tasks.** Several queued rebuilds (surface, burrow, retreat, hunt) no longer starve the threaded swarm step. Sim p99 went from 25 ms to 10.7 ms on the 4-thread test machine.
+- Flow fields accept custom goal sets and a max search distance.
+
+### Measured (headless, slow 4-thread 2.1 GHz cloud CPU)
+| Scenario | Result |
+|---|---|
+| Benchmark 10k with combat + colonists | 115 fps avg, 65 fps 1% low, sim 7.1 ms (p99 10.8) – PASS |
+| 3-min soak, bot player, pressure 500 | core held (1471/6000), 7/10 colonists alive and crewing, 4 abductions (all rescued), 3 mauled, 97 meals, largest alien x1.9 |
+| 3-min soak, no player, pressure 500 | overrun; 22 abductions, 19 rescued, 3 dragged off |
+
+### Balance notes
+- Stalkers do **not** abduct. With 55% of the swarm grabbing people, abductions were constant noise (82 in 3 minutes). Abduction now belongs to Snatchers (hunters) and Burrowers (they surface inside your walls).
+
+
+## M3 – Biomass economy, harvester drones, in-run turret tiers
+
+### Added
+- **`data/economy.json`**: every economy value in one file.
+  - Used now: starting Biomass, per-corpse Biomass by strain, charred yield, build costs, upgrade costs, refund ratio, repair cost, harvester stats.
+  - Ready for later milestones, already in final format: night bonus, early-call bonus, Xenite payouts, Threat Level and Hazard Contracts.
+- **Biomass economy** (`econ/economy.gd`).
+  - Building, upgrading and repairing cost Biomass.
+  - Selling refunds 50% of everything invested.
+  - The top bar shows income per minute.
+  - Tools you can't afford are greyed out, and the ghost turns red.
+- **Corpses hold Biomass.** Incendiary kills (including burn deaths) leave charred corpses worth 0.
+  Corpses that decay before harvest are counted as lost.
+- **Harvester Bay + drones** (`econ/harvester.gd`).
+  - Drones (2/3/4 by bay tier) fly to the nearest unclaimed corpse in range (16/19/22 m).
+  - Each drone strips corpses with a beam until it carries 24, then flies home and deposits; a "+N" pops up.
+  - Harvesting removes the corpse and lowers its pile, so bays near walls stop the swarm climbing over.
+  - Drones crash if their bay is destroyed.
+- **Turret tiers I/II/III** (multipliers in `turrets.json`, costs in `economy.json`).
+  - Tiers raise damage, range, crew efficiency (fire rate) and HP.
+  - Tier pips light up on the base and the turret head grows.
+  - Harvester Bays have tiers too: more drones, more range.
+- **Floodlights.**
+  - A real light plus a per-cell lit-coverage grid, ready for M5 nights.
+- **Inspector panel.**
+  - Select any structure to see HP, current and next-tier stats, kills, and drones and range.
+  - It has Upgrade (U / X), Repair (R / Y) and Sell (B) buttons.
+  - Range rings show for the selected or hovered structure.
+- Floating text for Biomass deposits, and toasts for build errors ("Need 120 Biomass").
+- The swarm ramps up over 90 s (`swarm.ramp_seconds`) so there is time to spend the starting Biomass.
+- Starting kit: Harvester Bay, Autocannon, Flamethrower, Mortar, 2 Floodlights and 350 Biomass.
+- Sandbox free build (F11 / `--free-build`).
+- Scripted bot player for soak tests (`--bot`).
+
+### Measured (headless 3-minute soaks, swarm pressure 500, slow cloud CPU)
+| | No player | Scripted bot (`--bot`) |
+|---|---|---|
+| Core | overrun | 5708 / 6000, held |
+| Biomass collected / spent | 730 / 0 | 1,875 / 2,115 |
+| Drone trips / corpses harvested | 45 / 278 | 83 / 545 |
+| Upgrades bought | – | 11 structures to tier II (incl. both bays, 6 drones) |
+| Swarm sim / combat / fx | 0.7 / 0.03 / 0.15 ms | 1.1 / 0.06 / 0.28 ms |
+
+### Changed
+- Build tools now use keys 1–9 and 0 (10 tools).
+- Reset outpost moved to F10, and R is now Repair.
+- Benchmark moved to B / F9 (keyboard only). Gamepad X / Y are now Upgrade / Repair.
+- The flow-field heatmap is keyboard only (F).
+
+### Known limitations
+- Drones can't be attacked yet.
+- Floodlights have no gameplay effect until night arrives in M5.
+- Specialisations (tier III choice) unlock in M6.
+- Colonists crewing turrets, and the 40% uncrewed rate, arrive in M4.
+  `Turret.crew_factor` is already wired in.
+
+
+## M2 – Walls, turrets, damage types, death, corpse piling
+
+### Added
+- **Damage types and counter matrix.**
+  - Six damage types: Ballistic, Incendiary, Piercing, Shock, Explosive, Seismic.
+  - The weak/resist table from `aliens.json` is compiled into a matrix (150% / 50%, set in `turrets.json`).
+  - The build card and the Intel panel (**I**) show who each type counters.
+- **Six turrets** with distinct behaviours and primitive models, stats in `data/turrets.json`:
+  - Autocannon: rapid, dodgeable.
+  - Flamethrower: cone plus burning.
+  - Railgun: pierces 5 in a line.
+  - Shock Grid: arcs into 14 and slows.
+  - Mortar: lobbed splash shells, minimum range.
+  - Seismic Spike: slam that also hits underground Burrowers and surfaces them.
+  - All turrets use "first" targeting: the alien closest to the core along the flow field.
+- **Structures:** walls, blast doors and turrets, each with HP and damage tint.
+  - Drag-paint to build, right-drag to demolish.
+  - A ghost preview and range ring show while placing.
+  - The starting compound has a demo battery of one of each turret.
+- **Aliens fight back.**
+  - The flow field paths through structures at a cost, so aliens bash whatever the field leads them into.
+  - Maulers deal x4 damage to doors.
+  - Spitters shell structures with acid from 9 m.
+  - Burrowers tunnel along a second flow field and surface near the core.
+  - Brood Mothers birth Stalker broods.
+  - Snatchers dodge 35% of aimed shots.
+  - Aliens gnaw the core. Losing it means **OUTPOST OVERRUN**; press **R** to rebuild.
+- **Death and corpse piling.**
+  - Deaths are processed at the end of the frame (safe swap-remove).
+  - Each death throws carapace gibs and an acidic ichor spray, and leaves a persistent ichor splat.
+  - Pooled corpses are kept per strain, capped at `corpse_cap` with the oldest decaying first.
+  - Corpses stack on per-cell pile heights.
+  - Incendiary kills leave charred corpses (no Biomass from M3 on).
+  - Living aliens walk on top of piles.
+  - A pile of 1.6 m beside a wall makes the wall climbable: it tints green and the swarm pours over it.
+- **Hit flash**, burn and slow status, and a gore toggle (**G**).
+- **Spatial bucket grid** (4 m cells, linked lists rebuilt in one pass per frame) for turret queries.
+- **Headless combat soak**: `-- --combat-test=60`.
+- The benchmark now includes combat (core invulnerable during the run) and reports combat + fx ms.
+
+### Changed
+- Swarm pressure moved to + / − and F5–F8. Number keys 1–8 now pick build tools.
+- Starting swarm pressure is 1,500.
+
+### Measured (headless, slow 4-thread 2.1 GHz cloud CPU)
+| Scenario | Result |
+|---|---|
+| Benchmark 10k with combat | 114 fps avg, 62 fps 1% low, sim 6.9 ms, combat+fx 1.2 ms – PASS |
+| Soak 30 s at pressure 1,500 | 629 kills, all six turrets scoring, 4 walls made climbable, core 67% |
+| Soak 60 s at pressure 6,000 | 3,833 kills, 37 structures lost, outpost overrun |
+
+### Known limitations
+- No economy yet: building is free (Biomass in M3).
+- No colonists, abduction or feeding (M4). No waves or day/night (M5).
+- Turret specialisations, upgrade tiers and Hive adaptation come in M3 to M6.
+  Damage dealt per type is already tracked for adaptation.
+
+
+## M1 – Swarm & flow field benchmark
+
+### Added
+- Godot 4.4 project `xenite_frontier/` (Forward+, 1280x800 base resolution, scales to any aspect).
+- **Flow field** (`sim/flow_field.gd`)
+  - 8-connected, corner-safe Dijkstra pass.
+  - Bucket queue with integer costs, so it runs in O(cells).
+  - Per-cell cost multiplier, ready for later "bash through the door" pathing.
+  - Async rebuild on a worker thread with double-buffered swap.
+  - Aliens caught inside a newly placed wall climb out.
+- **Swarm simulation** (`sim/swarm.gd`, `sim/alien_pool.gd`)
+  - Struct-of-arrays pools, one per strain.
+  - Density-grid crowd separation and wall sliding.
+  - Rate-limited spawning from canyon mouths.
+  - Threaded 1,024-alien chunks.
+  - Render buffer written in the same pass as the simulation.
+- **Six strain silhouettes** built procedurally from primitives with baked part
+  colours (`render/alien_meshes.gd`). Faceted shader with GPU gait animation and
+  emissive bioluminescent parts. The shader already reserves a hit-flash channel
+  for M2.
+- **Test range map**
+  - Cliff basin, three canyon mouths, noise-generated outcrops.
+  - Walled compound with airlock gaps and catwalk baffles around a glowing core.
+  - Wall placement and removal by click or gamepad.
+  - Flow-field distance heatmap.
+- **Angled top-down camera**: pan, edge scroll, drag, smooth zoom; keyboard, mouse and gamepad.
+- **Benchmark**
+  - HUD showing FPS, sim ms, upload ms, render CPU/GPU ms, draw calls and per-strain counts.
+  - Scripted run (`B` key or `-- --benchmark[=N]`) reporting avg FPS, 1% low and p99 sim time.
+  - Log written to `user://benchmark.log`.
+- Data-driven tuning: `data/aliens.json`, `data/game_config.json`.
+- Input actions registered in code (`core/input_setup.gd`) so they can be rebound in M8.
+
+### Measured (headless, CPU only; 4-thread 2.1 GHz cloud Xeon, a slow machine)
+| Aliens | Avg FPS | 1% low | Swarm sim avg / p99 |
+|---|---|---|---|
+| 10,000 | 145 | 144 | 4.8 ms / 7.8 ms |
+| 20,000 | 142 | 90 | 6.4 ms / 9.9 ms |
+
+Measured on a desktop with full rendering (Ryzen 7 9800X3D, RTX 5080, Windows, Vulkan):
+| Aliens | Avg FPS | 1% low | Swarm sim avg / p99 | GPU |
+|---|---|---|---|---|
+| 10,000 | 515 | 238 | 1.29 ms / 1.75 ms | 0.47 ms |
+
+Flow field rebuild (200x140 cells): ~54 ms on a worker thread, with no frame hitch.
+GPU cost depends on your card. Run `B` in a windowed build to measure it.
+
+### Fixed
+- Fresh clones failed with `Identifier "InputSetup" not declared` because the script class cache (`.godot/`) is not in git. The README now documents the one-time `--import`, and `run_benchmark.bat` runs it automatically.
+
+### Known limitations (by design for M1)
+- Aliens that reach the core are recycled to a canyon mouth; there is no damage or death yet (M2).
+- Aliens treat walls as impassable. Breaching, climbing piles and burrowing come in M2–M4.

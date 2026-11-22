@@ -1,0 +1,323 @@
+class_name Corpses
+extends Node3D
+## Persistent alien corpses. One ring buffer + MultiMesh per strain (same mesh
+## as the living alien, rolled onto its side and darkened by the shader).
+## When the cap is reached the oldest corpse of that strain decays.
+##
+## Corpses pile up physically: each corpse adds its corpse_height to the
+## cell's pile and rests on top of what is already there. A pile next to a
+## wall that reaches climb_height makes the wall climbable (see OutpostMap).
+## Corpses hold Biomass (economy.json per strain). Charred corpses
+## (incendiary kills) hold none. Harvester drones claim a corpse, then
+## harvest it: the corpse is removed, which also lowers its pile. Each slot
+## carries a serial so a drone can tell if its target decayed and was reused.
+
+const STRIDE := 16
+
+var map: OutpostMap
+var total_cap := 4000
+var count := 0          # live corpses
+var charred_count := 0
+
+var _cap := PackedInt32Array()
+var _next := PackedInt32Array()
+var _cell: Array[PackedInt32Array] = []
+var _height: Array[PackedFloat32Array] = []
+var _charred: Array[PackedByteArray] = []
+var _buf: Array[PackedFloat32Array] = []
+var _x: Array[PackedFloat32Array] = []
+var _z: Array[PackedFloat32Array] = []
+var _value: Array[PackedFloat32Array] = []
+var _claimed: Array[PackedByteArray] = []
+var _serial: Array[PackedInt32Array] = []
+var _biomass_of := PackedFloat32Array()
+var _pose: Array[String] = []
+var _charred_yield := 0.0
+var _next_serial := 1
+var biomass_lost := 0.0     # value that decayed before harvest
+var harvested := 0
+var eaten := 0
+var humans_eaten := 0
+var _by_cell := {}          # cell -> PackedInt32Array of (type << 16 | slot)
+var _humans := {}           # cell -> Array[Node3D] human remains
+var _human_mat: StandardMaterial3D
+var _blood_mat: StandardMaterial3D
+var _mm: Array[MultiMesh] = []
+var _dirty := PackedByteArray()
+var _rng := RandomNumberGenerator.new()
+
+
+func setup(m: OutpostMap, pools: Array[AlienPool], _material: Material = null) -> void:
+	map = m
+	total_cap = int(GameConfig.section("combat").get("corpse_cap", total_cap))
+	_charred_yield = float(GameConfig.econ("biomass").get("charred_yield", 0.0))
+	var wsum := 0.0
+	for p in pools:
+		wsum += float(p.def.get("spawn_weight", 1))
+	for p in pools:
+		var share := float(p.def.get("spawn_weight", 1)) / wsum
+		# small strains still get a useful buffer (bosses leave big corpses)
+		var c := maxi(48, int(total_cap * share))
+		_cap.append(c)
+		_next.append(0)
+		var cell := PackedInt32Array(); cell.resize(c); cell.fill(-1)
+		var hh := PackedFloat32Array(); hh.resize(c); hh.fill(0.0)
+		var ch := PackedByteArray(); ch.resize(c); ch.fill(0)
+		var b := PackedFloat32Array(); b.resize(c * STRIDE); b.fill(0.0)
+		_cell.append(cell); _height.append(hh); _charred.append(ch); _buf.append(b)
+		for arr in [_x, _z, _value]:
+			var f := PackedFloat32Array(); f.resize(c); f.fill(0.0)
+			arr.append(f)
+		var cl := PackedByteArray(); cl.resize(c); cl.fill(0)
+		_claimed.append(cl)
+		var se := PackedInt32Array(); se.resize(c); se.fill(0)
+		_serial.append(se)
+		_biomass_of.append(GameConfig.corpse_biomass(p.def.id))
+		_pose.append(AlienMeshes.corpse_pose(p.def.id))
+		var mm := MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_3D
+		mm.use_custom_data = true
+		mm.mesh = p.mesh_far
+		mm.instance_count = c
+		var mmi := MultiMeshInstance3D.new()
+		mmi.name = "Corpses_%s" % p.def.id
+		mmi.multimesh = mm
+		mmi.material_override = p.instance.material_override
+		mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		mmi.custom_aabb = AABB(Vector3(-1000, -10, -1000), Vector3(2000, 40, 2000))
+		add_child(mmi)
+		_mm.append(mm)
+		_dirty.append(1)
+
+
+func add(t: int, x: float, z: float, yaw: float, size: float, height: float, charred: bool) -> void:
+	var c := map.cell_of(Vector3(x, 0, z))
+	if c < 0:
+		return
+	var i := _next[t]
+	_next[t] = (i + 1) % _cap[t]
+	var cells := _cell[t]
+	if cells[i] >= 0:
+		biomass_lost += _value[t][i]
+		_remove_slot(t, i)
+	var rest := map.add_pile(c, height)
+	cells[i] = c
+	_index_add(c, (t << 16) | i)
+	_height[t][i] = height
+	_x[t][i] = x
+	_z[t][i] = z
+	_value[t][i] = _biomass_of[t] * (_charred_yield if charred else 1.0) * size
+	_claimed[t][i] = 0
+	_serial[t][i] = _next_serial
+	_next_serial += 1
+	_charred[t][i] = 1 if charred else 0
+	count += 1
+	if charred:
+		charred_count += 1
+	# death pose per strain (AlienMeshes.corpse_pose), random yaw, on the pile
+	var b := Basis(Vector3.UP, yaw)
+	match _pose[t]:
+		"back":
+			b = b * Basis(Vector3.FORWARD, PI)
+		"face":
+			b = b * Basis(Vector3.RIGHT, 1.15)
+		"flat":
+			pass
+		_:
+			b = b * Basis(Vector3.FORWARD, (PI * 0.5) * (1.0 if _rng.randf() < 0.5 else -1.0) * _rng.randf_range(0.75, 1.0))
+	b = b.scaled(Vector3(size, size, size))
+	var o := i * STRIDE
+	var buf := _buf[t]
+	buf[o] = b.x.x; buf[o + 1] = b.y.x; buf[o + 2] = b.z.x; buf[o + 3] = x
+	buf[o + 4] = b.x.y; buf[o + 5] = b.y.y; buf[o + 6] = b.z.y; buf[o + 7] = map.height_at(x, z) + rest * 0.85 + (0.6 * size if _pose[t] == "back" else 0.12 * size)
+	buf[o + 8] = b.x.z; buf[o + 9] = b.y.z; buf[o + 10] = b.z.z; buf[o + 11] = z
+	buf[o + 12] = 0.0; buf[o + 13] = 2.0 if charred else 1.0; buf[o + 14] = 0.0; buf[o + 15] = 0.0
+	_dirty[t] = 1
+
+
+func _remove_slot(t: int, i: int) -> void:
+	var c := _cell[t][i]
+	if c < 0:
+		return
+	map.remove_pile(c, _height[t][i])
+	_index_remove(c, (t << 16) | i)
+	_cell[t][i] = -1
+	_claimed[t][i] = 0
+	count -= 1
+	if _charred[t][i]:
+		charred_count -= 1
+	var o := i * STRIDE
+	var buf := _buf[t]
+	for k in 12:
+		buf[o + k] = 0.0
+	_dirty[t] = 1
+
+
+# ------------------------------------------------------------ harvesting
+
+## Nearest unclaimed corpse with Biomass within `radius` of `center`, closest
+## to `from`. Returns [type, slot, serial] or [] if none.
+func find_harvestable(center: Vector3, radius: float, from: Vector3) -> Array:
+	var r2 := radius * radius
+	var best: Array = []
+	var best_d := INF
+	for t in _cap.size():
+		var cells := _cell[t]
+		var xs := _x[t]
+		var zs := _z[t]
+		var vals := _value[t]
+		var cl := _claimed[t]
+		for i in _cap[t]:
+			if cells[i] < 0 or vals[i] <= 0.0 or cl[i]:
+				continue
+			var dx := xs[i] - center.x
+			var dz := zs[i] - center.z
+			if dx * dx + dz * dz > r2:
+				continue
+			var fx := xs[i] - from.x
+			var fz := zs[i] - from.z
+			var d := fx * fx + fz * fz
+			if d < best_d:
+				best_d = d
+				best = [t, i, _serial[t][i]]
+	return best
+
+
+func is_valid(ref: Array) -> bool:
+	return not ref.is_empty() and _cell[ref[0]][ref[1]] >= 0 and _serial[ref[0]][ref[1]] == ref[2]
+
+
+func claim(ref: Array, on: bool) -> void:
+	if is_valid(ref):
+		_claimed[ref[0]][ref[1]] = 1 if on else 0
+
+
+func position_of(ref: Array) -> Vector3:
+	var t: int = ref[0]
+	var i: int = ref[1]
+	return Vector3(_x[t][i], _buf[t][i * STRIDE + 7], _z[t][i])
+
+
+## Removes the corpse and returns its Biomass (0 if it already decayed).
+func harvest(ref: Array) -> float:
+	if not is_valid(ref):
+		return 0.0
+	var v := _value[ref[0]][ref[1]]
+	_remove_slot(ref[0], ref[1])
+	harvested += 1
+	return v
+
+
+## Removes a corpse without yield (eaten by aliens, M4 / cremated, M6).
+func destroy(ref: Array) -> void:
+	if is_valid(ref):
+		_remove_slot(ref[0], ref[1])
+
+
+func harvestable_value() -> float:
+	var s := 0.0
+	for t in _cap.size():
+		for i in _cap[t]:
+			if _cell[t][i] >= 0:
+				s += _value[t][i]
+	return s
+
+
+# ------------------------------------------------------------ feeding
+
+func _index_add(c: int, code: int) -> void:
+	if not _by_cell.has(c):
+		_by_cell[c] = PackedInt32Array()
+	var a: PackedInt32Array = _by_cell[c]
+	a.append(code)
+	map.corpse_count[c] += 1
+
+
+func _index_remove(c: int, code: int) -> void:
+	if _by_cell.has(c):
+		var a: PackedInt32Array = _by_cell[c]
+		var k := a.find(code)
+		if k >= 0:
+			a.remove_at(k)
+			map.corpse_count[c] = maxi(0, map.corpse_count[c] - 1)
+		if a.is_empty():
+			_by_cell.erase(c)
+
+
+## An alien eats one corpse in `cell` (human remains first - they are
+## starving for human flesh). Returns how many meals it was worth (0 = none).
+func eat_one(cell: int) -> float:
+	if _humans.has(cell):
+		var arr: Array = _humans[cell]
+		var n: Node3D = arr.pop_back()
+		n.queue_free()
+		if arr.is_empty():
+			_humans.erase(cell)
+		map.corpse_count[cell] = maxi(0, map.corpse_count[cell] - 1)
+		humans_eaten += 1
+		return float(GameConfig.feeding.get("human_meal_mult", 3.0))
+	if not _by_cell.has(cell):
+		return 0.0
+	var a: PackedInt32Array = _by_cell[cell]
+	var code := a[a.size() - 1]
+	_remove_slot(code >> 16, code & 0xFFFF)
+	eaten += 1
+	return 1.0
+
+
+## A mauled colonist's remains: a body in a blood pool. Edible.
+func add_human(pos: Vector3) -> void:
+	var c := map.cell_of(pos)
+	if c < 0:
+		return
+	if _human_mat == null:
+		_human_mat = TurretModels.mat(Color(0.9, 0.45, 0.1), 0.0, 0.1)
+		_blood_mat = TurretModels.mat(Color(0.35, 0.02, 0.02), 0.0, 0.0)
+		_blood_mat.roughness = 0.2
+	var n := Node3D.new()
+	n.position = Vector3(pos.x, map.height_at(pos.x, pos.z) + map.pile[c] * 0.85, pos.z)
+	n.rotation.y = randf() * TAU
+	add_child(n)
+	TurretModels.part(n, TurretModels.cyl(0.7, 0.02, -1.0, 10), _blood_mat, Vector3(0, 0.02, 0))
+	TurretModels.part(n, TurretModels.box(0.32, 0.18, 0.9), _human_mat, Vector3(0, 0.12, 0))
+	TurretModels.part(n, SphereMesh.new(), _human_mat, Vector3(0, 0.15, 0.58)).scale = Vector3.ONE * 0.24
+	if not _humans.has(c):
+		_humans[c] = []
+	_humans[c].append(n)
+	map.corpse_count[c] += 1
+
+
+func human_remains() -> int:
+	var n := 0
+	for a: Array in _humans.values():
+		n += a.size()
+	return n
+
+
+func clear() -> void:
+	for a: Array in _humans.values():
+		for n: Node3D in a:
+			n.queue_free()
+	_humans.clear()
+	_by_cell.clear()
+	map.corpse_count.fill(0)
+	eaten = 0
+	humans_eaten = 0
+	for t in _cap.size():
+		for i in _cap[t]:
+			_cell[t][i] = -1
+			_claimed[t][i] = 0
+		_buf[t].fill(0.0)
+		_dirty[t] = 1
+	count = 0
+	charred_count = 0
+	biomass_lost = 0.0
+	harvested = 0
+	map.reset_piles()
+
+
+func upload() -> void:
+	for t in _mm.size():
+		if _dirty[t]:
+			RenderingServer.multimesh_set_buffer(_mm[t].get_rid(), _buf[t])
+			_dirty[t] = 0
