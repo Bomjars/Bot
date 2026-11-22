@@ -118,7 +118,7 @@ func _build_environment(parent: Node) -> void:
 	env.ambient_light_energy = 1.1
 	env.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
 	env.tonemap_mode = Environment.TONE_MAPPER_ACES
-	env.tonemap_exposure = 1.08
+	env.tonemap_exposure = 1.18
 	env.tonemap_white = 6.0
 	# bloom: lamps, windows, eyes, acid and muzzle flashes glow softly
 	env.glow_enabled = true
@@ -182,7 +182,7 @@ func _build_environment(parent: Node) -> void:
 	sun = DirectionalLight3D.new()
 	sun.name = "Sun"
 	sun.light_color = Color(1.0, 0.84, 0.7)
-	sun.light_energy = 1.2
+	sun.light_energy = 1.45
 	sun.rotation_degrees = Vector3(-33, -40, 0)   # low sun: relief casts long shadows
 	sun.shadow_enabled = true
 	sun.shadow_bias = 0.04

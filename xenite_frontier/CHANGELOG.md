@@ -1,5 +1,29 @@
 # Changelog
 
+## M5a.6 – Stylized look from your reference art
+
+### Changed
+- **Buildings rebuilt from your outpost reference render:** chunky chamfered (bevelled) shapes that catch the light, built with a new `MeshAcc.add_bevel_box`.
+  - Every pad has orange lamps at the corners and along the front edge.
+  - Lit window bands, lamps over the doors, and wall icons: a gear on the Fabricator, bullets on the Armory, a fuel drop on the Bio-Refinery furnace, a green cross on the Medbay.
+  - Roof gear: AC units, vents, satellite dishes, antennas with red tips; crates and barrels.
+  - Specific buildings:
+    - Bio-Refinery: striped tanks joined by pipes, with a glowing furnace.
+    - Fabricator: hazard-framed door with a blue-lit interior and a crane rail.
+    - Armory: red light strip.
+    - Medbay: green trim, roof cross pad.
+    - Barracks: red stripe, flag and dish.
+    - Mining Rig: blue light column and a dish.
+    - Harvester Bay: glowing roll-up door and a marked landing pad (yellow ring and cross, corner lamps).
+  - Walls: posts with yellow lamps and blue light strips, grooved white panels. Blast doors have glowing chevrons and pillar lights. Guard Post: braced legs and a cabin with lit windows all round. Drone: rotor guards, skids and a blue underglow.
+- **Aliens restyled from your swarm reference render:**
+  - Each strain has its own palette: olive Spitters, purple Brood Mothers, dark stone Maulers and Elders, dark-brown Burrowers.
+  - Maulers and Elders: blocky bevelled stone plates, fists and forearm guards with glowing red seams, bone spikes and tusks.
+  - Spitters: bigger plated glowing sac, back-swept horns, long claws.
+  - Burrowers: a glowing maw wheel with dark spokes, on a hexagonal stone mound with ember cracks.
+  - Brood Mothers: a deep-purple crystal sac bristling with bone spikes and a taller crown.
+- Lighting: sun and exposure raised for the warmer, brighter look of the references.
+
 ## M5a.5 – Graphics pass: lighting, atmosphere, planet surface, buildings, aliens
 
 ### Added

@@ -35,6 +35,79 @@ func add(mesh: Mesh, xf: Transform3D, col: Color, part := 0.0, off := 0.0, pivot
 		i.append(ind[k] + base)
 
 
+## A box with chamfered (bevelled) edges and corners: the chunky look of the
+## outpost buildings. Bevels catch highlights, so shapes read from far away.
+func add_bevel_box(size: Vector3, xform: Transform3D, col: Color, bevel := 0.04, part := 0.0, off := 0.0, pivot := Vector2.ZERO) -> void:
+	var h := size * 0.5
+	var b := minf(bevel, minf(h.x, minf(h.y, h.z)) * 0.9)
+	var polys: Array = []
+	for ax in 3:
+		for sg: float in [-1.0, 1.0]:
+			# main face
+			var q: Array = []
+			for u: float in [-1.0, 1.0]:
+				for w: float in [-1.0, 1.0]:
+					q.append(_bv(ax, sg, u, w, h, b))
+			polys.append([q[0], q[1], q[3], q[2]])
+	# 12 edge chamfers
+	for a1 in 3:
+		for a2 in range(a1 + 1, 3):
+			var a3 := 3 - a1 - a2
+			for s1: float in [-1.0, 1.0]:
+				for s2: float in [-1.0, 1.0]:
+					var pts: Array = []
+					for s3: float in [-1.0, 1.0]:
+						var p1 := Vector3.ZERO
+						p1[a1] = s1 * h[a1]
+						p1[a2] = s2 * (h[a2] - b)
+						p1[a3] = s3 * (h[a3] - b)
+						var p2 := Vector3.ZERO
+						p2[a1] = s1 * (h[a1] - b)
+						p2[a2] = s2 * h[a2]
+						p2[a3] = s3 * (h[a3] - b)
+						pts.append(p1)
+						pts.append(p2)
+					polys.append([pts[0], pts[1], pts[3], pts[2]])
+	# 8 corner triangles
+	for sx: float in [-1.0, 1.0]:
+		for sy: float in [-1.0, 1.0]:
+			for sz: float in [-1.0, 1.0]:
+				polys.append([Vector3(sx * h.x, sy * (h.y - b), sz * (h.z - b)), Vector3(sx * (h.x - b), sy * h.y, sz * (h.z - b)), Vector3(sx * (h.x - b), sy * (h.y - b), sz * h.z)])
+	var nb := xform.basis.inverse().transposed()
+	for poly: Array in polys:
+		var cen := Vector3.ZERO
+		for pt: Vector3 in poly:
+			cen += pt
+		cen /= float(poly.size())
+		# winding: (p2 - p0) x (p1 - p0) must point away from the centre
+		var p0: Vector3 = poly[0]
+		var nrm := ((poly[2] as Vector3) - p0).cross((poly[1] as Vector3) - p0)
+		if nrm.dot(cen) < 0.0:
+			poly.reverse()
+			nrm = -nrm
+		var base := v.size()
+		for pt: Vector3 in poly:
+			v.append(xform * pt)
+			n.append((nb * nrm).normalized())
+			c.append(col)
+			uv.append(Vector2(part, off))
+			uv2.append(pivot)
+		for k in range(1, poly.size() - 1):
+			i.append(base)
+			i.append(base + k)
+			i.append(base + k + 1)
+
+
+static func _bv(ax: int, sg: float, u: float, w: float, h: Vector3, b: float) -> Vector3:
+	var p := Vector3.ZERO
+	p[ax] = sg * h[ax]
+	var o1 := (ax + 1) % 3
+	var o2 := (ax + 2) % 3
+	p[o1] = u * (h[o1] - b)
+	p[o2] = w * (h[o2] - b)
+	return p
+
+
 ## Displaces every vertex added so far from index `from` with noise (rocks).
 func jitter(from: int, amount: float, seed_value: int) -> void:
 	var rng := RandomNumberGenerator.new()

@@ -464,6 +464,10 @@ See `CHANGELOG.md` for per-milestone notes.
 
 ## Screenshots (software-rendered)
 
+![Buildings in the stylized look of your reference](docs/style_buildings.png)
+![The swarm in the stylized look of your reference](docs/style_aliens.png)
+![The outpost in game](docs/style_outpost.png)
+
 ![Graphics pass, High: haze, soft shadows, weathered outpost](docs/gfx_overview_high.png)
 ![Same view on Low](docs/gfx_overview_low.png)
 ![Planet surface: cliff ledges, pebbles, sand relief](docs/gfx_terrain.png)

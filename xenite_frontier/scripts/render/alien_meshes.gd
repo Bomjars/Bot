@@ -76,7 +76,7 @@ static func _cfg(id: String) -> Dictionary:
 		"spitter":
 			return {"hip": Vector3(0.08, 0.78, -0.02), "knee": Vector3(0.1, 0.45, 0.1), "ankle": Vector3(0.1, 0.08, -0.06), "toe": Vector3(0.1, 0.0, 0.08),
 				"leg_t": 0.045, "shin_t": 0.035, "t_base": Vector3(0, 0.76, -0.02), "t_top": Vector3(0, 1.32, 0.04), "t_w": 0.12, "t_d": 0.1,
-				"shoulder": Vector3(0.12, 1.3, 0.04), "elbow": Vector3(0.15, 1.05, 0.13), "wrist": Vector3(0.13, 0.86, 0.18), "arm_t": 0.032, "fore_t": 0.028, "claw": 0.07,
+				"shoulder": Vector3(0.12, 1.3, 0.04), "elbow": Vector3(0.15, 1.05, 0.13), "wrist": Vector3(0.13, 0.86, 0.18), "arm_t": 0.032, "fore_t": 0.028, "claw": 0.13,
 				"neck": Vector3(0, 1.45, 0.08), "head": Vector3(0, 1.53, 0.12), "head_s": Vector3(0.07, 0.07, 0.09), "muzzle": Vector3(0, 1.5, 0.2), "muzzle_s": Vector3(0.04, 0.03, 0.06),
 				"eye": Color(0.25, 0.85, 0.23, 0.0), "eye_p": Vector3(0.035, 1.55, 0.18), "eye_r": 0.016, "spikes": 5, "spike_col": BLACK, "spike_s": 0.1,
 				"q": [0.0, 0.2, 0.6, 0.9, 0.6], "gait": 8.0}
@@ -161,10 +161,25 @@ static func corpse_pose(id: String) -> String:
 	return "side"
 
 
+## Body colours per strain (reference art "aliens in the field"): olive
+## Spitters, purple Brood Mothers, stone-brown Maulers and Elders, dark-brown
+## Burrowers, charcoal Stalkers and Snatchers.
+static func _palette(id: String) -> Dictionary:
+	match id:
+		"spitter": return {"cb": Color("6a6436"), "cl": Color("3e3b22"), "cp": Color("a49c5c")}
+		"brood_mother": return {"cb": Color("43304f"), "cl": Color("2a1e33"), "cp": Color("6b4a80")}
+		"mauler": return {"cb": Color("4a433d"), "cl": Color("332e2a"), "cp": Color("5f554c")}
+		"elder": return {"cb": Color("3f3934"), "cl": Color("2b2724"), "cp": Color("554c44")}
+		"burrower": return {"cb": Color("3a2c24"), "cl": Color("261d18"), "cp": Color("6e5238")}
+		"snatcher": return {"cb": Color("2d2c30"), "cl": Color("1b1a1d"), "cp": Color("8f8a52")}
+	return {"cb": Color("332f2a"), "cl": Color("1f1d1a"), "cp": OLIVE_L}
+
+
 static func build(id: String, lod := 0) -> ArrayMesh:
 	var a := MeshAcc.new()
 	var hi := lod == 0
 	var c := _cfg(id)
+	c.merge(_palette(id), true)
 	_humanoid(a, c, hi)
 	match base_id(id):
 		"mauler": _mauler(a, c, hi)
@@ -190,6 +205,9 @@ static func _rock(a: MeshAcc, pos: Vector3, r: float, col: Color, part: int, off
 
 static func _humanoid(a: MeshAcc, c: Dictionary, hi: bool) -> void:
 	var sides := 5 if hi else 4
+	var cb: Color = c.get("cb", DARK)
+	var cl: Color = c.get("cl", BLACK)
+	var cp: Color = c.get("cp", OLIVE_L)
 	var tb: Vector3 = c.t_base
 	var tt: Vector3 = c.t_top
 	var tw: float = c.t_w
@@ -197,9 +215,9 @@ static func _humanoid(a: MeshAcc, c: Dictionary, hi: bool) -> void:
 	var axis := (tt - tb).normalized()
 	var front := Vector3(0, -axis.z, axis.y).normalized()
 	# torso: tapered charcoal prism with an olive front panel
-	_prism(a, tb, tt, tw * 0.75, tw, DARK, P.BODY, 0.0, Vector2.ZERO, 6 if hi else 4, td / tw)
-	_prism(a, tb + front * td * 0.6 + axis * 0.03, tt + front * td * 0.6 - axis * 0.05, tw * 0.42, tw * 0.62, OLIVE_L, P.BODY, 0.0, Vector2.ZERO, 4, 0.3)
-	_prism(a, tb - axis * 0.06, tb + axis * 0.08, tw * 0.6, tw * 0.75, BLACK, P.BODY, 0.0, Vector2.ZERO, sides)
+	_prism(a, tb, tt, tw * 0.75, tw, cb, P.BODY, 0.0, Vector2.ZERO, 6 if hi else 4, td / tw)
+	_prism(a, tb + front * td * 0.6 + axis * 0.03, tt + front * td * 0.6 - axis * 0.05, tw * 0.42, tw * 0.62, cp, P.BODY, 0.0, Vector2.ZERO, 4, 0.3)
+	_prism(a, tb - axis * 0.06, tb + axis * 0.08, tw * 0.6, tw * 0.75, cl, P.BODY, 0.0, Vector2.ZERO, sides)
 	# back spikes
 	var n_sp := int(c.get("spikes", 0))
 	for k in (n_sp if hi else mini(n_sp, 3)):
@@ -207,13 +225,13 @@ static func _humanoid(a: MeshAcc, c: Dictionary, hi: bool) -> void:
 		var p := tb.lerp(tt, 0.15 + 0.8 * t) - front * td * 0.8
 		var dir := (-front * 0.8 + axis * 0.6).normalized()
 		var ss: float = c.get("spike_s", 0.1) * (0.7 + 0.5 * sin(t * PI))
-		a.add(MeshAcc.cone(ss * 0.28, 1.0, 4), MeshAcc.limb(p, p + dir * ss), c.get("spike_col", BLACK), P.BODY)
+		a.add(MeshAcc.cone(ss * 0.28, 1.0, 4), MeshAcc.limb(p, p + dir * ss), c.get("spike_col", cl), P.BODY)
 	if hi and c.get("legs", true):
 		# spine: a ridge of vertebrae down the back
 		for k in 6:
 			var t := (k + 0.5) / 6.0
 			var p := tb.lerp(tt, 0.06 + 0.9 * t) - front * td * 0.92
-			a.add(MeshAcc.ball(tw * 0.14, 4, 2), MeshAcc.xf(p, Vector3.ZERO, Vector3(1.0, 0.75, 1.25)), BLACK, P.BODY)
+			a.add(MeshAcc.ball(tw * 0.14, 4, 2), MeshAcc.xf(p, Vector3.ZERO, Vector3(1.0, 0.75, 1.25)), cl, P.BODY)
 		# rib bands wrapping the flanks
 		var side := axis.cross(front).normalized()
 		for k in 3:
@@ -230,20 +248,20 @@ static func _humanoid(a: MeshAcc, c: Dictionary, hi: bool) -> void:
 		var S := Vector3(sx * sh.x, sh.y, sh.z)
 		var E := Vector3(sx * el.x, el.y, el.z)
 		var W := Vector3(sx * wr.x, wr.y, wr.z)
-		_prism(a, S, E, c.arm_t, c.arm_t * 0.8, DARK, P.ARM, off, Vector2(sh.y, sh.z), sides)
-		_prism(a, E, W, c.fore_t, c.fore_t * 0.7, BLACK, P.FOREARM, off, Vector2(el.y, el.z), sides)
+		_prism(a, S, E, c.arm_t, c.arm_t * 0.8, cb, P.ARM, off, Vector2(sh.y, sh.z), sides)
+		_prism(a, E, W, c.fore_t, c.fore_t * 0.7, cl, P.FOREARM, off, Vector2(el.y, el.z), sides)
 		if hi:
 			# knobbed elbow and a faceted shoulder plate
 			var at: float = c.arm_t
-			a.add(MeshAcc.ball(at * 1.25, 4, 3), MeshAcc.xf(E), BLACK, P.ARM, off, Vector2(sh.y, sh.z))
+			a.add(MeshAcc.ball(at * 1.25, 4, 3), MeshAcc.xf(E), cl, P.ARM, off, Vector2(sh.y, sh.z))
 			var start := a.v.size()
-			a.add(MeshAcc.ball(1.0, 5, 3), MeshAcc.xf(S + Vector3(sx * at * 0.4, at * 0.8, -at * 0.3), Vector3(0, 0, sx * 20.0), Vector3(at * 2.0, at * 1.2, at * 2.3)), DARK, P.BODY)
+			a.add(MeshAcc.ball(1.0, 5, 3), MeshAcc.xf(S + Vector3(sx * at * 0.4, at * 0.8, -at * 0.3), Vector3(0, 0, sx * 20.0), Vector3(at * 2.0, at * 1.2, at * 2.3)), cb, P.BODY)
 			a.jitter(start, at * 0.35, 13 + int(sx))
-		var cl: float = c.claw
-		if cl > 0.0:
+		var clw: float = c.claw
+		if clw > 0.0:
 			for k in (3 if hi else 1):
 				var ofs := Vector3(sx * (k - 1) * 0.02, 0, 0)
-				a.add(MeshAcc.cone(cl * 0.12, 1.0, 3), MeshAcc.limb(W + ofs, W + ofs + Vector3(sx * (k - 1) * 0.02, -cl, cl * 0.35)), BONE, P.FOREARM, off, Vector2(el.y, el.z))
+				a.add(MeshAcc.cone(clw * 0.12, 1.0, 3), MeshAcc.limb(W + ofs, W + ofs + Vector3(sx * (k - 1) * 0.02, -clw, clw * 0.35)), BONE, P.FOREARM, off, Vector2(el.y, el.z))
 	# legs: hip -> knee -> ankle -> toe
 	if c.get("legs", true):
 		var hp: Vector3 = c.hip
@@ -256,12 +274,12 @@ static func _humanoid(a: MeshAcc, c: Dictionary, hi: bool) -> void:
 			var K := Vector3(sx * kn.x, kn.y, kn.z)
 			var A := Vector3(sx * an.x, an.y, an.z)
 			var T := Vector3(sx * to.x, to.y, to.z)
-			_prism(a, H, K, c.leg_t, c.leg_t * 0.8, DARK, P.THIGH, off, Vector2(hp.y, hp.z), sides)
-			_prism(a, K, A, c.shin_t, c.shin_t * 0.7, BLACK, P.SHIN, off, Vector2(kn.y, kn.z), sides)
-			_prism(a, A, T, c.shin_t * 0.8, c.shin_t * 0.5, BLACK, P.SHIN, off, Vector2(kn.y, kn.z), 4)
+			_prism(a, H, K, c.leg_t, c.leg_t * 0.8, cb, P.THIGH, off, Vector2(hp.y, hp.z), sides)
+			_prism(a, K, A, c.shin_t, c.shin_t * 0.7, cl, P.SHIN, off, Vector2(kn.y, kn.z), sides)
+			_prism(a, A, T, c.shin_t * 0.8, c.shin_t * 0.5, cl, P.SHIN, off, Vector2(kn.y, kn.z), 4)
 			if hi:
 				# knobbed knee, two hooked toe claws
-				a.add(MeshAcc.ball(float(c.leg_t) * 1.2, 4, 3), MeshAcc.xf(K), BLACK, P.THIGH, off, Vector2(hp.y, hp.z))
+				a.add(MeshAcc.ball(float(c.leg_t) * 1.2, 4, 3), MeshAcc.xf(K), cl, P.THIGH, off, Vector2(hp.y, hp.z))
 				for tc: float in [-1.0, 1.0]:
 					var tp := T + Vector3(tc * float(c.shin_t) * 0.6, 0.0, 0.0)
 					a.add(MeshAcc.cone(float(c.shin_t) * 0.3, 1.0, 3), MeshAcc.limb(tp, tp + Vector3(tc * 0.015, -0.012, 0.075)), BONE, P.SHIN, off, Vector2(kn.y, kn.z))
@@ -270,11 +288,11 @@ static func _humanoid(a: MeshAcc, c: Dictionary, hi: bool) -> void:
 		var nk: Vector3 = c.neck
 		var hd: Vector3 = c.head
 		var pv := Vector2(tt.y, tt.z)
-		_prism(a, tt, nk, tw * 0.3, tw * 0.25, DARK, P.HEAD, 0.0, pv, 4)
+		_prism(a, tt, nk, tw * 0.3, tw * 0.25, cb, P.HEAD, 0.0, pv, 4)
 		var hs: Vector3 = c.head_s
-		a.add(MeshAcc.ball(1.0, 6 if hi else 4, 4 if hi else 3), MeshAcc.xf(hd, Vector3.ZERO, hs), DARK, P.HEAD, 0.0, pv)
+		a.add(MeshAcc.ball(1.0, 6 if hi else 4, 4 if hi else 3), MeshAcc.xf(hd, Vector3.ZERO, hs), cb, P.HEAD, 0.0, pv)
 		var ms: Vector3 = c.muzzle_s
-		a.add(MeshAcc.ball(1.0, 5 if hi else 4, 3 if hi else 2), MeshAcc.xf(c.muzzle, Vector3(-8, 0, 0), ms), BLACK, P.HEAD, 0.0, pv)
+		a.add(MeshAcc.ball(1.0, 5 if hi else 4, 3 if hi else 2), MeshAcc.xf(c.muzzle, Vector3(-8, 0, 0), ms), cl, P.HEAD, 0.0, pv)
 		var er: float = c.get("eye_r", 0.0)
 		if er > 0.0:
 			var ep: Vector3 = c.eye_p
@@ -287,37 +305,62 @@ static func _humanoid(a: MeshAcc, c: Dictionary, hi: bool) -> void:
 				var tx := (t - 2) * ms.x * 0.32
 				a.add(MeshAcc.cone(ms.x * (0.2 if t % 2 == 0 else 0.14), ms.y * (1.7 if t % 2 == 0 else 1.1), 3), MeshAcc.xf(Vector3(tx, mz.y - ms.y * 0.7, mz.z + ms.z * 0.5 - absf(tx) * 0.6), Vector3(180, 0, 0)), BONE, P.HEAD, 0.0, pv)
 			var jaw := mz + Vector3(0, -ms.y * 1.5, -ms.z * 0.25)
-			a.add(MeshAcc.box(ms.x * 1.5, ms.y * 0.6, ms.z * 1.7), MeshAcc.xf(jaw, Vector3(12, 0, 0)), BLACK, P.HEAD, 0.0, pv)
+			a.add(MeshAcc.box(ms.x * 1.5, ms.y * 0.6, ms.z * 1.7), MeshAcc.xf(jaw, Vector3(12, 0, 0)), cl, P.HEAD, 0.0, pv)
 			for t in 3:
 				a.add(MeshAcc.cone(ms.x * 0.13, ms.y * 0.9, 3), MeshAcc.xf(jaw + Vector3((t - 1) * ms.x * 0.4, ms.y * 0.45, ms.z * 0.55)), BONE, P.HEAD, 0.0, pv)
 			if er > 0.0:
 				var ep: Vector3 = c.eye_p
-				a.add(MeshAcc.box(ep.x * 2.8, er * 1.4, er * 3.0), MeshAcc.xf(Vector3(0, ep.y + er * 1.6, ep.z - er * 0.4), Vector3(-18, 0, 0)), BLACK, P.HEAD, 0.0, pv)
+				a.add(MeshAcc.box(ep.x * 2.8, er * 1.4, er * 3.0), MeshAcc.xf(Vector3(0, ep.y + er * 1.6, ep.z - er * 0.4), Vector3(-18, 0, 0)), cl, P.HEAD, 0.0, pv)
 
 
 static func _mauler(a: MeshAcc, c: Dictionary, hi: bool) -> void:
-	var red := Color(0.78, 0.13, 0.12, 0.45)
+	var seam := Color(1.0, 0.12, 0.05, 0.05)
+	var stone: Color = c.get("cp", MID)
+	var stone_d: Color = c.get("cb", DARK)
+	var spike := Color("c2b8aa")
 	var tt: Vector3 = c.t_top
 	var pv := Vector2(tt.y, tt.z)
-	# boulder shoulders and head-top with red slashes (they crack off on death)
-	var rocks := [Vector3(-0.45, 1.85, 0.0), Vector3(0.45, 1.85, 0.0), Vector3(-0.2, 2.0, 0.1), Vector3(0.22, 2.02, 0.05), Vector3(0.0, 1.95, -0.2)]
-	var rr := [0.26, 0.26, 0.2, 0.2, 0.22]
-	for k in (rocks.size() if hi else 3):
-		_rock(a, rocks[k], rr[k], MID if k % 2 == 0 else DARK, P.PLATE, 0.0, pv, hi, 11 + k)
-		a.add(MeshAcc.box(rr[k] * 1.1, 0.04, 0.05), MeshAcc.xf(rocks[k] + Vector3(0, rr[k] * 0.55, rr[k] * 0.45), Vector3(-30, 20.0 * (k - 2), 15.0)), red, P.PLATE, 0.0, pv)
-	# rock fists (clubs it walks on)
+	# blocky stone plates on shoulders, crown, chest and belly; each with a
+	# glowing red seam (they crack off on death)
+	var plates := [[Vector3(-0.47, 1.82, 0.0), Vector3(0.44, 0.38, 0.5), Vector3(0, 0, 16)],
+		[Vector3(0.47, 1.82, 0.0), Vector3(0.44, 0.38, 0.5), Vector3(0, 0, -16)],
+		[Vector3(0.0, 1.97, -0.06), Vector3(0.52, 0.3, 0.44), Vector3(-8, 0, 0)],
+		[Vector3(0.0, 1.5, 0.22), Vector3(0.52, 0.4, 0.14), Vector3(-14, 0, 0)],
+		[Vector3(0.0, 1.14, 0.18), Vector3(0.42, 0.3, 0.12), Vector3(-6, 0, 0)]]
+	for k in (plates.size() if hi else 3):
+		var pos: Vector3 = plates[k][0]
+		var sz: Vector3 = plates[k][1]
+		var rot: Vector3 = plates[k][2]
+		a.add_bevel_box(sz, MeshAcc.xf(pos, rot), stone if k % 2 == 0 else stone.darkened(0.12), 0.06, P.PLATE, 0.0, pv)
+		var b := Basis.from_euler(rot * (PI / 180.0))
+		a.add(MeshAcc.box(sz.x * 0.7, 0.03, 0.02), Transform3D(b, pos + b * Vector3(0, sz.y * 0.1, sz.z * 0.5 + 0.004)), seam, P.PLATE, 0.0, pv)
+		if hi and k < 3:
+			a.add(MeshAcc.box(0.03, sz.y * 0.6, 0.02), Transform3D(b, pos + b * Vector3(sz.x * 0.22, -sz.y * 0.1, sz.z * 0.5 + 0.004)), seam, P.PLATE, 0.0, pv)
+	# bone spikes along the shoulders and back
+	var spikes := [[Vector3(-0.55, 1.98, -0.05), Vector3(-0.75, 2.35, -0.2)], [Vector3(0.55, 1.98, -0.05), Vector3(0.75, 2.35, -0.2)],
+		[Vector3(-0.15, 2.1, -0.15), Vector3(-0.22, 2.5, -0.35)], [Vector3(0.15, 2.1, -0.15), Vector3(0.22, 2.5, -0.35)], [Vector3(0.0, 1.8, -0.3), Vector3(0.0, 2.15, -0.65)]]
+	for k in (spikes.size() if hi else 2):
+		a.add(MeshAcc.cone(0.06, 1.0, 5), MeshAcc.limb(spikes[k][0], spikes[k][1]), spike, P.PLATE, 0.0, pv)
+	# stone fists (clubs it walks on) and forearm guards, seams glowing
 	var wr: Vector3 = c.wrist
 	var el: Vector3 = c.elbow
 	for sx: float in [-1.0, 1.0]:
 		var off := PI if sx < 0.0 else 0.0
+		var fpv := Vector2(el.y, el.z)
 		var W := Vector3(sx * wr.x, wr.y, wr.z)
-		_rock(a, W + Vector3(0, -0.12, 0.02), 0.22, MID, P.FOREARM, off, Vector2(el.y, el.z), hi, 31)
+		var E := Vector3(sx * el.x, el.y, el.z)
+		a.add_bevel_box(Vector3(0.36, 0.34, 0.4), MeshAcc.xf(W + Vector3(0, -0.12, 0.03), Vector3(0, sx * 8.0, 0)), stone, 0.07, P.FOREARM, off, fpv)
+		a.add(MeshAcc.box(0.26, 0.03, 0.02), MeshAcc.xf(W + Vector3(0, -0.08, 0.235)), seam, P.FOREARM, off, fpv)
 		if hi:
-			_rock(a, W + Vector3(sx * 0.12, -0.18, 0.1), 0.14, DARK, P.FOREARM, off, Vector2(el.y, el.z), hi, 37)
-		a.add(MeshAcc.box(0.05, 0.25, 0.04), MeshAcc.xf(Vector3(sx * (el.x + 0.08), (el.y + wr.y) * 0.5 + 0.1, el.z + 0.08), Vector3(0, 0, sx * 10.0)), red, P.FOREARM, off, Vector2(el.y, el.z))
-	# white fang
+			for k in 3:
+				a.add_bevel_box(Vector3(0.09, 0.09, 0.08), MeshAcc.xf(W + Vector3(-0.11 + k * 0.11, -0.2, 0.24)), stone_d, 0.02, P.FOREARM, off, fpv)
+			a.add_bevel_box(Vector3(0.24, 0.42, 0.22), MeshAcc.xf((E + W) * 0.5 + Vector3(sx * 0.03, 0.06, 0.06), Vector3(0, 0, sx * 8.0)), stone.darkened(0.08), 0.05, P.FOREARM, off, fpv)
+			a.add(MeshAcc.box(0.03, 0.3, 0.02), MeshAcc.xf((E + W) * 0.5 + Vector3(sx * 0.03, 0.06, 0.175)), seam, P.FOREARM, off, fpv)
+	# white fang and two tusks
 	var mz: Vector3 = c.muzzle
 	a.add(MeshAcc.cone(0.035, 0.16, 4), MeshAcc.xf(mz + Vector3(0.05, -0.08, 0.05), Vector3(180, 0, 0)), BONE, P.HEAD, 0.0, pv)
+	for sx: float in [-1.0, 1.0]:
+		a.add(MeshAcc.cone(0.03, 1.0, 4), MeshAcc.limb(mz + Vector3(sx * 0.08, -0.06, 0.02), mz + Vector3(sx * 0.13, 0.06, 0.12)), BONE, P.HEAD, 0.0, pv)
 
 
 ## Elder: old spears and broken shafts jutting from the back and shoulders,
@@ -340,10 +383,23 @@ static func _elder(a: MeshAcc, c: Dictionary, hi: bool) -> void:
 
 
 static func _spitter(a: MeshAcc, c: Dictionary, hi: bool) -> void:
-	var acid := Color(0.25, 0.82, 0.23, 0.35)
+	var acid := Color(0.3, 0.9, 0.2, 0.25)
 	var tt: Vector3 = c.t_top
-	var sac := Vector3(0, tt.y + 0.02, tt.z + 0.12)
-	a.add(MeshAcc.ball(0.13, 6 if hi else 4, 4 if hi else 3), MeshAcc.xf(sac, Vector3.ZERO, Vector3(1.0, 1.1, 1.0)), acid, P.SAC, 0.0, Vector2(sac.y, sac.z))
+	var sac := Vector3(0, tt.y + 0.01, tt.z + 0.14)
+	var spv := Vector2(sac.y, sac.z)
+	# swollen glowing sac with dark plated ribs around it
+	var start := a.v.size()
+	a.add(MeshAcc.ball(0.16, 7 if hi else 4, 5 if hi else 3), MeshAcc.xf(sac, Vector3.ZERO, Vector3(1.0, 1.05, 0.95)), acid, P.SAC, 0.0, spv)
+	a.jitter(start, 0.012, 21)
+	if hi:
+		for k in 3:
+			a.add(MeshAcc.cyl(0.165 - absf(k - 1) * 0.04, 0.022, -1.0, 10), MeshAcc.xf(sac + Vector3(0, (k - 1) * 0.09, 0), Vector3(0, 0, 0), Vector3(1.0, 1.0, 0.95)), c.get("cl", BLACK), P.SAC, 0.0, spv)
+		a.add(MeshAcc.cyl(0.012, 0.3, -1.0, 4), MeshAcc.xf(sac + Vector3(0, 0, 0.14), Vector3(0, 0, 0)), c.get("cl", BLACK), P.SAC, 0.0, spv)
+	# back-swept horns
+	var hd: Vector3 = c.head
+	var hpv := Vector2(tt.y, tt.z)
+	for sx: float in [-1.0, 1.0]:
+		a.add(MeshAcc.cone(0.022, 1.0, 4), MeshAcc.limb(hd + Vector3(sx * 0.04, 0.05, -0.02), hd + Vector3(sx * 0.09, 0.2, -0.14)), c.get("cl", BLACK), P.HEAD, 0.0, hpv)
 
 
 static func _burrower(a: MeshAcc, c: Dictionary, hi: bool) -> void:
@@ -363,13 +419,23 @@ static func _burrower(a: MeshAcc, c: Dictionary, hi: bool) -> void:
 	var pv := Vector2(tt.y, tt.z)
 	var hd := Vector3(0, 1.38, 0.06)
 	a.add(MeshAcc.ball(0.15, 6 if hi else 4, 4 if hi else 3), MeshAcc.xf(hd), DARK, P.HEAD, 0.0, pv)
-	a.add(MeshAcc.cyl(0.1, 0.03, -1.0, 8), MeshAcc.xf(hd + Vector3(0, 0, 0.14), Vector3(90, 0, 0)), Color(0.05, 0.02, 0.02), P.HEAD, 0.0, pv)
+	a.add(MeshAcc.cyl(0.11, 0.03, -1.0, 12), MeshAcc.xf(hd + Vector3(0, 0, 0.14), Vector3(90, 0, 0)), Color(1.0, 0.62, 0.12, 0.0), P.HEAD, 0.0, pv)
+	# the maw is a glowing wheel: dark spokes and hub over the ember light
+	for k in (8 if hi else 4):
+		var ang := TAU * k / (8.0 if hi else 4.0)
+		a.add(MeshAcc.box(0.018, 0.1, 0.02), MeshAcc.xf(hd + Vector3(cos(ang) * 0.05, sin(ang) * 0.05, 0.16), Vector3(0, 0, rad_to_deg(ang) - 90.0)), Color(0.08, 0.04, 0.03), P.HEAD, 0.0, pv)
+	a.add(MeshAcc.cyl(0.03, 0.03, -1.0, 8), MeshAcc.xf(hd + Vector3(0, 0, 0.165), Vector3(90, 0, 0)), Color(0.08, 0.04, 0.03), P.HEAD, 0.0, pv)
 	for t in (10 if hi else 6):
 		var ang := TAU * t / (10.0 if hi else 6.0)
 		var p := hd + Vector3(cos(ang) * 0.12, sin(ang) * 0.12, 0.14)
 		a.add(MeshAcc.cone(0.022, 1.0, 3), MeshAcc.limb(p, p + Vector3(-cos(ang) * 0.07, -sin(ang) * 0.07, 0.05)), Color(0.91, 0.53, 0.1, 0.5), P.HEAD, 0.0, pv)
-	# dirt mound it breaches from (stays on the surface while it burrows)
-	a.add(MeshAcc.cyl(0.6, 0.16, 0.35, 7), MeshAcc.xf(Vector3(0, 0.06, 0)), DIRT, P.MOUND)
+	# hexagonal stone mound it breaches from, ember light in the cracks
+	a.add(MeshAcc.cyl(0.62, 0.16, 0.5, 6), MeshAcc.xf(Vector3(0, 0.06, 0)), Color("4a3222"), P.MOUND)
+	a.add(MeshAcc.cyl(0.5, 0.02, -1.0, 6), MeshAcc.xf(Vector3(0, 0.145, 0)), Color("3a271b"), P.MOUND)
+	for k in (6 if hi else 3):
+		var ang := TAU * k / 6.0 + 0.5
+		a.add(MeshAcc.box(0.34, 0.02, 0.025), MeshAcc.xf(Vector3(cos(ang) * 0.36, 0.155, sin(ang) * 0.36), Vector3(0, -rad_to_deg(ang), 0)), Color(1.0, 0.5, 0.1, 0.2), P.MOUND)
+		a.add(MeshAcc.box(0.1, 0.03, 0.02), MeshAcc.xf(Vector3(cos(ang + 0.52) * 0.58, 0.1, sin(ang + 0.52) * 0.58), Vector3(0, -rad_to_deg(ang + 0.52) + 90.0, 0)), Color(1.0, 0.55, 0.12, 0.1), P.MOUND)
 	if hi:
 		for k in 5:
 			var ang := TAU * k / 5.0 + 0.4
@@ -382,11 +448,18 @@ static func _mother(a: MeshAcc, c: Dictionary, hi: bool) -> void:
 	var sp := Vector3(0, 1.75, -0.45)
 	var pv := Vector2(sp.y, sp.z)
 	var start := a.v.size()
-	a.add(MeshAcc.ball(1.0, 6 if hi else 4, 4 if hi else 3), MeshAcc.xf(sp, Vector3(10, 0, 0), Vector3(0.55, 0.75, 0.5)), SAC_D, P.SAC, 0.0, pv)
-	a.jitter(start, 0.08, 71)
+	a.add(MeshAcc.ball(1.0, 6 if hi else 4, 4 if hi else 3), MeshAcc.xf(sp, Vector3(10, 0, 0), Vector3(0.55, 0.75, 0.5)), Color(0.33, 0.14, 0.43, 0.9), P.SAC, 0.0, pv)
+	a.jitter(start, 0.1, 71)
 	start = a.v.size()
-	a.add(MeshAcc.ball(1.0, 5, 3), MeshAcc.xf(sp + Vector3(0.12, 0.25, -0.05), Vector3.ZERO, Vector3(0.35, 0.4, 0.38)), SAC_L, P.SAC, 0.0, pv)
+	a.add(MeshAcc.ball(1.0, 5, 3), MeshAcc.xf(sp + Vector3(0.12, 0.25, -0.05), Vector3.ZERO, Vector3(0.35, 0.4, 0.38)), Color(0.6, 0.3, 0.8, 0.7), P.SAC, 0.0, pv)
 	a.jitter(start, 0.06, 73)
+	# bone spikes bristling out of the crystal sac
+	if hi:
+		var dirs := [Vector3(0.0, 1.0, -0.3), Vector3(0.5, 0.8, -0.4), Vector3(-0.5, 0.8, -0.4), Vector3(0.7, 0.2, -0.6), Vector3(-0.7, 0.2, -0.6), Vector3(0.2, 0.5, -0.9), Vector3(-0.25, 0.6, -0.85)]
+		for k in dirs.size():
+			var d: Vector3 = (dirs[k] as Vector3).normalized()
+			var base := sp + Vector3(d.x * 0.5, d.y * 0.68, d.z * 0.46)
+			a.add(MeshAcc.cone(0.035, 1.0, 4), MeshAcc.limb(base, base + d * (0.28 + 0.06 * (k % 3))), BONE, P.SAC, 0.0, pv)
 	var spots := [Vector3(0.3, 0.2, -0.3), Vector3(-0.32, 0.0, -0.28), Vector3(0.15, -0.3, -0.38), Vector3(-0.1, 0.42, -0.25), Vector3(0.4, -0.15, -0.05), Vector3(-0.42, 0.3, 0.0)]
 	for k in (spots.size() if hi else 3):
 		a.add(MeshAcc.ball(0.06, 4, 2), MeshAcc.xf(sp + spots[k]), mag, P.SAC, float(k), pv)
@@ -410,5 +483,5 @@ static func _mother(a: MeshAcc, c: Dictionary, hi: bool) -> void:
 	for k in (7 if hi else 4):
 		var ang := -60.0 + k * (120.0 / (6.0 if hi else 3.0))
 		var base := hd + Vector3(sin(deg_to_rad(ang)) * 0.08, 0.08, -0.02 + cos(deg_to_rad(ang)) * 0.02)
-		var tip := base + Vector3(sin(deg_to_rad(ang)) * 0.12, 0.26 + 0.06 * cos(deg_to_rad(ang * 2.0)), -0.06)
+		var tip := base + Vector3(sin(deg_to_rad(ang)) * 0.16, 0.36 + 0.08 * cos(deg_to_rad(ang * 2.0)), -0.08)
 		a.add(MeshAcc.cone(0.025, 1.0, 3), MeshAcc.limb(base, tip), BONE, P.HEAD, 0.0, hpv)
