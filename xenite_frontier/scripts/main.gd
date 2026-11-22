@@ -31,6 +31,7 @@ var harvester: HarvesterSystem
 var cam: RTSCamera
 var hud: Hud
 var build: BuildBar
+var icons: ItemIcons
 var bench: BenchmarkRunner
 ## sandbox swarm pressure: aliens spawned per minute (ramps up at start)
 var target_count := 240
@@ -180,6 +181,15 @@ func _ready() -> void:
 		map.set_grid_visible(id != "")
 		if id != "": _select(-1))
 	build.inspector_action.connect(_inspector_action)
+	# shop / Inspector pictures rendered from the real models
+	icons = ItemIcons.new()
+	icons.name = "ItemIcons"
+	add_child(icons)
+	build.icons = icons
+	icons.icons_ready.connect(_on_icons_ready)
+	var icon_ids: Array = BuildBar.TOOLS.duplicate()
+	icon_ids.append("command_hab")
+	icons.generate.call_deferred(icon_ids)
 
 	_make_ghost()
 	RenderingServer.viewport_set_measure_render_time(get_viewport().get_viewport_rid(), true)
@@ -246,6 +256,14 @@ func _ready() -> void:
 	for arg in args:
 		if arg.begins_with("--screenshot="):
 			_screenshot_after(arg.split("=")[1])
+
+
+func _on_icons_ready() -> void:
+	build.apply_icons()
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--export-icons="):
+			var dir := arg.split("=")[1]
+			print("[icons] wrote %d pictures to %s" % [icons.export_png(dir), dir])
 
 
 # ------------------------------------------------------------------ run flow
@@ -660,7 +678,7 @@ func _inspector_info(c: int) -> Dictionary:
 			int(structures.core_hp), int(structures.core_max), colonists.alive(), colonists.pop_cap(),
 			colonists.count_role(ColonistSystem.Role.WORKER), colonists.count_role(ColonistSystem.Role.SOLDIER), colonists.wages_due(),
 			("\nTraining: %d" % colonists.training.size()) if not colonists.training.is_empty() else ""]
-		return {"text": t, "buttons": [{"label": "Recruit worker  %d" % int(rc.get("cost", 40)), "action": "recruit_worker", "enabled": economy.can_afford(int(rc.get("cost", 40)))}]}
+		return {"text": t, "icon": "command_hab", "buttons": [{"label": "Recruit worker  %d" % int(rc.get("cost", 40)), "action": "recruit_worker", "enabled": economy.can_afford(int(rc.get("cost", 40)))}]}
 	if not structures.ids.has(c):
 		return {}
 	var id: String = structures.ids[c]
@@ -683,7 +701,7 @@ func _inspector_info(c: int) -> Dictionary:
 		lines.append("[color=#ffd21a]UNDER CONSTRUCTION  %d%%[/color]" % int(structures.site_progress(c) * 100))
 		lines.append(("Builders: " + ", ".join(builders)) if not builders.is_empty() else "[color=#ff7a6a]Waiting for a free worker[/color]")
 		buttons.append({"label": "Cancel  +%d" % structures.sell_value(c), "action": "sell"})
-		return {"text": "\n".join(lines), "buttons": buttons}
+		return {"text": "\n".join(lines), "buttons": buttons, "icon": id}
 	var up := structures.upgrade_cost(c)
 	if structures.turrets.has(c):
 		var t: Turret = structures.turrets[c]
@@ -736,7 +754,7 @@ func _inspector_info(c: int) -> Dictionary:
 	if rc2 > 0:
 		buttons.append({"label": "Repair [R]  %d" % rc2, "action": "repair", "enabled": economy.can_afford(rc2)})
 	buttons.append({"label": "Sell  +%d" % structures.sell_value(c), "action": "sell"})
-	return {"text": "\n".join(lines), "buttons": buttons}
+	return {"text": "\n".join(lines), "buttons": buttons, "icon": id}
 
 
 func _update_ghost() -> void:

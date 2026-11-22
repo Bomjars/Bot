@@ -1,5 +1,17 @@
 # Changelog
 
+## M5a.4 – Item pictures in the UI
+
+### Added
+- **Pictures of every building and turret** in the shop (build bar), the tool card and the Inspector. They're rendered once at startup from the real in-game models: an off-screen viewport per item, transparent background, three-quarter view, warm key light and cool fill. They always match the models (tier I), and the Command Hab gets one too. Each picture costs one frame at startup; headless runs skip rendering and fall back to text.
+- Shop buttons now show picture, `key  name` and the Biomass cost (red when you can't afford it).
+- Art hook: `"icon": "res://art/icons/<name>.png"` on a structure or turret replaces the rendered picture with your own image.
+- Dev: `-- --export-icons=<folder>` writes every picture as a PNG.
+
+### Changed
+- The tool card moved to the bottom-right (the Inspector's spot; they are never open together), clear of the help text and event log.
+- Picking a tool (keyboard, `--tool=`) switches the build bar to that tool's category.
+
 ## M5a.3 – Lineup v4 movement notes (concept sheet)
 
 ### Added

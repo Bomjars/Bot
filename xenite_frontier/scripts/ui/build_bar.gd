@@ -1,6 +1,7 @@
 class_name BuildBar
 extends CanvasLayer
-## Bottom build bar (keys 1-9, 0 / LB-RB) with Biomass costs, an info card
+## Bottom build bar (keys 1-9, 0 / LB-RB): a picture of each building /
+## turret (ItemIcons renders the real models), its name and Biomass cost, an info card
 ## for the selected tool that shows its counters (readable with a controller -
 ## no hover needed), the structure Inspector (upgrade / repair / sell) and the
 ## Intel panel: the full damage-type vs strain counter table.
@@ -22,6 +23,12 @@ var economy: Economy
 var structures: Structures
 var _cat_buttons := {}
 var _buttons: Array[Button] = []
+var _btn_icon: Array[TextureRect] = []
+var _btn_name: Array[Label] = []
+var _btn_cost: Array[Label] = []
+var icons: ItemIcons
+var _info_icon: TextureRect
+var _insp_icon: TextureRect
 var _info: RichTextLabel
 var _info_panel: PanelContainer
 var _intel: PanelContainer
@@ -76,10 +83,36 @@ func _ready() -> void:
 		var b := Button.new()
 		b.focus_mode = Control.FOCUS_NONE
 		b.toggle_mode = true
-		b.custom_minimum_size = Vector2(116, 60)
-		b.autowrap_mode = TextServer.AUTOWRAP_WORD
-		b.add_theme_font_size_override("font_size", 14)
+		b.custom_minimum_size = Vector2(112, 118)
 		b.tooltip_text = tool_text(id, false)
+		# picture on top, then "key  name", then the cost
+		var v := VBoxContainer.new()
+		v.set_anchors_preset(Control.PRESET_FULL_RECT)
+		v.offset_left = 4
+		v.offset_right = -4
+		v.offset_top = 3
+		v.offset_bottom = -6
+		v.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		v.add_theme_constant_override("separation", 0)
+		b.add_child(v)
+		var tr := TextureRect.new()
+		tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		tr.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		v.add_child(tr)
+		var nl := Label.new()
+		nl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		nl.add_theme_font_size_override("font_size", 13)
+		nl.clip_text = true
+		v.add_child(nl)
+		var cl := Label.new()
+		cl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		cl.add_theme_font_size_override("font_size", 13)
+		v.add_child(cl)
+		_btn_icon.append(tr)
+		_btn_name.append(nl)
+		_btn_cost.append(cl)
 		var accent := Color(0.6, 0.62, 0.66)
 		if d.has("damage_type"):
 			accent = GameConfig.damage_color(GameConfig.damage_index(d.damage_type))
@@ -110,16 +143,24 @@ func _ready() -> void:
 
 	_info_panel = PanelContainer.new()
 	_info_panel.add_theme_stylebox_override("panel", UiStyle.panel())
-	_info_panel.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	# bottom-right, where the Inspector goes (never open at the same time),
+	# clear of the help text and event log on the left
+	_info_panel.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	_info_panel.grow_horizontal = Control.GROW_DIRECTION_BEGIN
 	_info_panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	_info_panel.position = Vector2(12, -110)
+	_info_panel.position = Vector2(-12, -170)
 	root.add_child(_info_panel)
+	var ih := HBoxContainer.new()
+	ih.add_theme_constant_override("separation", 8)
+	_info_panel.add_child(ih)
+	_info_icon = _picture(112)
+	ih.add_child(_info_icon)
 	_info = RichTextLabel.new()
 	_info.bbcode_enabled = true
 	_info.fit_content = true
 	_info.custom_minimum_size = Vector2(340, 0)
 	_info.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_info_panel.add_child(_info)
+	ih.add_child(_info)
 	_info_panel.visible = false
 
 	_build_inspector(root)
@@ -145,10 +186,15 @@ func _build_inspector(root: Control) -> void:
 	_insp_panel.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
 	_insp_panel.grow_horizontal = Control.GROW_DIRECTION_BEGIN
 	_insp_panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	_insp_panel.position = Vector2(-12, -110)
+	_insp_panel.position = Vector2(-12, -170)
 	root.add_child(_insp_panel)
+	var hh := HBoxContainer.new()
+	hh.add_theme_constant_override("separation", 8)
+	_insp_panel.add_child(hh)
+	_insp_icon = _picture(96)
+	hh.add_child(_insp_icon)
 	var v := VBoxContainer.new()
-	_insp_panel.add_child(v)
+	hh.add_child(v)
 	_insp_text = RichTextLabel.new()
 	_insp_text.bbcode_enabled = true
 	_insp_text.fit_content = true
@@ -158,6 +204,33 @@ func _build_inspector(root: Control) -> void:
 	_insp_row = HBoxContainer.new()
 	v.add_child(_insp_row)
 	_insp_panel.visible = false
+
+
+func _picture(px: int) -> TextureRect:
+	var tr := TextureRect.new()
+	tr.custom_minimum_size = Vector2(px, px)
+	tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	tr.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	tr.visible = false
+	return tr
+
+
+## Called when ItemIcons has rendered the pictures.
+func apply_icons() -> void:
+	if icons == null:
+		return
+	for k in TOOLS.size():
+		_btn_icon[k].texture = icons.get_icon(TOOLS[k])
+	if selected != "":
+		_set_picture(_info_icon, selected)
+
+
+func _set_picture(tr: TextureRect, id: String) -> void:
+	var tex: Texture2D = icons.get_icon(id) if icons and id != "" else null
+	tr.texture = tex
+	tr.visible = tex != null
 
 
 func _insp_button(parent: Control, label: String, action: String, enabled: bool) -> Button:
@@ -220,11 +293,16 @@ func tool_text(id: String, bbcode := true) -> String:
 
 func select(id: String) -> void:
 	selected = "" if id == selected else id
+	if selected != "" and not selected in CATEGORIES[category]:
+		for cat: String in CATEGORIES:
+			if selected in CATEGORIES[cat]:
+				set_category(cat)
 	for k in TOOLS.size():
 		_buttons[k].set_pressed_no_signal(TOOLS[k] == selected)
 	_info_panel.visible = selected != ""
 	if selected != "":
 		_info.text = tool_text(selected)
+		_set_picture(_info_icon, selected)
 	tool_changed.emit(selected)
 
 
@@ -240,7 +318,7 @@ func set_category(cat: String) -> void:
 	var list: Array = CATEGORIES[cat]
 	for k in TOOLS.size():
 		_buttons[k].visible = TOOLS[k] in list
-		_buttons[k].text = "%d %s\n%d" % [list.find(TOOLS[k]) + 1, _def(TOOLS[k]).get("name", TOOLS[k]), _cost(TOOLS[k])]
+		_label_button(k, list)
 	for c: String in _cat_buttons:
 		_cat_buttons[c].set_pressed_no_signal(c == cat)
 
@@ -275,9 +353,19 @@ func refresh_affordability() -> void:
 	var list: Array = CATEGORIES[category]
 	for k in TOOLS.size():
 		var ok := economy.can_afford(_cost(TOOLS[k]))
-		_buttons[k].modulate = Color.WHITE if ok else Color(1, 1, 1, 0.45)
+		_buttons[k].modulate = Color.WHITE if ok else Color(1, 1, 1, 0.5)
 		if TOOLS[k] in list:
-			_buttons[k].text = "%d %s\n%d" % [list.find(TOOLS[k]) + 1, _def(TOOLS[k]).get("name", TOOLS[k]), _cost(TOOLS[k])]
+			_label_button(k, list)
+
+
+## "key  name" and the Biomass cost (green when affordable, red when not).
+func _label_button(k: int, list: Array) -> void:
+	var id: String = TOOLS[k]
+	_btn_name[k].text = "%d  %s" % [list.find(id) + 1, _def(id).get("name", id)]
+	var cost := _cost(id)
+	_btn_cost[k].text = "%d Biomass" % cost
+	var ok := economy == null or economy.can_afford(cost)
+	_btn_cost[k].add_theme_color_override("font_color", Color(0.55, 1.0, 0.5) if ok else Color(1.0, 0.5, 0.42))
 
 
 func toast(text: String) -> void:
@@ -299,6 +387,7 @@ func show_inspector(info: Dictionary) -> void:
 		_insp_sig = ""
 		return
 	_insp_text.text = info.text
+	_set_picture(_insp_icon, str(info.get("icon", "")))
 	var buttons: Array = info.get("buttons", [])
 	var sig := str(buttons)
 	if sig == _insp_sig:

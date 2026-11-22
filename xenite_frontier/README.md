@@ -423,10 +423,20 @@ xenite_frontier/
 * **Animation on the GPU.** Gait swing and bob happen in the vertex shader,
   phased by `INSTANCE_ID`.
 
-### Using your own models
+### Using your own models and icons
 Each strain in `data/aliens.json` accepts `"mesh": "res://art/<name>.glb"` to
 replace its procedural model. `art/README.md` lists the requirements:
 orientation, triangle budget, vertex colours and part ids for the animation rig.
+
+**Shop and Inspector pictures** are rendered at startup from each item's real
+model, so they always match what you build. To use your own painting instead,
+add `"icon": "res://art/icons/<name>.png"` to that building in
+`data/structures.json` (or turret in `data/turrets.json`). Square PNGs with a
+transparent background look best; 192×192 or larger. To get the current
+pictures as a starting point, run with `-- --export-icons=<folder>`. It writes
+one PNG per item, including `command_hab.png`.
+
+![Shop pictures rendered from the models](docs/item_icons.png)
 
 ---
 
@@ -443,6 +453,9 @@ orientation, triangle budget, vertex colours and part ids for the animation rig.
 See `CHANGELOG.md` for per-milestone notes.
 
 ## Screenshots (software-rendered)
+
+![Shop with item pictures, the tool card on the right](docs/m5a4_shop.png)
+![Inspector with the selected turret's picture](docs/m5a4_inspector.png)
 
 ![Lineup v4: Stalker, Mauler (charging), Spitter (sac tell), Snatcher (dragging)](docs/m5a3_lineup_a.png)
 ![Lineup v4: Burrower (breach tell), Brood Mother with young, Mauler Elder (roar), runt](docs/m5a3_lineup_b.png)
