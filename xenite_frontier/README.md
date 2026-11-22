@@ -55,6 +55,33 @@ own `.glb` models, described in `art/README.md`.
 
 Buildings marked "needs 1 worker" only work while staffed.
 
+### How each alien moves and fights (Lineup v4 movement notes)
+Built from your concept sheet *"predatory/primal – Humanoid Lineup v4 ·
+movement notes"* (`docs/concept_humanoid_lineup_v4.svg`). Every strain's
+**SPEED and SIZE ratings (1–5 squares)** are in `data/aliens.json` as
+`speed_rating` / `size_rating`. The game turns them into numbers through the
+`ratings` block: speed = rating × 1.65 m/s, and the model is scaled to
+1.2 / 1.6 / 1.9 / 2.25 / 2.7 m tall for ratings 1–5. Change a rating and both
+follow.
+
+| Strain | Speed / Size | What it does | How to answer it |
+|---|---|---|---|
+| Stalker | 4 / 1 | lopes upright, drops to all fours to sprint; hunts in **packs of 20–50** that flow around obstacles; head twitches | Incendiary, Shock |
+| Stalker runt | 5 / 1 (×0.62) | Brood Mother young: **skitters in bursts, freezes, then pounces**; climbs corpse piles at **45% of the usual height**, so it is always first over a wall | keep piles away from walls |
+| Mauler | 2 / 4 | heavy knuckle-walk, **the camera shakes with each step**. Locks onto a door ahead, winds up for 0.7 s, then **charges in a straight line it cannot turn out of**: 260 damage to what it hits. A **blast door** takes only 40% and **stuns it for 3.5 s** | bait it into blast doors, then Piercing |
+| Mauler Elder | 1 / 5 | old spears in its back; plods, then **stops to roar (1.4 s tell)**: every alien within 11 m is **enraged for 7 s** (×1.4 speed, ×1.6 structure damage, eyes burn red). Fist sweeps hit the wall cells either side too | kill it before it reaches the swarm's front |
+| Spitter | 2 / 2 | hangs back at **max range (9 m)**, preferring turrets; **tell: stops and inflates its throat sac for 1 s**, then lobs acid over walls. The pool burns for **4 s**, hurting structures and colonists in it. **Three shots drain the sac**, then it retreats to refill (6 s) | Mortar out-ranges it; strike during the tell |
+| Snatcher | 5 / 2 | ignores turrets and hunts the **most isolated colonist it can smell**: each companion within 6 m or turret within 8 m makes a colonist 3.5 m "further away". **Zig-zags under fire.** Grabs an ankle and **drags backward at half speed**, leaving a blood trail | keep workers in pairs near guns; kill it and the colonist crawls home |
+| Burrower | 3 / 3 | swims underground as a dirt ripple. **2 s tell: the ground cracks and amber light leaks out**, then it erupts behind your walls, rakes for 3 s and sinks again. **Seismic hits force it up early, stunned for 2.5 s** | Seismic Spike near the core |
+| Brood Mother | 1 / 5 | lumbers forward and **stops to eat every corpse** she passes, growing each time. **Young cling to her sac** (6 at the start, +2 per meal, 8 max) and **drop off as runts every 3 s**. She topples on death; the sac spills dying young and a huge ichor pool, and flies arrive within seconds | clear corpses from her path; Piercing, Explosive |
+
+Dev: `-- --strain=<id>` makes every wave (and sandbox spawn) that strain,
+`-- --start-wave=N` starts at wave N, and `-- --mode-trace` prints each
+strain's behaviour states every 5 s. Photo modes: `-- --showcase` (every
+strain in idle / run / attack / tell poses) and `-- --buildings` (every
+building next to the Command Hab), both with `--pair=N` to pan and
+`--screenshot=file.png`.
+
 ### A more realistic horde
 * Stride phase advances with the **distance actually walked**, so feet never
   slide.
@@ -123,16 +150,16 @@ M4 adds the people you are defending, and the swarm's hunger.
 ### Abduction: kill the carrier
 * Anyone outside the core is **exposed**: walking to a post, bailing out of a
   destroyed turret, or limping home.
-* **Snatchers and Burrowers** grab exposed colonists and **drag them
-  toward the nearest canyon mouth** at 70% speed, leaving a blood trail.
-  **Snatchers hunt**: they sense colonists within 14 m (their own flow field)
-  and even **rip crews out of turrets**.
+* **Snatchers** grab exposed colonists and **drag them backward toward
+  the nearest canyon mouth** at half speed, leaving a blood trail.
+  They hunt the most isolated colonist they can smell within 14 m (their own
+  flow field). Since Lineup v4 they ignore turrets and their crews.
 * Turrets **prioritise carriers.** Kill the carrier and the colonist drops,
   wounded. They limp back to the core and recover for 40 s before returning to
   duty. Colony Charter medics will shorten this in M6. If the carrier reaches
   the map edge, the colonist is gone, and that turret loses its crew for good.
-* **Maulers and Brood Mothers** don't carry. They maul exposed colonists to
-  death, leaving remains.
+* **Maulers, Elders, Burrowers and Brood Mothers** don't carry. They maul
+  exposed colonists, leaving remains.
 
 ### Feeding: the swarm grows
 * Aliens standing on corpses stop to eat (per-strain `feed_rate` in
@@ -254,11 +281,13 @@ shown in game in the build card and the Intel panel (**I**).
 | Strain | Trait | Weak to | Resists |
 |---|---|---|---|
 | Stalker | fast swarm, low HP | Incendiary, Shock | Piercing |
-| Mauler | armoured; x4 damage to blast doors | Piercing | Ballistic |
-| Spitter | stops at range and lobs acid at structures | Explosive | Shock |
-| Snatcher | fast; dodges 35% of aimed shots | Shock, Ballistic | Explosive |
-| Burrower | tunnels under walls; only Seismic reaches it underground | Seismic | Incendiary |
-| Brood Mother | boss; births Stalker broods | Piercing, Explosive | Shock |
+| Stalker runt | Brood young; bursts, pounces, climbs low piles | Incendiary, Shock | Piercing |
+| Mauler | armoured; charges doors in a straight line | Piercing | Ballistic |
+| Mauler Elder | roars to enrage nearby aliens; sweeping fists | Piercing | Ballistic |
+| Spitter | 1 s sac tell, lobs acid that pools for 4 s | Explosive | Shock |
+| Snatcher | fast; dodges 35% of aimed shots; hunts isolated colonists | Shock, Ballistic | Explosive |
+| Burrower | tunnels under walls; only Seismic reaches it underground; 2 s ground-crack tell | Seismic | Incendiary |
+| Brood Mother | boss; eats every corpse, sheds young as runts | Piercing, Explosive | Shock |
 
 | Turret | Type | Behaviour |
 |---|---|---|
@@ -279,10 +308,12 @@ shown in game in the build card and the Intel panel (**I**).
   When a pile beside a wall reaches **1.6 m**, the wall becomes climbable.
   It tints green, its path cost drops, and the swarm streams over the top.
   Clear kill zones away from your walls.
-* **Spitters** stop up to 9 m short and shell structures with acid.
-  **Burrowers** follow a second flow field where only rock blocks, and surface
+* **Spitters** stop up to 9 m short (turrets first) and lob acid over walls,
+  or at the Command Hab if nothing stands in between.
+  **Burrowers** follow a second flow field where only rock blocks, and breach
   8 m from the core or when a Seismic Spike slams them.
-  **Brood Mothers** spawn 4 Stalkers every 7 s.
+  **Maulers** charge the first door or wall 3–12 m ahead in a straight line.
+  **Brood Mothers** drop one runt every 3 s while they still carry young.
 * Losing the core = **OUTPOST OVERRUN**. Press **R** to rebuild.
 
 ### Swarm pressure (sandbox)
@@ -412,6 +443,12 @@ orientation, triangle budget, vertex colours and part ids for the animation rig.
 See `CHANGELOG.md` for per-milestone notes.
 
 ## Screenshots (software-rendered)
+
+![Lineup v4: Stalker, Mauler (charging), Spitter (sac tell), Snatcher (dragging)](docs/m5a3_lineup_a.png)
+![Lineup v4: Burrower (breach tell), Brood Mother with young, Mauler Elder (roar), runt](docs/m5a3_lineup_b.png)
+![Wave 6: Elders and runts in the swarm legend, the Outpost Buildings v1 compound](docs/m5a3_wave6.png)
+![Outpost Buildings v1 in game](docs/m5a2_buildings_a.png)
+![Outpost Buildings v1: colony buildings and a construction site](docs/m5a2_buildings_b.png)
 
 ![Humanoid Lineup v3 in game: Stalkers, Maulers, Spitters + corpses](docs/m5a1_lineup_a.png)
 ![Humanoid Lineup v3: Snatchers, Burrowers breaching, Brood Mothers](docs/m5a1_lineup_b.png)

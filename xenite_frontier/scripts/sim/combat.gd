@@ -39,8 +39,27 @@ var _growth := 0.12
 var _max_size := 1.9
 var _hp_per_meal := 0.35
 var _shells: Array[Dictionary] = []
+var _pool_s := 4.0
+var _pool_dps := 9.0
+var _pool_r := 1.3
 var _acid: Array[Dictionary] = []
+# Spitter acid pools burning on the ground (packed: x, z, seconds left, cell)
+var _pool_x := PackedFloat32Array()
+var _pool_z := PackedFloat32Array()
+var _pool_t := PackedFloat32Array()
+var _pool_c := PackedInt32Array()
+const MAX_POOLS := 48
+const MAX_ACID := 160       # acid globs in flight with visuals; the rest land at once
+var _fx_budget := 0         # behaviour particles left this frame
+var _flies: Array[Dictionary] = []    # fly swarms over Brood Mother remains
 var _body_colors: Array[Color] = []
+var roars := 0
+var charges_landed := 0
+var charges_on_doors := 0
+var breaches := 0
+var spits := 0
+## heavy footfalls / impacts / roars this frame for camera shake: [x, z, strength]...
+var shake_events := PackedFloat32Array()
 
 
 func setup(s: Swarm, m: OutpostMap, st: Structures, effects: Fx, c: Corpses) -> void:
@@ -54,12 +73,19 @@ func setup(s: Swarm, m: OutpostMap, st: Structures, effects: Fx, c: Corpses) -> 
 	kills_by_alien.fill(0)
 	damage_by_type.resize(GameConfig.DMG_COUNT)
 	damage_by_type.fill(0.0)
+	for d: Dictionary in GameConfig.alien_defs:
+		var rg: Dictionary = d.get("ranged", {})
+		if rg.has("pool_seconds"):
+			_pool_s = float(rg.pool_seconds)
+			_pool_dps = float(rg.get("pool_dps", _pool_dps))
+			_pool_r = float(rg.get("pool_radius", _pool_r))
 	var fd := GameConfig.feeding
 	_growth = float(fd.get("growth_per_meal", _growth))
 	_max_size = float(fd.get("max_size", _max_size))
 	_hp_per_meal = float(fd.get("hp_per_meal", _hp_per_meal))
 	var cols := {"stalker": Color("2b2c29"), "mauler": Color("4b4f4c"), "spitter": Color("2b2c29"),
-		"snatcher": Color("2b2c29"), "burrower": Color("2b2c29"), "brood_mother": Color("3a2433")}
+		"snatcher": Color("2b2c29"), "burrower": Color("2b2c29"), "brood_mother": Color("3a2433"),
+		"elder": Color("3a3b38"), "runt": Color("2b2c29")}
 	for p in swarm.pools:
 		_body_colors.append(cols.get(p.def.id, Color.GRAY))
 
@@ -74,6 +100,13 @@ func reset_stats() -> void:
 	damage_by_type.fill(0.0)
 	_shells.clear()
 	_acid.clear()
+	_pool_x.clear(); _pool_z.clear(); _pool_t.clear(); _pool_c.clear()
+	_flies.clear()
+	roars = 0
+	charges_landed = 0
+	charges_on_doors = 0
+	breaches = 0
+	spits = 0
 	_dead.clear()
 	_dead_cause.clear()
 
@@ -89,10 +122,22 @@ func process_swarm_events() -> void:
 	structures.damage_core(swarm.core_damage)
 	var sp := swarm.out_spit
 	for k in range(0, sp.size(), 4):
-		var from := Vector3(sp[k], 0.9, sp[k + 1])
+		var from := Vector3(sp[k], 1.5, sp[k + 1])
 		var cell := int(sp[k + 2])
-		var to := map.cell_ground(cell) + Vector3(0, map.sheight[cell] * 0.7, 0)
-		_acid.append({"from": from, "to": to, "t": 0.0, "T": 0.6 + from.distance_to(to) * 0.05, "cell": cell, "dmg": sp[k + 3]})
+		# cell -1: lobbed at the Command Hab itself
+		var to := map.cell_ground(cell) + Vector3(0, map.sheight[cell] * 0.7, 0) if cell >= 0 \
+			else map.core_center + Vector3(rng.randf_range(-0.9, 0.9), 1.0, rng.randf_range(-0.9, 0.9))
+		spits += 1
+		if _acid.size() >= MAX_ACID:
+			_acid_land(cell, sp[k + 3], to)   # huge swarms: skip the flight
+			continue
+		# lobbed in a high arc over the walls
+		_acid.append({"from": from, "to": to, "t": 0.0, "T": 0.8 + from.distance_to(to) * 0.06, "cell": cell, "dmg": sp[k + 3]})
+	shake_events.clear()
+	var st := swarm.out_step
+	for k in range(0, st.size(), 3):
+		shake_events.append(st[k]); shake_events.append(st[k + 1]); shake_events.append(st[k + 2])
+	_process_acts()
 	var ev := swarm.out_eat
 	for k in range(0, ev.size(), 2):
 		var m := corpses.eat_one(ev[k + 1])
@@ -109,17 +154,143 @@ func process_swarm_events() -> void:
 			if bc < 0 or map.blocked[bc] or swarm.field.dist[bc] >= FlowField.UNREACHABLE:
 				bx = br[k]
 				bz = br[k + 1]
+			# a young drops off her sac as a Stalker runt (its own strain)
 			swarm.spawn_at(mother.brood_type, bx, bz)
-			# brood young are "runts": small Stalkers
-			var bp := swarm.pools[mother.brood_type]
-			var bi := bp.count - 1
-			bp.size[bi] *= 0.62
-			bp.hp[bi] *= 0.6
-			var bo := bi * AlienPool.STRIDE
-			for kk in [0, 5, 10]:
-				bp.buf[bo + kk] *= 0.62
-		fx.burst(Vector3(br[k], 1.0, br[k + 1]), mother.ichor, 8, 3.0, 0.12, 0.6)
+		fx.burst(Vector3(br[k], 1.6, br[k + 1]), mother.ichor, 6, 2.5, 0.1, 0.5)
 	combat_usec = Time.get_ticks_usec() - t0
+
+
+## Behaviour events from the swarm step (Lineup v4 tells and actions).
+func _process_acts() -> void:
+	var ev := swarm.out_act
+	var budget := 2   # visual events per frame (a 10k swarm can fire hundreds)
+	for k in range(0, ev.size(), 5):
+		var kind := int(ev[k])
+		if kind == Swarm.Act.ROAR:
+			pass   # always applied (gameplay)
+		elif kind == Swarm.Act.IMPACT:
+			charges_landed += 1
+			if ev[k + 3] > 0.5:
+				charges_on_doors += 1
+			if budget <= 0:
+				continue
+		elif kind == Swarm.Act.ERUPT:
+			breaches += 1
+			if budget <= 0:
+				continue
+		elif budget <= 0:
+			continue
+		budget -= 1
+		var at := Vector3(ev[k + 1], 0.0, ev[k + 2])
+		at.y = map.height_at(at.x, at.z)
+		var t := int(ev[k + 4])
+		var p := swarm.pools[t]
+		match kind:
+			Swarm.Act.CRACK:
+				# the ground splits; amber light leaks out of the cracks
+				fx.splat(at, Color(0.16, 0.1, 0.05), 0.9, 0.0)
+				fx.burst(at + Vector3(0, 0.1, 0), Color(0.35, 0.24, 0.14, 0.0), 6, 1.5, 0.08, 0.6, 1.0)
+			Swarm.Act.ERUPT:
+				fx.burst(at + Vector3(0, 0.2, 0), Color(0.33, 0.22, 0.12, 0.0), 14, 6.0, 0.18, 1.1, 1.0, 0.9)
+				fx.burst(at + Vector3(0, 0.3, 0), Color(1.0, 0.55, 0.1, 0.9), 6, 4.0, 0.07, 0.5, 0.6, 0.9)
+				shake_events.append(at.x); shake_events.append(at.z); shake_events.append(0.35)
+			Swarm.Act.SINK:
+				fx.burst(at + Vector3(0, 0.1, 0), Color(0.33, 0.22, 0.12, 0.0), 10, 3.0, 0.12, 0.8, 1.0)
+			Swarm.Act.IMPACT:
+				var door := ev[k + 3] > 0.5
+				fx.burst(at + Vector3(0, 1.0, 0), Color(1.0, 0.85, 0.5, 1.0), 14, 7.0, 0.06, 0.35, 0.8)
+				fx.burst(at + Vector3(0, 0.8, 0), Color(0.3, 0.29, 0.27, 0.0), 12, 4.0, 0.18, 1.0, 1.0)
+				fx.float_text(at + Vector3(0, 2.4, 0), "STUNNED" if door else "CRASH", Color(1.0, 0.8, 0.3) if door else Color(1.0, 0.45, 0.3))
+				shake_events.append(at.x); shake_events.append(at.z); shake_events.append(1.2)
+			Swarm.Act.ROAR:
+				roars += 1
+				var r := p.roar_radius
+				# enrage everything in range (the query result is reused, so read it
+				# straight away; a dense 10k swarm is capped at 600 per roar)
+				var hits := query_circle(at.x, at.z, r, false)
+				var dur := p.roar_duration
+				for n in mini(hits.size(), 600):
+					var h := hits[n]
+					var q := swarm.pools[h >> SHIFT]
+					var qi := h & MASK
+					if q.rage[qi] < dur:
+						q.rage[qi] = dur
+				for a in 18:
+					var ang := TAU * a / 18.0
+					fx.particle(at + Vector3(0, 1.8, 0), Vector3(cos(ang), 0.15, sin(ang)) * r * 0.9, Color(1.0, 0.15, 0.08, 0.7), 0.16, 1.0, 0.0)
+				fx.float_text(at + Vector3(0, 3.6, 0), "ROAR", Color(1.0, 0.25, 0.2))
+				shake_events.append(at.x); shake_events.append(at.z); shake_events.append(0.9)
+			Swarm.Act.TELL_SPIT:
+				fx.burst(at + Vector3(0, 1.6 * float(p.def.size), 0), Color(0.4, 1.0, 0.25, 0.6), 3, 0.8, 0.05, 0.8, 0.5)
+
+
+## Ongoing behaviour effects, a few dozen aliens at most: Burrower cracks
+## glowing during the breach tell, blood trails behind Snatchers dragging a
+## colonist, flies over a Brood Mother's remains.
+var _bfx_frame := 0
+func behaviour_fx(dt: float) -> void:
+	_fx_budget = 12
+	_bfx_frame += 1
+	var scan := _bfx_frame % 3 == 0   # the per-alien scans run every 3rd frame
+	var sdt := dt * 3.0
+	for p in swarm.pools:
+		if not scan:
+			break
+		if p.burrows:
+			for i in p.count:
+				if _fx_budget <= 0:
+					break
+				if p.mode[i] == AlienPool.Mode.TELL and rng.randf() < sdt * 14.0:
+					_fx_budget -= 1
+					var a := rng.randf() * TAU
+					var r := rng.randf_range(0.2, 0.9)
+					var at := Vector3(p.px[i] + cos(a) * r, 0.0, p.pz[i] + sin(a) * r)
+					at.y = map.height_at(at.x, at.z) + 0.05
+					fx.particle(at, Vector3(0, rng.randf_range(0.6, 1.6), 0), Color(1.0, 0.55, 0.1, 0.9), 0.07, 0.5, -0.1)
+					if rng.randf() < 0.3:
+						fx.particle(at, Vector3(rng.randf_range(-0.6, 0.6), 1.5, rng.randf_range(-0.6, 0.6)), Color(0.33, 0.22, 0.12, 0.0), 0.06, 0.6, 1.0)
+		elif p.drag_mult > 0.0:
+			for i in p.count:
+				if p.carry[i] >= 0 and rng.randf() < sdt * 3.5 and _fx_budget > 0:
+					_fx_budget -= 1
+					fx.splat(Vector3(p.px[i] + rng.randf_range(-0.2, 0.2), 0.0, p.pz[i] + rng.randf_range(-0.2, 0.2)), Color(0.45, 0.02, 0.02), rng.randf_range(0.12, 0.22), 0.0)
+	# acid pools burn for pool_seconds: structures in them and colonists
+	# standing in them take damage
+	var k := 0
+	var hurt := _pool_dps * dt
+	while k < _pool_x.size():
+		var t := _pool_t[k] - dt
+		if t <= 0.0:
+			_pool_x.remove_at(k); _pool_z.remove_at(k); _pool_t.remove_at(k); _pool_c.remove_at(k)
+			continue
+		_pool_t[k] = t
+		var cell := _pool_c[k]
+		if cell >= 0 and map.kind[cell] == OutpostMap.Kind.STRUCT:
+			structures.damage(cell, hurt)
+		if colonists:
+			colonists.hurt_area(Vector3(_pool_x[k], 0.0, _pool_z[k]), _pool_r, hurt, "acid")
+		if _fx_budget > 0 and rng.randf() < dt * 10.0:
+			_fx_budget -= 1
+			var a := rng.randf() * TAU
+			var r := rng.randf() * _pool_r
+			var at := Vector3(_pool_x[k] + cos(a) * r, 0.0, _pool_z[k] + sin(a) * r)
+			at.y = map.height_at(at.x, at.z) + 0.05
+			fx.particle(at, Vector3(0, rng.randf_range(0.3, 0.9), 0), Color(0.5, 1.0, 0.2, 0.9), 0.06, 0.4, -0.2)
+		k += 1
+	# flies arrive over a Brood Mother's remains after a few seconds
+	k = 0
+	while k < _flies.size():
+		var fl := _flies[k]
+		fl.t += dt
+		var at: Vector3 = fl.pos
+		if fl.t > 2.5 and rng.randf() < dt * 30.0:
+			var a := rng.randf() * TAU
+			var r := rng.randf_range(0.3, 2.2)
+			fx.particle(at + Vector3(cos(a) * r, rng.randf_range(0.4, 1.6), sin(a) * r), Vector3(-sin(a), rng.randf_range(-0.3, 0.3), cos(a)) * rng.randf_range(1.0, 2.5), Color(0.03, 0.03, 0.03, 0.0), 0.035, 0.6, 0.0)
+		if fl.t > float(fl.life):
+			_flies.remove_at(k)
+			continue
+		k += 1
 
 
 func build_grid() -> void:
@@ -164,14 +335,39 @@ func tick_projectiles(dt: float) -> void:
 		var from: Vector3 = a.from
 		var to: Vector3 = a.to
 		var p := from.lerp(to, minf(k, 1.0))
-		p.y += sin(minf(k, 1.0) * PI) * 2.5
-		fx.particle(p, Vector3.ZERO, Color(0.5, 1.0, 0.2, 0.9), 0.2, 0.1, 0.0)
+		p.y += sin(minf(k, 1.0) * PI) * 3.0
+		if (i + Engine.get_process_frames()) & 1 == 0 and i < 60:
+			fx.particle(p, Vector3.ZERO, Color(0.5, 1.0, 0.2, 0.9), 0.2, 0.12, 0.0)
 		if k >= 1.0:
-			structures.damage(a.cell, a.dmg)
-			fx.burst(to, Color(0.5, 1.0, 0.2, 0.8), 8, 2.5, 0.1, 0.5, 1.0)
+			_acid_land(a.cell, a.dmg, to)
 			_acid.remove_at(i)
 			continue
 		i += 1
+
+
+## An acid glob lands: impact damage, then a pool that burns for
+## pool_seconds. Pools landing close to a burning one just refresh it.
+func _acid_land(cell: int, dmg: float, to: Vector3) -> void:
+	if cell >= 0:
+		structures.damage(cell, dmg)
+	else:
+		structures.damage_core(dmg)
+	var r2 := _pool_r * _pool_r
+	for k in _pool_x.size():
+		var dx := _pool_x[k] - to.x
+		var dz := _pool_z[k] - to.z
+		if dx * dx + dz * dz < r2:
+			_pool_t[k] = _pool_s
+			return
+	fx.burst(to, Color(0.5, 1.0, 0.2, 0.8), 8, 2.5, 0.1, 0.5, 1.0)
+	if _pool_x.size() >= MAX_POOLS:
+		return
+	var gp := Vector3(to.x, map.height_at(to.x, to.z), to.z)
+	fx.splat(gp, Color(0.45, 0.95, 0.15), 0.9, 0.25)
+	_pool_x.append(to.x)
+	_pool_z.append(to.z)
+	_pool_t.append(_pool_s)
+	_pool_c.append(cell)
 
 
 ## Feeding: the alien grows in size and HP (aliens.json "feeding").
@@ -187,6 +383,9 @@ func _grow(h: int, meals_eaten: float) -> void:
 	p.size[i] = ns
 	p.hp[i] += float(p.def.hp) * _hp_per_meal * meals_eaten
 	biggest = maxf(biggest, ns / base)
+	if p.young_max > 0:
+		# every meal grows more young on the Brood Mother's sac
+		p.val[i] = minf(float(p.young_max), p.val[i] + float(p.young_per_meal) * meals_eaten)
 	var r := ns / old
 	var o := i * AlienPool.STRIDE
 	for k in [0, 2, 5, 8, 10]:
@@ -305,7 +504,7 @@ func flush_deaths() -> void:
 ## Strain-specific death effects (art direction).
 func _death_special(p: AlienPool, at: Vector3, sz: float) -> void:
 	match p.def.id:
-		"mauler":
+		"mauler", "elder":
 			# the shell cracks and its plates scatter
 			fx.burst(at + Vector3(0, 1.4, 0), Color(0.12, 0.09, 0.1, 0.0), 10, 5.5, 0.3, 2.5, 1.0, 0.8)
 			fx.burst(at + Vector3(0, 1.6, 0), Color(0.6, 0.05, 0.04, 0.3), 5, 5.0, 0.22, 2.5, 1.0, 0.8)
@@ -314,15 +513,23 @@ func _death_special(p: AlienPool, at: Vector3, sz: float) -> void:
 			fx.burst(at + Vector3(0, 1.7, 0), Color(0.5, 1.0, 0.15, 0.8), 16, 4.0, 0.1, 0.8, 1.0)
 			fx.splat(at, Color(0.5, 1.0, 0.15), 1.4, 0.35)
 		"brood_mother":
-			# the egg sac ruptures and spills dead young
+			# topples forward; the sac ruptures and spills dying young and a
+			# huge ichor pool that stays on the map; flies arrive in seconds
 			fx.burst(at + Vector3(0, 1.6, 0), Color(1.0, 0.2, 0.75, 0.6), 24, 6.0, 0.18, 1.2, 1.0)
-			for k in 3:
-				fx.splat(at + Vector3(rng.randf_range(-1.5, 1.5), 0, rng.randf_range(-2.5, 0.5)), p.ichor, 2.0, 0.1)
-			var st := GameConfig.alien_index("stalker")
+			fx.splat(at + Vector3(0, 0, -1.2), p.ichor, 3.2 * sz, 0.15)
 			for k in 5:
+				fx.splat(at + Vector3(rng.randf_range(-2.0, 2.0), 0, rng.randf_range(-3.0, 0.8)), p.ichor, 1.8, 0.1)
+			var young := 6
+			var rt := GameConfig.alien_index("runt")
+			var rs := 1.0
+			if rt < 0:
+				rt = GameConfig.alien_index("stalker")
+				rs = 0.38
+			for k in young:
 				var a := rng.randf() * TAU
-				var r := rng.randf_range(1.0, 2.6)
-				corpses.add(st, at.x + cos(a) * r, at.z + sin(a) * r - 1.5, rng.randf() * TAU, 0.38 * sz, 0.03, false)
+				var r := rng.randf_range(0.8, 2.8)
+				corpses.add(rt, at.x + cos(a) * r, at.z + sin(a) * r - 1.5, rng.randf() * TAU, rs * float(swarm.pools[rt].def.size), 0.02, false)
+			_flies.append({"pos": at + Vector3(0, 0, -1.0), "t": 0.0, "life": 90.0})
 
 
 # ------------------------------------------------------------ queries
@@ -396,6 +603,7 @@ func damage(h: int, amount: float, dtype: int, dodgeable := false, src: Turret =
 		return false
 	if p.aux[i] > 0.5 and dtype != GameConfig.Dmg.SEISMIC:
 		return false
+	p.alert[i] = 1.5
 	if dodgeable and p.dodge > 0.0 and rng.randf() < p.dodge:
 		dodges += 1
 		fx.burst(Vector3(p.px[i], 0.8, p.pz[i]), Color(0.8, 0.7, 1.0, 0.8), 2, 2.0, 0.05, 0.15, 0.0)
@@ -469,10 +677,14 @@ func surface(h: int, seconds: float) -> void:
 	if not p.burrows:
 		return
 	var i := h & MASK
-	if p.aux[i] > 0.5:
-		fx.burst(Vector3(p.px[i], 0.2, p.pz[i]), Color(0.45, 0.33, 0.22, 0.0), 6, 4.0, 0.2, 0.8, 1.0)
+	if p.aux[i] < 0.5:
+		return
+	# forced up early: stunned and exposed (tell cut short)
+	fx.burst(Vector3(p.px[i], 0.2, p.pz[i]), Color(0.45, 0.33, 0.22, 0.0), 10, 4.5, 0.2, 0.8, 1.0)
+	fx.float_text(Vector3(p.px[i], 2.0, p.pz[i]), "FORCED UP", Color(1.0, 0.65, 0.25))
 	p.aux[i] = 0.0
-	p.timer[i] = seconds
+	p.mode[i] = AlienPool.Mode.STUN
+	p.mt[i] = p.seismic_stun if p.seismic_stun > 0.0 else seconds
 
 
 func launch_shell(from: Vector3, to: Vector3, time: float, amount: float, aoe: float, dtype: int, src: Turret = null) -> void:

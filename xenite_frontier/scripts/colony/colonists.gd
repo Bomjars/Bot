@@ -63,6 +63,7 @@ var recovery_time := 40.0
 var recovery_mult := 1.0           # Medbay / Colony Charter medics
 var stun_time := 1.2
 var hunt_interval := 0.6
+var isolation_penalty := 35   # hunt-field distance units (10 = 1 m) per companion
 var immunity := 1.5
 var morale := 1.0                  # unpaid wages -> 0.8
 var soldier_cfg: Dictionary = {}
@@ -102,6 +103,7 @@ func setup(m: OutpostMap, st: Structures, c: Corpses, effects: Fx, hf: FlowField
 	recovery_time = float(cfg.get("rescued_recovery_seconds", recovery_time))
 	stun_time = float(cfg.get("drop_stun_seconds", stun_time))
 	hunt_interval = float(cfg.get("hunt_field_interval", hunt_interval))
+	isolation_penalty = int(float(cfg.get("hunt_isolation_penalty_m", 3.5)) * FlowField.ORTHO)
 	immunity = float(cfg.get("grab_immunity_seconds", immunity))
 	soldier_cfg = cfg.get("soldier", {})
 	var mirror := TurretModels.mat(Color(0.02, 0.02, 0.025), 0.0, 1.0)
@@ -541,6 +543,29 @@ func process_swarm(swarm: Swarm, comb: Combat) -> void:
 		event.emit("%s was dragged into the wilds. Gone." % col.name, Color(1.0, 0.25, 0.25), col.pos)
 
 
+## Acid pools and other area damage: exposed colonists inside `r` take
+## `amount` (soldiers' armour applies). Returns how many were hit.
+func hurt_area(pos: Vector3, r: float, amount: float, cause: String) -> int:
+	var n := 0
+	var r2 := r * r
+	for col in colonists:
+		if not _is_exposed(col) or col.state == S.CARRIED:
+			continue
+		var d := col.pos - pos
+		if d.x * d.x + d.z * d.z > r2:
+			continue
+		n += 1
+		col.hp -= amount * (float(soldier_cfg.get("armor", 0.7)) if col.role == Role.SOLDIER else 1.0)
+		if col.hp <= 0.0:
+			_clear_job(col)
+			col.state = S.DEAD
+			killed += 1
+			col.node.visible = false
+			corpses.add_human(col.pos)
+			event.emit("%s was dissolved by %s" % [col.name, cause], Color(1.0, 0.3, 0.25), col.pos)
+	return n
+
+
 ## Carrier died: the colonist drops, wounded.
 func drop(cid: int, pos: Vector3) -> void:
 	if cid < 0 or cid >= colonists.size():
@@ -585,18 +610,32 @@ func tick(dt: float) -> void:
 	_hunt_timer -= dt
 	if _hunt_timer <= 0.0:
 		_hunt_timer = hunt_interval
+		# Snatchers ignore turrets and go for the most isolated colonist they
+		# can smell: every exposed colonist is a goal, but company (other
+		# colonists within 6 m, turrets within 8 m) adds a distance penalty, so
+		# a lone worker out at a build site is smelled first and from furthest
 		var goals := PackedInt32Array()
+		var costs := PackedInt32Array()
 		for col in colonists:
-			if _is_exposed(col):
-				var c := map.cell_of(col.pos)
-				if c >= 0:
-					goals.append(c)
-			elif col.state == S.WORKING and col.job in [Job.CREW, Job.GARRISON, Job.STAFF]:
-				goals.append(col.job_cell)
-		goals.sort()
-		if goals != _last_goals:
-			_last_goals = goals
-			hunt_field.set_goals(goals)
+			if not _is_exposed(col):
+				continue
+			var c := map.cell_of(col.pos)
+			if c < 0:
+				continue
+			var company := 0
+			for o in colonists:
+				if o != col and o.state in [S.MOVING, S.WORKING, S.DOWNED, S.RETURNING] and o.pos.distance_squared_to(col.pos) < 36.0:
+					company += 1
+			for tc: int in structures.turrets:
+				if map.cell_center(tc).distance_squared_to(col.pos) < 64.0:
+					company += 2
+			goals.append(c)
+			costs.append(mini(400, company * isolation_penalty))
+		var key := goals.duplicate()
+		key.append_array(costs)
+		if key != _last_goals:
+			_last_goals = key
+			hunt_field.set_goals(goals, costs)
 			hunt_field.request_rebuild()
 
 

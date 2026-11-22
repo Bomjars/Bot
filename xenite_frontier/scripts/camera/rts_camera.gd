@@ -16,6 +16,8 @@ var bounds := Rect2(-100, -70, 200, 140)
 var camera: Camera3D
 var _dragging := false
 var photo_lock := false
+var shake_scale := 1.0   # settings / game_config "camera": {"shake": 1.0}
+var _shake := 0.0
 
 
 func _ready() -> void:
@@ -31,6 +33,14 @@ func _apply() -> void:
 	var p := deg_to_rad(pitch_deg)
 	camera.position = Vector3(0.0, sin(p) * distance, cos(p) * distance)
 	camera.rotation = Vector3(-p, 0.0, 0.0)
+	var k := _shake * _shake * shake_scale * clampf(distance / 40.0, 0.4, 1.5)
+	camera.h_offset = randf_range(-1.0, 1.0) * k * 0.35
+	camera.v_offset = randf_range(-1.0, 1.0) * k * 0.35
+
+
+## Camera shake (0..1, decays): Mauler footfalls, charge impacts, roars.
+func add_shake(amount: float) -> void:
+	_shake = minf(1.0, _shake + amount)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -69,6 +79,7 @@ func _process(delta: float) -> void:
 		_target_distance *= 1.0 + z * 1.6 * delta
 	_target_distance = clampf(_target_distance, min_distance, max_distance)
 	distance = lerpf(distance, _target_distance, minf(1.0, delta * 10.0))
+	_shake = maxf(0.0, _shake - delta * 1.8)
 	if photo_lock:
 		_apply()
 		return

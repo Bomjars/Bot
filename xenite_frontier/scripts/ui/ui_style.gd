@@ -6,6 +6,7 @@ extends RefCounted
 const ALIEN_COLORS := {
 	"stalker": "#e8e4d6", "mauler": "#c8201f", "spitter": "#3fd23a",
 	"snatcher": "#e3c21b", "burrower": "#e8871a", "brood_mother": "#d42bb4",
+	"elder": "#8f1715", "runt": "#bdb9ab",
 }
 
 

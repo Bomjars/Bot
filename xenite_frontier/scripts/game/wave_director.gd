@@ -14,6 +14,8 @@ enum Phase { LANDING, BUILD, WAVE, OVER }
 
 var phase := Phase.LANDING
 var wave := 0
+var start_wave := 0   # dev: `-- --start-wave=N` begins at wave N
+var dev_strain := -1  # dev: `-- --strain=<id>` turns every wave alien into this strain
 var timer := 0.0
 var threat := 1.0
 var swarm: Swarm
@@ -47,7 +49,7 @@ func cfg() -> Dictionary:
 
 func reset() -> void:
 	phase = Phase.LANDING
-	wave = 0
+	wave = start_wave
 	timer = 0.0
 	threat = 1.0
 	xenite_mined = 0.0
@@ -117,8 +119,28 @@ func _start_wave() -> void:
 	swarm.hp_mult = 1.0 + float(cfg().get("hp_growth_per_wave", 0.04)) * (wave - 1)
 	var comp := composition(wave)
 	var all := PackedInt32Array()
+	var packs: Array[PackedInt32Array] = []
+	var strains: Dictionary = cfg().get("strains", {})
 	for id: String in comp:
-		var t := GameConfig.alien_index(id)
+		var t := GameConfig.alien_index(id) if dev_strain < 0 else dev_strain
+		if t < 0:
+			continue
+		var sd: Dictionary = strains.get(id, {})
+		if sd.has("pack_min"):
+			# hunts in its own packs (Stalkers: 20-50 that flow like water)
+			var lo := int(sd.pack_min)
+			var hi := int(sd.get("pack_max", lo))
+			var left := int(comp[id])
+			while left > 0:
+				var n := _rng.randi_range(lo, hi)
+				if left - n < lo:
+					n = left
+				var pk := PackedInt32Array()
+				pk.resize(n)
+				pk.fill(t)
+				packs.append(pk)
+				left -= n
+			continue
 		for k in comp[id]:
 			all.append(t)
 	# shuffle, then cut into packs that leave from one canyon mouth together
@@ -132,15 +154,22 @@ func _start_wave() -> void:
 	var pmin := int(cfg().get("pack_size_min", 5))
 	var pmax := int(cfg().get("pack_size_max", 14))
 	var i := 0
-	var packs: Array[PackedInt32Array] = []
 	while i < all.size():
 		var n := mini(_rng.randi_range(pmin, pmax), all.size() - i)
 		packs.append(all.slice(i, i + n))
 		i += n
+	# interleave the big packs with the mixed ones
+	for k in range(packs.size() - 1, 0, -1):
+		var j := _rng.randi_range(0, k)
+		var tmp := packs[k]
+		packs[k] = packs[j]
+		packs[j] = tmp
 	for k in packs.size():
 		var at := spawn_s * float(k) / maxf(1.0, packs.size() - 1) if packs.size() > 1 else 0.0
 		_queue.append({"t": at + _rng.randf_range(0.0, 2.0), "types": packs[k], "mouth": _rng.randi() % maxi(1, map.mouth_cells.size())})
-	wave_total = all.size()
+	wave_total = 0
+	for pk in packs:
+		wave_total += pk.size()
 	_wave_t = 0.0
 	phase = Phase.WAVE
 	phase_changed.emit(phase)

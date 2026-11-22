@@ -216,6 +216,11 @@ func _ready() -> void:
 			_classic = true
 		elif arg == "--free-build":
 			economy.free_build = true
+		elif arg.begins_with("--strain="):
+			swarm.only_strain(maxi(0, GameConfig.alien_index(arg.split("=")[1])))
+			waves.dev_strain = maxi(0, GameConfig.alien_index(arg.split("=")[1]))
+		elif arg.begins_with("--start-wave="):
+			waves.start_wave = maxi(0, int(arg.split("=")[1]) - 1)
 		elif arg == "--stuck-report":
 			_stuck_report = true
 		elif arg.begins_with("--combat-test"):
@@ -389,10 +394,13 @@ func _poll_fields() -> void:
 
 
 func _step(dt: float) -> void:
+	swarm.listen = Vector2(cam.position.x, cam.position.z)
 	swarm.simulate(dt)
+	combat.build_grid()
 	combat.process_swarm_events()
 	colonists.process_swarm(swarm, combat)
-	combat.build_grid()
+	combat.behaviour_fx(dt)
+	_shake_from(combat.shake_events)
 	if not swarm.paused:
 		structures.tick(dt, combat)
 		combat.tick_projectiles(dt)
@@ -421,9 +429,36 @@ func _step(dt: float) -> void:
 			swarm.spawn_random(mini(n, maxi(0, max_alive - swarm.total())))
 	if _bot:
 		_bot_tick(dt)
+	if OS.get_cmdline_user_args().has("--mode-trace") and int(_run_time * 60.0) % 300 == 0:
+		for p in swarm.pools:
+			if p.count == 0:
+				continue
+			var modes := {}
+			var tg := 0
+			var dsum := 0
+			for i in p.count:
+				modes[p.mode[i]] = modes.get(p.mode[i], 0) + 1
+				if p.tgt[i] >= 0:
+					tg += 1
+				var c := map.cell_of(Vector3(p.px[i], 0, p.pz[i]))
+				dsum += field.dist[c] if c >= 0 else 0
+			print("[dbg %.0fs] %s n=%d modes=%s tgt=%d avg_dist=%.1fm val0=%.1f" % [_run_time, p.def.id, p.count, modes, tg, dsum / 10.0 / p.count, p.val[0]])
 	swarm.upload()
 	corpses.upload()
 	fx.update(dt)
+
+
+## Heavy footfalls, charge impacts, roars and breaches near the view shake
+## the camera (falls off over ~30 m from the point the camera looks at).
+func _shake_from(ev: PackedFloat32Array) -> void:
+	if ev.is_empty() or cam == null:
+		return
+	var total := 0.0
+	for k in range(0, ev.size(), 3):
+		var d := Vector2(ev[k] - cam.position.x, ev[k + 1] - cam.position.z).length()
+		total += ev[k + 2] * clampf(1.0 - d / 30.0, 0.0, 1.0)
+	if total > 0.0:
+		cam.add_shake(minf(0.5, total * 0.12))
 
 
 # ------------------------------------------------------------------ input
@@ -934,6 +969,7 @@ func _print_test_report() -> void:
 	for t: Turret in structures.turrets.values():
 		if t.crewed:
 			crewed += 1
+	lines.append("v4 behaviour: spitter shots %d  burrower breaches %d  mauler charges landed %d (on blast doors %d)  elder roars %d" % [combat.spits, combat.breaches, combat.charges_landed, combat.charges_on_doors, combat.roars])
 	lines.append("turrets crewed %d/%d  meals %d (human %d)  biggest alien x%.2f  remains on field %d" % [crewed, structures.turrets.size(), combat.meals, corpses.humans_eaten, combat.biggest, corpses.human_remains()])
 	lines.append("sim %.2f ms  combat %.2f ms  fx %.2f ms  fps %d" % [swarm.sim_usec / 1000.0, combat.combat_usec / 1000.0, fx.update_usec / 1000.0, Engine.get_frames_per_second()])
 	print("\n".join(lines))
@@ -1018,11 +1054,13 @@ func _stuck_reason(c: int, p: AlienPool, i: int) -> String:
 func _showcase() -> void:
 	target_count = 0
 	swarm.paused = true
-	var row := map.core_center + Vector3(-8.5, 0, -11.0)
+	var row := map.core_center + Vector3(-12.0, 0, -18.0)
 	for t in swarm.pools.size():
 		var p := swarm.pools[t]
 		var x := row.x + t * 3.4
-		var poses := [0.35, 1.0, -2.0, -3.0 if p.def.id == "burrower" else -1.0]
+		# idle, run, attack, then the strain's v4 tell / action
+		var special := {"spitter": -4.7, "burrower": -4.7, "mauler": -6.4, "elder": -4.7, "snatcher": -6.4, "runt": -2.0}
+		var poses := [0.35, 1.0, -2.0, float(special.get(p.def.id, -1.0))]
 		for k in poses.size():
 			var z := row.z + k * 2.6
 			var i := p.spawn(x, z, swarm.rng)
@@ -1032,6 +1070,8 @@ func _showcase() -> void:
 			p.buf[o + 7] = map.height_at(x, z)
 			p.buf[o + 14] = 0.8 + k * 1.7
 			p.buf[o + 15] = poses[k]
+			p.buf[o + 13] = -1.0 if p.young_max > 0 else 0.0
+			p.buf[o] = p.size[i]; p.buf[o + 5] = p.size[i]; p.buf[o + 10] = p.size[i]
 		# a corpse of each strain in the front row (its death pose)
 		corpses.add(t, x, row.z + 4 * 2.6 + 0.3, PI * 0.15, 1.0, 0.1, false)
 	corpses.upload()
@@ -1071,17 +1111,28 @@ func _building_showcase() -> void:
 				structures.place(c, bid, false)
 			x += fp + (0 if bid == "wall" or bid == "blast_door" else 1)
 	structures.nav_changed.emit()
+	structures._refresh_visuals()   # the sim is paused, so do it now
 	hud.visible = false
 	build.visible = false
 	var view := 0
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--pair="):
 			view = int(arg.split("=")[1])
-	cam.position = map.core_center + Vector3(-1.0 + view * 3.0, 0.0, 9.5)
-	cam.pitch_deg = 34.0
+	var dist := 12.0
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--dist="):
+			dist = float(arg.split("=")[1])
+	cam.position = map.core_center + Vector3(-2.5 + view * 6.0, 0.0, 6.5)
+	cam.pitch_deg = 30.0
 	cam.photo_lock = true
-	cam._target_distance = 15.0
-	cam.distance = 15.0
+	cam._target_distance = dist
+	cam.distance = dist
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--hide="):
+			for nm in arg.split("=")[1].split(","):
+				var nd := get_node_or_null(NodePath(nm))
+				if nd is Node3D:
+					(nd as Node3D).visible = false
 
 
 ## Dev helper: `-- --aliens=N --screenshot=path.png [--cam=x,z,dist]`.

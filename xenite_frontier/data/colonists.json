@@ -8,6 +8,7 @@
 	"carrier_speed_mult": 0.7,
 	"hunt_sense_range": 14.0,
 	"hunt_field_interval": 0.6,
+	"hunt_isolation_penalty_m": 3.5,
 	"ranks": [
 		"Tech",
 		"Driller",

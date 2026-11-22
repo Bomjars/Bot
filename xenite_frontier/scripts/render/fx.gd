@@ -2,7 +2,9 @@ class_name Fx
 extends Node3D
 ## Pooled visual effects, all MultiMesh (one draw call each):
 ##  - particles: gibs, sparks, flame, smoke, acid. Ballistic motion + gravity,
-##    gibs stick to the ground. Ring buffer: oldest is recycled.
+##    gibs stick to the ground. Ring buffer: oldest is recycled. Simulated on
+##    the GPU (fx_particle.gdshader): the CPU only writes a slot when one
+##    spawns, so thousands cost the same as a few.
 ##  - beams: tracers, rail slugs, shock arcs. Stretched boxes that thin out.
 ##  - splats: persistent ichor puddles on the ground (ring buffer).
 ## Instance colour alpha = glow strength.
@@ -13,15 +15,14 @@ var p_cap := 4000
 var b_cap := 384
 var s_cap := 2500
 
-# particles
-var _ppx := PackedFloat32Array(); var _ppy := PackedFloat32Array(); var _ppz := PackedFloat32Array()
-var _pvx := PackedFloat32Array(); var _pvy := PackedFloat32Array(); var _pvz := PackedFloat32Array()
-var _plife := PackedFloat32Array(); var _pmax := PackedFloat32Array()
-var _psize := PackedFloat32Array(); var _pgrav := PackedFloat32Array()
+# particles (GPU-simulated): 12 transform + 4 colour + 4 custom floats each
+const P_STRIDE := 20
 var _pbuf := PackedFloat32Array()
 var _p_next := 0
-var _p_active := 0
+var _p_dirty := false
 var _p_mm: MultiMesh
+var _p_mat: ShaderMaterial
+var _time := 0.0
 
 # beams
 var _bfrom: Array[Vector3] = []
@@ -58,11 +59,10 @@ func setup() -> void:
 
 	var pbox := BoxMesh.new()
 	pbox.size = Vector3.ONE
-	_p_mm = _make_mm(pbox, p_cap, mat)
-	for a in [_ppx, _ppy, _ppz, _pvx, _pvy, _pvz, _plife, _pmax, _psize, _pgrav]:
-		a.resize(p_cap)
-		a.fill(0.0)
-	_pbuf.resize(p_cap * STRIDE)
+	_p_mat = ShaderMaterial.new()
+	_p_mat.shader = preload("res://scripts/render/fx_particle.gdshader")
+	_p_mm = _make_mm(pbox, p_cap, _p_mat, true)
+	_pbuf.resize(p_cap * P_STRIDE)
 	_pbuf.fill(0.0)
 
 	var bbox := BoxMesh.new()
@@ -95,12 +95,18 @@ func setup() -> void:
 		_texts.append(l)
 	_text_life.resize(24)
 	_text_life.fill(0.0)
+	# upload the zeroed buffers now: GPU multimesh storage starts out
+	# uninitialised, and until the first effect spawns it would draw garbage
+	RenderingServer.multimesh_set_buffer(_p_mm.get_rid(), _pbuf)
+	RenderingServer.multimesh_set_buffer(_b_mm.get_rid(), _bbuf)
+	RenderingServer.multimesh_set_buffer(_s_mm.get_rid(), _sbuf)
 
 
-func _make_mm(mesh: Mesh, n: int, mat: Material) -> MultiMesh:
+func _make_mm(mesh: Mesh, n: int, mat: Material, custom := false) -> MultiMesh:
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
 	mm.use_colors = true
+	mm.use_custom_data = custom
 	mm.mesh = mesh
 	mm.instance_count = n
 	var mmi := MultiMeshInstance3D.new()
@@ -113,13 +119,12 @@ func _make_mm(mesh: Mesh, n: int, mat: Material) -> MultiMesh:
 
 
 func clear() -> void:
-	_plife.fill(0.0)
 	_pbuf.fill(0.0)
+	_p_dirty = true
 	_blife.fill(0.0)
 	_bbuf.fill(0.0)
 	_sbuf.fill(0.0)
 	_s_dirty = true
-	_p_active = 1
 
 
 # ---------------------------------------------------------------- spawning
@@ -127,13 +132,18 @@ func clear() -> void:
 func particle(pos: Vector3, vel: Vector3, col: Color, size: float, life: float, grav := 1.0) -> void:
 	var i := _p_next
 	_p_next = (_p_next + 1) % p_cap
-	_ppx[i] = pos.x; _ppy[i] = pos.y; _ppz[i] = pos.z
-	_pvx[i] = vel.x; _pvy[i] = vel.y; _pvz[i] = vel.z
-	_plife[i] = life; _pmax[i] = life
-	_psize[i] = size; _pgrav[i] = grav
-	var o := i * STRIDE
-	_pbuf[o + 12] = col.r; _pbuf[o + 13] = col.g; _pbuf[o + 14] = col.b; _pbuf[o + 15] = col.a
-	_p_active += 1
+	var o := i * P_STRIDE
+	var ground := pos.y - 100.0
+	if map and grav > 0.0:
+		ground = map.height_at(pos.x, pos.z) + 0.04
+	var b := _pbuf
+	# basis X = velocity, basis Y = (ground, gravity, 0), origin = spawn point
+	b[o] = vel.x; b[o + 1] = ground; b[o + 2] = 0.0; b[o + 3] = pos.x
+	b[o + 4] = vel.y; b[o + 5] = grav; b[o + 6] = 0.0; b[o + 7] = maxf(pos.y, ground)
+	b[o + 8] = vel.z; b[o + 9] = 0.0; b[o + 10] = 0.0; b[o + 11] = pos.z
+	b[o + 12] = col.r; b[o + 13] = col.g; b[o + 14] = col.b; b[o + 15] = col.a
+	b[o + 16] = _time; b[o + 17] = life; b[o + 18] = size; b[o + 19] = 0.0
+	_p_dirty = true
 
 
 func burst(pos: Vector3, col: Color, n: int, speed: float, size: float, life: float, grav := 1.0, up := 0.6) -> void:
@@ -215,8 +225,11 @@ func float_text(pos: Vector3, text: String, col: Color) -> void:
 
 func update(dt: float) -> void:
 	var t0 := Time.get_ticks_usec()
-	if _p_active > 0:
-		_update_particles(dt)
+	_time += dt
+	_p_mat.set_shader_parameter("now", _time)
+	if _p_dirty:
+		RenderingServer.multimesh_set_buffer(_p_mm.get_rid(), _pbuf)
+		_p_dirty = false
 	_update_beams(dt)
 	if _s_dirty:
 		RenderingServer.multimesh_set_buffer(_s_mm.get_rid(), _sbuf)
@@ -230,53 +243,6 @@ func update(dt: float) -> void:
 			if _text_life[k] <= 0.0:
 				l.visible = false
 	update_usec = Time.get_ticks_usec() - t0
-
-
-func _update_particles(dt: float) -> void:
-	var active := 0
-	var buf := _pbuf
-	var g := 14.0 * dt
-	var hg := map.hgrid if map else PackedFloat32Array()
-	var hgw := map.hw if map else 0
-	var hgh := map.hh if map else 0
-	var ox := map.origin.x if map else 0.0
-	var oz := map.origin.y if map else 0.0
-	for i in p_cap:
-		var l := _plife[i]
-		if l <= 0.0:
-			continue
-		l -= dt
-		var o := i * STRIDE
-		if l <= 0.0:
-			_plife[i] = 0.0
-			buf[o] = 0.0; buf[o + 5] = 0.0; buf[o + 10] = 0.0
-			continue
-		_plife[i] = l
-		active += 1
-		var vy := _pvy[i] - g * _pgrav[i]
-		var y := _ppy[i] + vy * dt
-		var x := _ppx[i]
-		var z := _ppz[i]
-		var ground := 0.04
-		if hgw > 0 and _pgrav[i] > 0.0:
-			var gi := clampi(int((x - ox) * 2.0 + 0.5), 0, hgw - 1)
-			var gj := clampi(int((_ppz[i] - oz) * 2.0 + 0.5), 0, hgh - 1)
-			ground = hg[gj * hgw + gi] + 0.04
-		if y < ground and _pgrav[i] > 0.0:
-			y = ground
-			vy = 0.0
-			_pvx[i] *= 0.5
-			_pvz[i] *= 0.5
-		x += _pvx[i] * dt
-		z += _pvz[i] * dt
-		_ppx[i] = x; _ppy[i] = y; _ppz[i] = z
-		_pvy[i] = vy
-		var s := _psize[i] * minf(1.0, l / _pmax[i] * 3.0)
-		buf[o] = s; buf[o + 1] = 0.0; buf[o + 2] = 0.0; buf[o + 3] = x
-		buf[o + 4] = 0.0; buf[o + 5] = s; buf[o + 6] = 0.0; buf[o + 7] = y
-		buf[o + 8] = 0.0; buf[o + 9] = 0.0; buf[o + 10] = s; buf[o + 11] = z
-	_p_active = active
-	RenderingServer.multimesh_set_buffer(_p_mm.get_rid(), buf)
 
 
 func _update_beams(dt: float) -> void:

@@ -23,6 +23,7 @@ var economy: Dictionary = {}
 var tiers: Array = []
 var colonists: Dictionary = {}
 var feeding: Dictionary = {}
+var alien_ratings: Dictionary = {}
 var waves: Dictionary = {}
 var damage_type_ids: PackedStringArray = []
 ## damage multiplier: counter[alien_type * DMG_COUNT + damage_type]
@@ -38,6 +39,8 @@ func reload() -> void:
 	var ad := load_json(ALIENS_PATH)
 	alien_defs = ad.get("aliens", [])
 	feeding = ad.get("feeding", {})
+	alien_ratings = ad.get("ratings", {})
+	_apply_ratings()
 	colonists = load_json(COLONISTS_PATH)
 	waves = load_json(WAVES_PATH)
 	turrets_data = load_json(TURRETS_PATH)
@@ -49,6 +52,22 @@ func reload() -> void:
 	tiers = turrets_data.get("tiers", [{"name": "I", "damage": 1.0, "range": 1.0, "crew_efficiency": 1.0, "hp": 1.0}])
 	damage_type_ids = PackedStringArray(turrets_data.get("damage_types", []))
 	_build_counter()
+
+
+## Concept-sheet SPEED / SIZE ratings (1-5 squares) -> m/s and model scale.
+## speed = speed_rating x speed_per_point; the model is scaled so it stands
+## size_height[size_rating] (x size_scale) metres tall.
+func _apply_ratings() -> void:
+	var per := float(alien_ratings.get("speed_per_point", 1.65))
+	var hs: Array = alien_ratings.get("size_height", [0.0, 1.2, 1.6, 1.9, 2.25, 2.7])
+	for a: Dictionary in alien_defs:
+		if a.has("speed_rating"):
+			a["speed"] = maxf(0.3, float(a.speed_rating) * per)
+		if a.has("size_rating"):
+			var target := float(hs[clampi(int(a.size_rating), 0, hs.size() - 1)]) * float(a.get("size_scale", 1.0))
+			a["size"] = target / AlienMeshes.authored_height(str(a.id))
+		a["speed"] = float(a.get("speed", 4.0))
+		a["size"] = float(a.get("size", 1.0))
 
 
 func _build_counter() -> void:

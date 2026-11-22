@@ -13,7 +13,10 @@ extends RefCounted
 ##   Burrower  no legs: segmented torso with orange glow between segments,
 ##             circular orange-toothed maw, breaches from a dirt mound | orange
 ##   Brood Mother  tall, carries a faceted purple egg sac with magenta glowing
-##             spots, crown of white spikes                   | magenta
+##             spots and clinging young, crown of white spikes | magenta
+##   Mauler Elder  (v4) a Mauler with old spears jutting from its back and
+##             fresh wounds                                   | red
+##   Stalker Runt  (v4) a small Stalker: the Brood Mother's young  | white
 ## Vertices carry part / phase / joint pivot for alien.gdshader. Built twice:
 ## lod 0 (near) and lod 1 (far). Flat-shaded for the faceted look.
 
@@ -29,11 +32,33 @@ const DIRT_D := Color("3e2c1c")
 const SAC_D := Color("3a2433")
 const SAC_L := Color("6b4256")
 
-enum P { BODY, HEAD, THIGH, ARM, SEG, SAC, TAIL, STATIC, PLATE, SHIN, FOREARM, MOUND }
+enum P { BODY, HEAD, THIGH, ARM, SEG, SAC, TAIL, STATIC, PLATE, SHIN, FOREARM, MOUND, YOUNG }
+
+const YOUNG_N := 8   # young modelled on the Brood Mother's sac (shader shows as many as she carries)
+
+
+## Which body plan a strain uses (v4 variants share their parent's).
+static func base_id(id: String) -> String:
+	match id:
+		"elder": return "mauler"
+		"runt": return "stalker"
+	return id
+
+
+## Height of the authored model in metres (standing). GameConfig scales each
+## strain to its concept-sheet SIZE rating from this.
+static func authored_height(id: String) -> float:
+	match base_id(id):
+		"mauler": return 2.22
+		"burrower": return 1.53
+	var c := _cfg(id)
+	var hd: Vector3 = c.head
+	var hs: Vector3 = c.head_s
+	return hd.y + hs.y
 
 
 static func _cfg(id: String) -> Dictionary:
-	match id:
+	match base_id(id):
 		"stalker":
 			return {"hip": Vector3(0.08, 0.74, -0.05), "knee": Vector3(0.1, 0.42, 0.14), "ankle": Vector3(0.1, 0.08, -0.06), "toe": Vector3(0.1, 0.0, 0.08),
 				"leg_t": 0.05, "shin_t": 0.038, "t_base": Vector3(0, 0.72, -0.04), "t_top": Vector3(0, 1.06, 0.26), "t_w": 0.12, "t_d": 0.1,
@@ -97,20 +122,28 @@ static func rig(id: String) -> Dictionary:
 	var q: Array = c.q
 	var dead := {"stalker": [1.1, 0.4, 0.0, 0.05, 0.95], "mauler": [0.5, 0.8, 0.0, 0.0, 10.0], "spitter": [0.8, 0.5, 0.0, 0.0, 10.0],
 		"snatcher": [0.3, 0.0, 0.0, 0.0, 10.0], "burrower": [0.0, 0.6, 0.32, 0.0, 10.0], "brood_mother": [0.9, 0.5, 0.0, 0.0, 10.0]}
-	var dd: Array = dead.get(id, [1.0, 0.0, 0.0, 0.0, 10.0])
+	var b := base_id(id)
+	var dd: Array = dead.get(b, [1.0, 0.0, 0.0, 0.0, 10.0])
+	var tells := {"spitter": 1, "burrower": 2, "mauler": 3, "elder": 4}
+	var acts := {"mauler": 2, "snatcher": 1}
 	return {
 		"hip_y": hip.y, "hip_z": hip.z, "sh_y": sh.y, "sh_z": sh.z, "pitch_max": pitch,
 		"q_min": q[0], "q_max": q[1], "run_lo": q[2], "run_hi": q[3], "attack_q": q[4],
 		"quad_drop": maxf(0.0, final_h - reach - 0.06) * 0.6,
-		"leg_amp": 0.5 if id != "mauler" else 0.35, "knee_amp": 0.8, "arm_amp": 0.5 if id != "mauler" else 0.45,
+		"leg_amp": 0.5 if b != "mauler" else 0.35, "knee_amp": 0.8, "arm_amp": 0.5 if b != "mauler" else 0.45,
 		"sink": float(c.get("sink", 0.0)), "dead_curl": dd[0], "dead_arm": dd[1], "seg_gap": dd[2], "split": dd[3], "split_y": dd[4],
 		"sheen": 0.35, "gait_freq": float(c.gait),
+		# v4 behaviour poses: tell 1 sac inflate / 2 ground breach / 3 charge
+		# wind-up / 4 roar; act 1 drag backward / 2 shoulder charge
+		"tell_kind": int(tells.get(id, 0)), "act_kind": int(acts.get(id, 0)),
+		"twitch": 1.0 if b == "stalker" else 0.0, "sac_drain": 1.0 if b == "spitter" else 0.0,
+		"young_n": float(YOUNG_N) if b == "brood_mother" else 0.0,
 	}
 
 
 ## How the corpse lies: "side", "back", "face" (face-first) or "flat".
 static func corpse_pose(id: String) -> String:
-	match id:
+	match base_id(id):
 		"snatcher": return "back"
 		"mauler", "burrower", "brood_mother": return "face"
 	return "side"
@@ -121,11 +154,13 @@ static func build(id: String, lod := 0) -> ArrayMesh:
 	var hi := lod == 0
 	var c := _cfg(id)
 	_humanoid(a, c, hi)
-	match id:
+	match base_id(id):
 		"mauler": _mauler(a, c, hi)
 		"spitter": _spitter(a, c, hi)
 		"burrower": _burrower(a, c, hi)
 		"brood_mother": _mother(a, c, hi)
+	if id == "elder":
+		_elder(a, c, hi)
 	return a.commit(true)
 
 
@@ -240,6 +275,25 @@ static func _mauler(a: MeshAcc, c: Dictionary, hi: bool) -> void:
 	a.add(MeshAcc.cone(0.035, 0.16, 4), MeshAcc.xf(mz + Vector3(0.05, -0.08, 0.05), Vector3(180, 0, 0)), BONE, P.HEAD, 0.0, pv)
 
 
+## Elder: old spears and broken shafts jutting from the back and shoulders,
+## and fresh red wounds across the chest.
+static func _elder(a: MeshAcc, c: Dictionary, hi: bool) -> void:
+	var tt: Vector3 = c.t_top
+	var pv := Vector2(tt.y, tt.z)
+	var shaft := Color("3a3b38")
+	var spears := [[Vector3(-0.32, 1.78, -0.22), Vector3(-0.48, 2.95, -0.55)], [Vector3(-0.12, 1.86, -0.28), Vector3(-0.16, 3.15, -0.62)],
+		[Vector3(0.1, 1.84, -0.28), Vector3(0.18, 2.85, -0.7)], [Vector3(0.3, 1.76, -0.22), Vector3(0.52, 2.7, -0.42)],
+		[Vector3(0.0, 1.55, -0.32), Vector3(0.04, 2.45, -0.95)], [Vector3(-0.46, 1.62, -0.1), Vector3(-0.85, 2.4, -0.2)]]
+	for k in (spears.size() if hi else 3):
+		var from: Vector3 = spears[k][0]
+		var to: Vector3 = spears[k][1]
+		a.add(MeshAcc.cone(0.05 if k % 2 == 0 else 0.04, 1.0, 4), MeshAcc.limb(from, to), BLACK if k % 3 == 0 else shaft, P.PLATE, 0.0, pv)
+	var red := Color(0.78, 0.13, 0.12, 0.45)
+	var cuts := [Vector3(0.12, 1.45, 0.2), Vector3(-0.15, 1.25, 0.18), Vector3(0.22, 1.1, 0.12), Vector3(-0.05, 1.6, 0.17)]
+	for k in (cuts.size() if hi else 2):
+		a.add(MeshAcc.box(0.2, 0.035, 0.04), MeshAcc.xf(cuts[k], Vector3(-35, 0, 25.0 - k * 22.0)), red, P.BODY, 0.0, Vector2.ZERO)
+
+
 static func _spitter(a: MeshAcc, c: Dictionary, hi: bool) -> void:
 	var acid := Color(0.25, 0.82, 0.23, 0.35)
 	var tt: Vector3 = c.t_top
@@ -291,6 +345,20 @@ static func _mother(a: MeshAcc, c: Dictionary, hi: bool) -> void:
 	var spots := [Vector3(0.3, 0.2, -0.3), Vector3(-0.32, 0.0, -0.28), Vector3(0.15, -0.3, -0.38), Vector3(-0.1, 0.42, -0.25), Vector3(0.4, -0.15, -0.05), Vector3(-0.42, 0.3, 0.0)]
 	for k in (spots.size() if hi else 3):
 		a.add(MeshAcc.ball(0.06, 4, 2), MeshAcc.xf(sp + spots[k]), mag, P.SAC, float(k), pv)
+	# young clinging to the sac: small dark runts, head up; the shader shows
+	# only as many as she still carries
+	for k in (YOUNG_N if hi else 4):
+		var ang := -1.2 + 2.4 * float(k) / float(YOUNG_N - 1 if hi else 3)
+		var lat := 0.35 if k % 2 == 0 else -0.25
+		var yp := sp + Vector3(0.55 * sin(ang) * cos(lat), 0.75 * sin(lat), -0.5 * cos(ang) * cos(lat)) * 1.05
+		var ypv := Vector2(yp.y, yp.z)
+		var yo := float(k)
+		a.add(MeshAcc.ball(1.0, 4, 3), MeshAcc.xf(yp, Vector3(20, 0, 0), Vector3(0.07, 0.1, 0.06)), DARK, P.YOUNG, yo, ypv)
+		a.add(MeshAcc.ball(0.045, 4, 2), MeshAcc.xf(yp + Vector3(0, 0.1, -0.03)), BLACK, P.YOUNG, yo, ypv)
+		if hi:
+			for sx: float in [-1.0, 1.0]:
+				a.add(MeshAcc.cone(0.012, 1.0, 3), MeshAcc.limb(yp + Vector3(sx * 0.04, 0.02, 0.0), yp + Vector3(sx * 0.1, -0.06, 0.04)), BLACK, P.YOUNG, yo, ypv)
+			a.add(MeshAcc.ball(0.012, 3, 2), MeshAcc.xf(yp + Vector3(0.015, 0.11, -0.07)), Color(0.83, 0.17, 0.71, 0.2), P.YOUNG, yo, ypv)
 	# crown of white spikes
 	var hd: Vector3 = c.head
 	var hpv := Vector2(c.t_top.y, c.t_top.z)

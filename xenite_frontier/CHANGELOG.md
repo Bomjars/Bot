@@ -1,5 +1,36 @@
 # Changelog
 
+## M5a.3 – Lineup v4 movement notes (concept sheet)
+
+### Added
+- **Movement and AI from the concept sheet** "predatory/primal – Humanoid Lineup v4 · movement notes" (saved as `docs/concept_humanoid_lineup_v4.svg`).
+  - **Tells before attacks.** Spitters stop and inflate the throat sac for 1 s before every shot. Burrowers crack the ground for 2 s, with amber light leaking out, before they erupt. Mauler charges have a 0.7 s wind-up and Elder roars a 1.4 s rear-up, so every big hit can be seen coming.
+  - **Mauler charge:** locks onto the first door or wall 3–12 m ahead and runs at it in a straight line (×2.8 speed, no steering, no crowd push). Whatever it hits takes 260 damage. A blast door takes only 40% and leaves it stunned for 3.5 s, so you can bait it. Rock or a miss ends the charge too.
+  - **Mauler Elder** (new strain, from wave 6, every 2nd wave): spears in its back, fresh wounds. It stops to roar and enrages every alien within 11 m for 7 s (×1.4 speed, ×1.6 structure damage, red-burning eyes). Its fist sweeps hit the wall cells either side of the one it is smashing.
+  - **Snatcher:** ignores turrets and hunts the most isolated exposed colonist. The hunt field gives each goal a starting cost of 3.5 m per companion within 6 m and 7 m per turret within 8 m. It zig-zags for 1.5 s after every hit. It drags its catch backward at half speed, facing the base and walking in reverse, and leaves a blood trail.
+  - **Spitter:** prefers turrets, scanning five rays fanned around its path, and holds its range, wading back out if pushed closer than 55% of it. With nothing in between, it lobs at the Command Hab. Acid pools burn for 4 s, hurting structures and colonists standing in them. Three shots drain its sac, visibly, and it retreats for 6 s to refill.
+  - **Burrower:** tunnel → 2 s crack tell → erupt, rake (it now mauls instead of abducting) → sink after 3 s → tunnel at least 2.5 s → breach again. A Seismic hit while it is underground forces it up early, stunned for 2.5 s.
+  - **Brood Mother:** stops to eat every corpse she passes, stepping onto adjacent ones. Young cling to her egg sac (6 at the start, +2 per meal, 8 max, modelled and shown as she carries them) and drop off one every 3 s as **Stalker runts**, now their own strain. On death the sac spills six dying runts and a huge ichor pool; flies swarm over it after 2.5 s.
+  - **Stalker runt** (new strain): skitters in bursts, freezes, then pounces (×1.9) at walls, colonists or the core within 3 m. It climbs corpse piles at 45% of the normal height.
+  - **Stalkers** hunt in their own packs of 20–50 (`waves.json` `pack_min`/`pack_max`). Their heads twitch while idle or slow.
+  - **Heavy footfalls shake the camera** (Maulers, Elders), as do charge impacts, roars and breaches, fading over 30 m.
+- **SPEED and SIZE ratings as data.** `speed_rating` and `size_rating` (1–5, from the sheet) in `aliens.json`, converted through `ratings` (speed = rating × 1.65 m/s; height 1.2–2.7 m). Snatchers got faster (8.25 m/s), Spitters and Brood Mothers slower, Burrowers bigger.
+- Shader states for all of this: tell progress, charge, drag, stun, enraged glow, Spitter sac fill, clinging young, head twitch.
+- Test report line `v4 behaviour:` (shots, breaches, charges landed and on blast doors, roars). Dev flags `--strain=<id>`, `--start-wave=N`, `--mode-trace`.
+
+### Changed
+- **Particles are simulated on the GPU** (`fx_particle.gdshader`). The CPU writes a particle once when it spawns; flight, landing (gibs still stick to the ground) and fade are computed in the shader. Particle cost no longer grows with count: Combat + fx in the 10k benchmark is 0.34 ms, down from 0.57 ms before v4.
+- Big-swarm safety valves for the new behaviours: at most 160 acid globs fly with visuals (the rest land at once), 48 acid pools (new ones landing near a burning pool refresh it), a roar enrages at most 600 aliens, a few behaviour effects per frame, and Spitters and Maulers only scan for targets within 60 m of the base. Footfall shake is only reported near the camera.
+
+### Fixed
+- Effects (particles, tracers, splats) could draw garbage before the first effect spawned: their GPU buffers were never uploaded until then. They are now uploaded at startup.
+- The `--buildings` photo mode now draws walls and doors (visuals refresh while the sim is paused).
+
+### Measured (headless, slow 4-thread cloud CPU)
+- 10k benchmark: avg ~90 FPS, 1% low 59–61, sim 8.5–8.6 ms, Combat + fx 0.34 ms. The pre-v4 build on the same machine scored 1% low 63–65 and sim 8.0–8.2 ms. Six behaviour states for 10k aliens cost about 0.5 ms; GPU particles won back more than that elsewhere. This CPU sits right at the 60 FPS line; your Ryzen 9800X3D had 4x headroom before.
+- One strain per wave (`--strain`), 90 s each, 0 stuck in every run: Spitters 35 shots; Maulers 24 charges landed, 6 into blast doors; Burrowers 6 breaches; Elders 58 roars; Brood Mothers shed 185 runts; Snatchers 4 abductions, all 4 rescued.
+- Mixed bot soak (300 s, fast waves): wave 5, Command Hab 6000/6000, 10/10 colonists, every site finished, 0 stuck.
+
 ## M5a.2 – Outpost Buildings v1 (concept sheet)
 
 ### Changed

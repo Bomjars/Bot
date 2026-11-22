@@ -1,14 +1,26 @@
 {
-	"_comment": "Alien strain definitions. Order = type id. weak = 150% damage taken, resists = 50%. structure_dps: damage per second to structures they are blocked by; door_mult multiplies that vs blast doors. core_dps: damage to the outpost core while gnawing it. corpse_height: metres added to the corpse pile of the cell it dies in. ichor: acid-green blood colour. abducts: drags exposed colonists to the map edge. mauls: strikes exposed colonists for maul_damage (colonists have 100 HP; at 0 they die, leaving remains). hunts: Snatcher - senses colonists (incl. turret crews) and goes for them. feed_rate: chance per second to stop and eat a corpse it stands on.",
+	"_comment": "Alien strain definitions. Order = type id. SPEED and SIZE come from the concept sheet 'HUMANOID LINEUP v4 - movement notes' as 1-5 ratings (see 'ratings': speed m/s = speed_rating x speed_per_point, body height = size_height[size_rating] x size_scale; the model is scaled to that height). weak = 150% damage taken, resists = 50%. structure_dps: damage per second to structures they are blocked by; door_mult multiplies that vs blast doors. core_dps: damage to the Command Hab while gnawing it. corpse_height: metres added to the corpse pile of the cell it dies in. ichor: acid-green blood colour. abducts: drags exposed colonists to the map edge (drag_speed_mult of its speed). mauls: strikes exposed colonists for maul_damage. hunts: senses the most isolated exposed colonist and goes for it. feed_rate: chance per second to stop and eat a corpse it stands on. Behaviour blocks (tells, charge, roar, burrow, bursts) are described inline.",
+	"ratings": {
+		"_comment": "Concept sheet ratings -> numbers. A strain's speed is speed_rating x speed_per_point (m/s, +-22% per alien). Its model is scaled so it stands size_height[size_rating] metres tall (x size_scale), +-12% per alien.",
+		"speed_per_point": 1.65,
+		"size_height": [
+			0.0,
+			1.2,
+			1.6,
+			1.9,
+			2.25,
+			2.7
+		]
+	},
 	"aliens": [
 		{
 			"id": "stalker",
 			"name": "Stalker",
-			"trait": "Hunched, long-jawed hunter with a spiked back. Floods in fast, low HP. Brood young are Stalker runts.",
+			"trait": "Lopes upright, drops to all fours to sprint. Hunts in packs of 20-50 that flow around obstacles like water; head twitches between lunges.",
 			"hp": 22,
-			"speed": 7.0,
+			"speed_rating": 4,
+			"size_rating": 1,
 			"steer": 6.0,
-			"size": 1.0,
 			"mass": 1,
 			"push": 1.0,
 			"spawn_weight": 55,
@@ -24,21 +36,22 @@
 				"piercing"
 			],
 			"abducts": false,
-			"feed_rate": 0.15
+			"feed_rate": 0.15,
+			"twitch": 1.0
 		},
 		{
 			"id": "mauler",
 			"name": "Mauler",
-			"trait": "Gorilla-built brute with boulder shoulders and rock fists. Smashes blast doors (x4). Mauls colonists.",
+			"trait": "Slow, heavy knuckle-walk; the camera shakes with each step. Charges doors shoulder-first in a straight line and cannot turn mid-charge: bait it into blast doors, where it stuns itself.",
 			"hp": 260,
-			"speed": 3.4,
+			"speed_rating": 2,
+			"size_rating": 4,
 			"steer": 3.0,
-			"size": 1.0,
 			"mass": 4,
 			"push": 0.6,
 			"spawn_weight": 10,
 			"structure_dps": 40,
-			"door_mult": 4.0,
+			"door_mult": 1.0,
 			"core_dps": 30,
 			"corpse_height": 0.45,
 			"ichor": "#8aff3a",
@@ -50,16 +63,30 @@
 			],
 			"mauls": true,
 			"feed_rate": 0.15,
-			"maul_damage": 70
+			"maul_damage": 70,
+			"heavy_steps": 0.35,
+			"charge": {
+				"_comment": "Locks onto the first door (or other structure) within range along its path, winds up, then runs straight at speed_mult x speed. It cannot turn: whatever it hits takes impact_damage (blast doors only door_impact_mult of it, and they stun it for door_stun s); rock or a miss after max_time also ends the charge.",
+				"range": 12,
+				"min_range": 3,
+				"windup": 0.7,
+				"speed_mult": 2.8,
+				"max_time": 3.0,
+				"impact_damage": 260,
+				"door_impact_mult": 0.4,
+				"door_stun": 3.5,
+				"stun": 1.2,
+				"cooldown": 7.0
+			}
 		},
 		{
 			"id": "spitter",
 			"name": "Spitter",
-			"trait": "Upright, spiked back, swollen glowing throat sac. Hunches and spits acid at structures from range.",
+			"trait": "Stilted, wading gait; hangs back behind the swarm at max range from turrets. Tell: stops and inflates its throat sac for 1 s before lobbing acid over walls. Three shots drain the sac, then it retreats to refill.",
 			"hp": 35,
-			"speed": 4.2,
+			"speed_rating": 2,
+			"size_rating": 2,
 			"steer": 4.0,
-			"size": 1.0,
 			"mass": 1,
 			"push": 1.0,
 			"spawn_weight": 12,
@@ -68,8 +95,15 @@
 			"corpse_height": 0.14,
 			"ranged": {
 				"range": 9,
-				"cooldown": 2.4,
-				"damage": 28
+				"cooldown": 2.0,
+				"damage": 26,
+				"tell": 1.0,
+				"shots": 3,
+				"refill": 6.0,
+				"back_off": 0.55,
+				"pool_seconds": 4.0,
+				"pool_dps": 9,
+				"pool_radius": 1.3
 			},
 			"ichor": "#5cff10",
 			"weak": [
@@ -83,11 +117,11 @@
 		{
 			"id": "snatcher",
 			"name": "Snatcher",
-			"trait": "Very long arms dragging white claws, yellow spines. Dodges 35% of aimed shots, hunts colonists and drags them off.",
+			"trait": "Low knuckle-sprint, zig-zags under fire. Ignores turrets and heads straight for the most isolated colonist it can smell, grabs an ankle and drags it backward at half speed to the map edge, leaving a blood trail. Kill it and the colonist crawls home.",
 			"hp": 48,
-			"speed": 6.6,
+			"speed_rating": 5,
+			"size_rating": 2,
 			"steer": 7.0,
-			"size": 1.0,
 			"mass": 1,
 			"push": 1.2,
 			"spawn_weight": 10,
@@ -105,16 +139,19 @@
 			],
 			"abducts": true,
 			"hunts": true,
-			"feed_rate": 0.0
+			"feed_rate": 0.0,
+			"drag_speed_mult": 0.5,
+			"zigzag": 0.9,
+			"ignores_turrets": true
 		},
 		{
 			"id": "burrower",
 			"name": "Burrower",
-			"trait": "Legless segmented torso with a circular toothed maw. Tunnels under walls (only Seismic reaches it) and breaches near the core.",
+			"trait": "Swims under the ground as a moving dirt ripple. 2 s tell: the ground cracks and amber glow leaks out, then it erupts behind walls, rakes with digging claws and sinks again after 3 s. Seismic turrets force it up early, stunned and exposed.",
 			"hp": 90,
-			"speed": 4.6,
+			"speed_rating": 3,
+			"size_rating": 3,
 			"steer": 4.0,
-			"size": 1.0,
 			"mass": 2,
 			"push": 0.8,
 			"spawn_weight": 10,
@@ -129,17 +166,26 @@
 			"resists": [
 				"incendiary"
 			],
-			"abducts": true,
-			"feed_rate": 0.15
+			"abducts": false,
+			"feed_rate": 0.15,
+			"mauls": true,
+			"maul_damage": 30,
+			"burrow": {
+				"tell": 2.0,
+				"surface_time": 3.0,
+				"tunnel_min": 2.5,
+				"seismic_stun": 2.5,
+				"tell_speed_mult": 0.2
+			}
 		},
 		{
 			"id": "brood_mother",
 			"name": "Brood Mother",
-			"trait": "Boss. Carries a glowing egg sac on her back, crown of white spikes. Births broods of runts, gorges to grow.",
+			"trait": "Boss. Lumbers forward, stopping to feed on every corpse and growing larger each time. Young cling to her egg sac and drop off as Stalker runts every few seconds; each meal grows more. Topples forward on death, spilling dying young and a huge ichor pool.",
 			"hp": 3000,
-			"speed": 2.2,
+			"speed_rating": 1,
+			"size_rating": 5,
 			"steer": 1.5,
-			"size": 1.0,
 			"mass": 16,
 			"push": 0.25,
 			"spawn_weight": 1,
@@ -147,9 +193,12 @@
 			"core_dps": 60,
 			"corpse_height": 1.2,
 			"brood": {
-				"interval": 7.0,
-				"count": 4,
-				"type": "stalker"
+				"interval": 3.0,
+				"count": 1,
+				"type": "runt",
+				"young_start": 6,
+				"young_max": 8,
+				"young_per_meal": 2
 			},
 			"ichor": "#70ff20",
 			"weak": [
@@ -160,8 +209,87 @@
 				"shock"
 			],
 			"mauls": true,
-			"feed_rate": 2.5,
-			"maul_damage": 250
+			"feed_rate": 100.0,
+			"maul_damage": 250,
+			"feed_every_corpse": true,
+			"feed_cooldown": 1.2
+		},
+		{
+			"id": "elder",
+			"name": "Mauler Elder",
+			"trait": "Ancient Mauler carrying old spears and wounds from past colonies. Plods, then stops to roar, enraging nearby aliens (faster, harder hits). Wide fist sweeps scatter walls and colonists.",
+			"hp": 900,
+			"speed_rating": 1,
+			"size_rating": 5,
+			"steer": 2.0,
+			"mass": 8,
+			"push": 0.35,
+			"spawn_weight": 2,
+			"structure_dps": 60,
+			"door_mult": 1.5,
+			"core_dps": 50,
+			"corpse_height": 0.7,
+			"ichor": "#8aff3a",
+			"weak": [
+				"piercing"
+			],
+			"resists": [
+				"ballistic"
+			],
+			"mauls": true,
+			"feed_rate": 0.1,
+			"maul_damage": 90,
+			"heavy_steps": 0.6,
+			"sweep": {
+				"_comment": "Fist sweeps hit the blocking structure and the cells either side of it.",
+				"width": 1
+			},
+			"roar": {
+				"_comment": "Every interval s it stops for `tell` s and roars: aliens within radius m are enraged for duration s (speed x speed_mult, structure damage x damage_mult).",
+				"interval": 10.0,
+				"tell": 1.4,
+				"radius": 11.0,
+				"duration": 7.0,
+				"speed_mult": 1.4,
+				"damage_mult": 1.6
+			},
+			"mesh_of": "mauler"
+		},
+		{
+			"id": "runt",
+			"name": "Stalker Runt",
+			"trait": "Brood Mother young. Skitters in short bursts, freezes, then pounces. Climbs corpse piles fastest: always the first one over a wall.",
+			"hp": 13,
+			"speed_rating": 5,
+			"size_rating": 1,
+			"size_scale": 0.62,
+			"steer": 9.0,
+			"mass": 1,
+			"push": 1.1,
+			"spawn_weight": 0,
+			"structure_dps": 3,
+			"core_dps": 2,
+			"corpse_height": 0.06,
+			"ichor": "#7dff2a",
+			"weak": [
+				"incendiary",
+				"shock"
+			],
+			"resists": [
+				"piercing"
+			],
+			"abducts": false,
+			"feed_rate": 0.0,
+			"bursts": {
+				"_comment": "Runs `run` s, freezes `freeze` s; within pounce_range m of prey or a wall it leaps at pounce_mult x speed.",
+				"run": 0.75,
+				"freeze": 0.35,
+				"pounce_range": 3.0,
+				"pounce_mult": 1.9
+			},
+			"climb_mult": 0.45,
+			"twitch": 1.0,
+			"mesh_of": "stalker"
 		}
 	],
 	"feeding": {

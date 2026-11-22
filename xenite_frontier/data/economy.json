@@ -9,7 +9,9 @@
 			"spitter": 3,
 			"snatcher": 4,
 			"burrower": 6,
-			"brood_mother": 80
+			"brood_mother": 80,
+			"elder": 40,
+			"runt": 1
 		},
 		"charred_yield": 0.0,
 		"refund_ratio": 0.5,

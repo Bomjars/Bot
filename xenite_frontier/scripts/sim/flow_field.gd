@@ -19,6 +19,7 @@ const INV_SQRT2 := 0.70710678
 var w := 0
 var h := 0
 var goals := PackedInt32Array()
+var goal_costs := PackedInt32Array()   # optional starting distance per goal
 # front buffers (read by the swarm)
 var dist := PackedInt32Array()
 var dir_x := PackedFloat32Array()
@@ -62,7 +63,7 @@ func _init(map: OutpostMap, cost_name := "nav_cost", goal_cells := PackedInt32Ar
 
 ## Blocking rebuild (startup).
 func build() -> void:
-	_compute(_costs(), goals.duplicate())
+	_compute(_costs(), goals.duplicate(), goal_costs.duplicate())
 	_swap()
 
 
@@ -73,7 +74,7 @@ func request_rebuild() -> void:
 		return
 	# low priority: Godot caps these to a fraction of the pool, so several
 	# queued rebuilds never starve the threaded swarm step
-	_task = WorkerThreadPool.add_task(_compute.bind(_costs(), goals.duplicate()), false, "flow_field")
+	_task = WorkerThreadPool.add_task(_compute.bind(_costs(), goals.duplicate(), goal_costs.duplicate()), false, "flow_field")
 
 
 func busy() -> bool:
@@ -104,11 +105,14 @@ func _swap() -> void:
 	rebuilt.emit()
 
 
-func set_goals(g: PackedInt32Array) -> void:
+## costs (optional): a starting distance per goal, so some goals are less
+## attractive than others (the hunt field makes crowded colonists cost more).
+func set_goals(g: PackedInt32Array, costs := PackedInt32Array()) -> void:
 	goals = g
+	goal_costs = costs
 
 
-func _compute(cst: PackedByteArray, goal_list: PackedInt32Array) -> void:
+func _compute(cst: PackedByteArray, goal_list: PackedInt32Array, gcost := PackedInt32Array()) -> void:
 	# impassable mask derived from cost (0 = impassable)
 	var blk := PackedByteArray()
 	blk.resize(cst.size())
@@ -130,12 +134,14 @@ func _compute(cst: PackedByteArray, goal_list: PackedInt32Array) -> void:
 	var nn := 0
 	var pending := 0
 
-	for g in goal_list:
-		if blk[g] == 0:
-			d[g] = 0
+	for gi in goal_list.size():
+		var g := goal_list[gi]
+		var g0 := clampi(gcost[gi], 0, kb - 1) if gi < gcost.size() else 0
+		if blk[g] == 0 and g0 < d[g]:
+			d[g] = g0
 			ncell[nn] = g
-			nnext[nn] = heads[0]
-			heads[0] = nn
+			nnext[nn] = heads[g0]
+			heads[g0] = nn
 			nn += 1
 			pending += 1
 
