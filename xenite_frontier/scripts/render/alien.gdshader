@@ -45,10 +45,13 @@ uniform int act_kind = 0;
 uniform float twitch = 0.0;
 uniform float sac_drain = 0.0;
 uniform float young_n = 0.0;
+uniform vec3 rim_col : source_color = vec3(0.85, 0.82, 0.74);
 
 varying vec4 vcol;
 varying vec3 fx;
 varying vec2 vfx;   // x amber breach glow, y enraged
+varying vec3 lpos;  // rest-pose model position: mottling sticks to the body
+varying float vmat; // 0 body, 1 dirt mound, 2 boulder plates (both matte)
 
 vec3 rot_x(vec3 v, float py, float pz, float a) {
 	float c = cos(a);
@@ -69,6 +72,13 @@ vec3 rot_y(vec3 v, float pz, float a) {
 }
 float hash1(float n) {
 	return fract(sin(n * 78.233) * 43758.5453);
+}
+float h3(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
+float n3(vec3 p) {
+	vec3 i = floor(p); vec3 f = fract(p);
+	vec3 u = f * f * (3.0 - 2.0 * f);
+	return mix(mix(mix(h3(i), h3(i + vec3(1, 0, 0)), u.x), mix(h3(i + vec3(0, 1, 0)), h3(i + vec3(1, 1, 0)), u.x), u.y),
+		mix(mix(h3(i + vec3(0, 0, 1)), h3(i + vec3(1, 0, 1)), u.x), mix(h3(i + vec3(0, 1, 1)), h3(i + vec3(1, 1, 1)), u.x), u.y), u.z);
 }
 
 void vertex() {
@@ -115,6 +125,10 @@ void vertex() {
 	float P = q * pitch_max - t_roar * 0.35 - t_sac * 0.12;
 	vec3 v = VERTEX;
 	vec3 n = NORMAL;
+	lpos = VERTEX;
+	vmat = pid == 11 ? 1.0 : (pid == 8 ? 2.0 : 0.0);
+	// flinch: knocked back a little when hit
+	v.z -= INSTANCE_CUSTOM.r * 0.06 * alive * step(0.5, v.y);
 
 	// legs: knee bend, then hip swing (bigger strides at a gallop)
 	float swing = -gs * leg_amp * move * (1.0 + 0.5 * q) - feeding * 0.4 + dead * dead_curl * 0.7 + stun * 0.2;
@@ -215,17 +229,35 @@ void fragment() {
 	float dead = fx.g;
 	float charred = fx.b;
 	float rage = vfx.y;
+	float glow = (1.0 - vcol.a) * (1.0 - dead * 0.85);
+	float lum = dot(base, vec3(0.3, 0.59, 0.11));
+	// what the surface is made of, from its colour: bone (claws, teeth, crown),
+	// olive belly panels, or dark chitin
+	float bone = smoothstep(0.35, 0.6, lum);
+	float olive = smoothstep(0.08, 0.16, lum) * (1.0 - bone) * step(base.b * 1.8, base.g);
+	float matte = step(0.5, vmat);
+	float chitin = (1.0 - bone) * (1.0 - olive) * (1.0 - step(0.01, glow)) * (1.0 - matte);
+	// mottled chitin with darker veins, fixed to the body
+	float m = n3(lpos * 9.0);
+	float vein = 1.0 - smoothstep(0.0, 0.06, abs(n3(lpos * 4.0 + 7.0) - 0.5));
+	base *= mix(1.0, 0.8 + 0.4 * m, chitin + olive * 0.6);
+	base *= 1.0 - vein * 0.35 * chitin;
 	base = mix(base, base * 0.6, dead);
 	base = mix(base, vec3(0.03, 0.025, 0.02), charred);
 	base = mix(base, base * vec3(1.6, 0.6, 0.55), rage * 0.35);
 	ALBEDO = mix(base, vec3(1.0), fx.r);
-	ROUGHNESS = mix(0.55, 0.85, dead);
-	SPECULAR = sheen;
-	float glow = (1.0 - vcol.a) * (1.0 - dead * 0.85);
+	// wet, glossy chitin; matte belly; polished claws
+	float rough = mix(0.3 + 0.2 * m, 0.72, olive);
+	rough = mix(rough, 0.25, bone);
+	rough = mix(rough, 0.9, matte);
+	ROUGHNESS = mix(rough, 0.85, max(dead * 0.6, charred));
+	SPECULAR = mix(sheen + 0.2, sheen, olive) * (1.0 - charred);
 	// enraged: every glowing marking burns red
 	vec3 gcol = mix(vcol.rgb, vec3(1.0, 0.08, 0.03), rage);
+	float fres = pow(1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0), 3.0);
 	EMISSION = gcol * glow * (1.8 + rage * 0.8) + vec3(1.0, 0.9, 0.8) * fx.r * 0.8
-		+ vec3(1.0, 0.35, 0.05) * charred * 0.15 + vec3(1.0, 0.45, 0.05) * vfx.x * 0.9;
-	RIM = 0.3 * (1.0 - dead);
+		+ vec3(1.0, 0.35, 0.05) * charred * 0.15 + vec3(1.0, 0.42, 0.05) * vfx.x * 0.32
+		+ mix(rim_col, vec3(1.0, 0.1, 0.04), rage) * fres * 0.22 * (1.0 - dead) * (1.0 - step(0.5, vmat) * step(vmat, 1.5));
+	RIM = 0.35 * (1.0 - dead);
 	RIM_TINT = 0.6;
 }

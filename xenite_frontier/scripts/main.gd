@@ -29,6 +29,7 @@ var fx: Fx
 var economy: Economy
 var harvester: HarvesterSystem
 var cam: RTSCamera
+var graphics: Graphics
 var hud: Hud
 var build: BuildBar
 var icons: ItemIcons
@@ -74,6 +75,8 @@ func _ready() -> void:
 	map = OutpostMap.new()
 	map.name = "OutpostMap"
 	add_child(map)
+	graphics.map = map
+	graphics.apply(graphics.quality)
 	map.generate_test_range(int(tr.get("width", 200)), int(tr.get("height", 140)), int(tr.get("seed", 1337)))
 
 	fx = Fx.new()
@@ -154,6 +157,7 @@ func _ready() -> void:
 		hud.log_event(text.split("\n")[0], Color(0.95, 0.85, 0.3)))
 
 	cam = RTSCamera.new()
+	graphics.set_deferred("_follow", cam)
 	cam.name = "CameraRig"
 	add_child(cam)
 	cam.position = map.core_center + Vector3(0, 0, -10)
@@ -229,6 +233,11 @@ func _ready() -> void:
 		elif arg.begins_with("--strain="):
 			swarm.only_strain(maxi(0, GameConfig.alien_index(arg.split("=")[1])))
 			waves.dev_strain = maxi(0, GameConfig.alien_index(arg.split("=")[1]))
+		elif arg == "--photo":
+			hud.visible = false
+			build.visible = false
+		elif arg.begins_with("--quality="):
+			graphics.apply(arg.split("=")[1])
 		elif arg.begins_with("--start-wave="):
 			waves.start_wave = maxi(0, int(arg.split("=")[1]) - 1)
 		elif arg == "--stuck-report":
@@ -309,51 +318,13 @@ func call_wave_early() -> void:
 	waves.call_early()
 
 
+## Sky, sun, fog, haze, bloom, grading, post-effect and blowing dust all live
+## in Graphics, with the quality presets (F2).
 func _build_environment() -> void:
-	# dim violet sky with a ringed gas giant and a small moon
-	var sky_mat := ShaderMaterial.new()
-	sky_mat.shader = preload("res://scripts/render/sky.gdshader")
-	var sky := Sky.new()
-	sky.sky_material = sky_mat
-	var env := Environment.new()
-	env.background_mode = Environment.BG_SKY
-	env.sky = sky
-	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	env.ambient_light_sky_contribution = 0.65
-	env.ambient_light_color = Color(0.5, 0.4, 0.58)
-	env.ambient_light_energy = 1.15
-	env.tonemap_mode = Environment.TONE_MAPPER_ACES
-	env.tonemap_exposure = 1.05
-	env.glow_enabled = true
-	env.glow_intensity = 0.35
-	env.glow_hdr_threshold = 1.1
-	env.ssao_enabled = true
-	env.ssao_radius = 1.2
-	env.ssao_intensity = 1.0
-	env.fog_enabled = true
-	env.fog_light_color = Color(0.36, 0.22, 0.3)
-	env.fog_density = 0.0035
-	env.fog_sky_affect = 0.4
-	env.adjustment_enabled = true
-	env.adjustment_saturation = 1.08
-	env.adjustment_contrast = 1.05
-	var we := WorldEnvironment.new()
-	we.environment = env
-	add_child(we)
-
-	var sun := DirectionalLight3D.new()
-	sun.light_color = Color(1.0, 0.86, 0.74)
-	sun.light_energy = 1.1
-	sun.rotation_degrees = Vector3(-33, -40, 0)   # low sun: relief casts shadows
-	sun.shadow_enabled = true
-	sun.directional_shadow_max_distance = 140.0
-	add_child(sun)
-	# cool bounce from the opposite side so shadowed cliffs read
-	var fill := DirectionalLight3D.new()
-	fill.light_color = Color(0.55, 0.42, 0.85)
-	fill.light_energy = 0.55
-	fill.rotation_degrees = Vector3(-30, 150, 0)
-	add_child(fill)
+	graphics = Graphics.new()
+	graphics.name = "Graphics"
+	add_child(graphics)
+	graphics.setup(self, null)
 
 
 func _make_ghost() -> void:
@@ -589,6 +560,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		hud.detailed = not hud.detailed
 	elif event.is_action_pressed("toggle_gore"):
 		fx.gore = not fx.gore
+	elif event.is_action_pressed("graphics_quality"):
+		graphics.cycle()
+		build.toast("Graphics: %s  (F2)" % graphics.label())
 	elif event.is_action_pressed("reset_walls"):
 		reset_outpost()
 

@@ -120,6 +120,15 @@ building next to the Command Hab), both with `--pair=N` to pan and
   blue windows). The Command Hab is a solid 3x3 block; colony buildings take
   2x2 cells, defences 1 cell. Floodlights cast a real spotlight cone.
   Unfinished buildings stand as yellow scaffolds with a crane arm.
+* **Graphics quality** (F2: Low / Medium / High / Ultra, saved between runs;
+  presets in `data/game_config.json` "graphics"). On High: volumetric ground
+  haze with light shafts, soft sun shadows, ambient occlusion and bounce
+  light, bloom, colour grade, vignette and grain, and wind-blown dust. The
+  ground has relief (sand ripples, pebbles, mud cracks, cliff ledges) and
+  pebble fields. Buildings weather (dirt, dust, grime streaks) and scorch,
+  smoke and spark as they take damage. Aliens have wet chitin and a faint
+  identity-coloured rim. Low turns the expensive parts off and renders at
+  85% for weak GPUs.
 * **Ichor** is acid green; **human blood** dark red.
 * **Humans and buildings** are industrial: off-white, hazard yellow, worn grey.
   **Dragged colonists flail and kick.**
@@ -266,6 +275,7 @@ xenite_frontier\run_benchmark.bat "C:\path\to\Godot_v4.4.1-stable_win64_console.
 | Run benchmark | B / F9 | – |
 | Flow-field heatmap | F | – |
 | Gore on/off | G | – |
+| Graphics quality (Low / Medium / High / Ultra) | F2 | – |
 | Detailed HUD + help | F1 | Back |
 
 Selecting a structure opens the **Inspector** (bottom right). It shows HP,
@@ -453,6 +463,13 @@ one PNG per item, including `command_hab.png`.
 See `CHANGELOG.md` for per-milestone notes.
 
 ## Screenshots (software-rendered)
+
+![Graphics pass, High: haze, soft shadows, weathered outpost](docs/gfx_overview_high.png)
+![Same view on Low](docs/gfx_overview_low.png)
+![Planet surface: cliff ledges, pebbles, sand relief](docs/gfx_terrain.png)
+![Aliens up close: spine, ribs, jaws, wet chitin, identity rims](docs/gfx_aliens.png)
+![Weathered buildings and turrets](docs/gfx_buildings.png)
+![A wave at the gate: acid, corpses, a harvester drone](docs/gfx_fight.png)
 
 ![Shop with item pictures, the tool card on the right](docs/m5a4_shop.png)
 ![Inspector with the selected turret's picture](docs/m5a4_inspector.png)

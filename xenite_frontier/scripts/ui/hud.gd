@@ -43,7 +43,7 @@ func _ready() -> void:
 	_help = _panel_label(col, Vector2.ZERO)
 	_help.add_theme_font_size_override("font_size", 14)
 	_help.add_theme_color_override("font_color", Color(0.75, 0.8, 0.85))
-	_help.text = "Tab category   1-8 tool   LMB build/select   RMB sell   Esc cancel\nClick/drag-box soldiers, RMB to move them, H return to posts\nU upgrade   R repair   N call next wave early   I intel\nB benchmark   Space pause   F10 new run   F11 free build\nPan WASD/stick/edge/MMB    Zoom wheel/Q,E/triggers\nF flow field   G gore   F1 (Back) toggle details + help"
+	_help.text = "Tab category   1-8 tool   LMB build/select   RMB sell   Esc cancel\nClick/drag-box soldiers, RMB to move them, H return to posts\nU upgrade   R repair   N call next wave early   I intel\nB benchmark   Space pause   F10 new run   F11 free build\nPan WASD/stick/edge/MMB    Zoom wheel/Q,E/triggers\nF flow field   G gore   F2 graphics quality   F1 (Back) toggle details + help"
 	var lp2 := PanelContainer.new()
 	lp2.add_theme_stylebox_override("panel", UiStyle.panel(0.7, Color(1.0, 0.55, 0.2, 0.6)))
 	col.add_child(lp2)

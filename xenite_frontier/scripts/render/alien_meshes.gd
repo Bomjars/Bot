@@ -138,7 +138,19 @@ static func rig(id: String) -> Dictionary:
 		"tell_kind": int(tells.get(id, 0)), "act_kind": int(acts.get(id, 0)),
 		"twitch": 1.0 if b == "stalker" else 0.0, "sac_drain": 1.0 if b == "spitter" else 0.0,
 		"young_n": float(YOUNG_N) if b == "brood_mother" else 0.0,
+		# faint identity-coloured rim so each strain reads against the ground
+		"rim_col": _identity(id),
 	}
+
+
+static func _identity(id: String) -> Color:
+	match base_id(id):
+		"mauler": return Color(0.9, 0.15, 0.12)
+		"spitter": return Color(0.3, 0.9, 0.25)
+		"snatcher": return Color(0.95, 0.78, 0.15)
+		"burrower": return Color(1.0, 0.5, 0.1)
+		"brood_mother": return Color(0.85, 0.2, 0.75)
+	return Color(0.85, 0.82, 0.74)
 
 
 ## How the corpse lies: "side", "back", "face" (face-first) or "flat".
@@ -196,6 +208,19 @@ static func _humanoid(a: MeshAcc, c: Dictionary, hi: bool) -> void:
 		var dir := (-front * 0.8 + axis * 0.6).normalized()
 		var ss: float = c.get("spike_s", 0.1) * (0.7 + 0.5 * sin(t * PI))
 		a.add(MeshAcc.cone(ss * 0.28, 1.0, 4), MeshAcc.limb(p, p + dir * ss), c.get("spike_col", BLACK), P.BODY)
+	if hi and c.get("legs", true):
+		# spine: a ridge of vertebrae down the back
+		for k in 6:
+			var t := (k + 0.5) / 6.0
+			var p := tb.lerp(tt, 0.06 + 0.9 * t) - front * td * 0.92
+			a.add(MeshAcc.ball(tw * 0.14, 4, 2), MeshAcc.xf(p, Vector3.ZERO, Vector3(1.0, 0.75, 1.25)), BLACK, P.BODY)
+		# rib bands wrapping the flanks
+		var side := axis.cross(front).normalized()
+		for k in 3:
+			var p := tb.lerp(tt, 0.38 + k * 0.17)
+			for sx: float in [-1.0, 1.0]:
+				var sp := p + side * sx * tw * 0.9
+				a.add(MeshAcc.cyl(0.011 + tw * 0.06, 1.0, 0.008 + tw * 0.05, 4), MeshAcc.limb(sp - front * td * 0.85, sp + front * td * 0.55), MID, P.BODY)
 	# arms: shoulder -> elbow -> wrist, bone-white claws
 	var sh: Vector3 = c.shoulder
 	var el: Vector3 = c.elbow
@@ -207,6 +232,13 @@ static func _humanoid(a: MeshAcc, c: Dictionary, hi: bool) -> void:
 		var W := Vector3(sx * wr.x, wr.y, wr.z)
 		_prism(a, S, E, c.arm_t, c.arm_t * 0.8, DARK, P.ARM, off, Vector2(sh.y, sh.z), sides)
 		_prism(a, E, W, c.fore_t, c.fore_t * 0.7, BLACK, P.FOREARM, off, Vector2(el.y, el.z), sides)
+		if hi:
+			# knobbed elbow and a faceted shoulder plate
+			var at: float = c.arm_t
+			a.add(MeshAcc.ball(at * 1.25, 4, 3), MeshAcc.xf(E), BLACK, P.ARM, off, Vector2(sh.y, sh.z))
+			var start := a.v.size()
+			a.add(MeshAcc.ball(1.0, 5, 3), MeshAcc.xf(S + Vector3(sx * at * 0.4, at * 0.8, -at * 0.3), Vector3(0, 0, sx * 20.0), Vector3(at * 2.0, at * 1.2, at * 2.3)), DARK, P.BODY)
+			a.jitter(start, at * 0.35, 13 + int(sx))
 		var cl: float = c.claw
 		if cl > 0.0:
 			for k in (3 if hi else 1):
@@ -228,7 +260,11 @@ static func _humanoid(a: MeshAcc, c: Dictionary, hi: bool) -> void:
 			_prism(a, K, A, c.shin_t, c.shin_t * 0.7, BLACK, P.SHIN, off, Vector2(kn.y, kn.z), sides)
 			_prism(a, A, T, c.shin_t * 0.8, c.shin_t * 0.5, BLACK, P.SHIN, off, Vector2(kn.y, kn.z), 4)
 			if hi:
-				a.add(MeshAcc.cone(c.shin_t * 0.35, 1.0, 3), MeshAcc.limb(T, T + Vector3(0, -0.01, 0.06)), BONE, P.SHIN, off, Vector2(kn.y, kn.z))
+				# knobbed knee, two hooked toe claws
+				a.add(MeshAcc.ball(float(c.leg_t) * 1.2, 4, 3), MeshAcc.xf(K), BLACK, P.THIGH, off, Vector2(hp.y, hp.z))
+				for tc: float in [-1.0, 1.0]:
+					var tp := T + Vector3(tc * float(c.shin_t) * 0.6, 0.0, 0.0)
+					a.add(MeshAcc.cone(float(c.shin_t) * 0.3, 1.0, 3), MeshAcc.limb(tp, tp + Vector3(tc * 0.015, -0.012, 0.075)), BONE, P.SHIN, off, Vector2(kn.y, kn.z))
 	# neck + head (skull, long muzzle, glowing eyes, teeth)
 	if c.has("head"):
 		var nk: Vector3 = c.neck
@@ -246,8 +282,17 @@ static func _humanoid(a: MeshAcc, c: Dictionary, hi: bool) -> void:
 				a.add(MeshAcc.ball(er, 4, 2), MeshAcc.xf(Vector3(sx * ep.x, ep.y, ep.z)), c.eye, P.HEAD, 0.0, pv)
 		if hi:
 			var mz: Vector3 = c.muzzle
+			# upper fangs, a hinged lower jaw with its own teeth, a heavy brow
+			for t in 5:
+				var tx := (t - 2) * ms.x * 0.32
+				a.add(MeshAcc.cone(ms.x * (0.2 if t % 2 == 0 else 0.14), ms.y * (1.7 if t % 2 == 0 else 1.1), 3), MeshAcc.xf(Vector3(tx, mz.y - ms.y * 0.7, mz.z + ms.z * 0.5 - absf(tx) * 0.6), Vector3(180, 0, 0)), BONE, P.HEAD, 0.0, pv)
+			var jaw := mz + Vector3(0, -ms.y * 1.5, -ms.z * 0.25)
+			a.add(MeshAcc.box(ms.x * 1.5, ms.y * 0.6, ms.z * 1.7), MeshAcc.xf(jaw, Vector3(12, 0, 0)), BLACK, P.HEAD, 0.0, pv)
 			for t in 3:
-				a.add(MeshAcc.cone(ms.x * 0.22, ms.y * 1.6, 3), MeshAcc.xf(Vector3((t - 1) * ms.x * 0.45, mz.y - ms.y * 0.7, mz.z + ms.z * 0.5), Vector3(180, 0, 0)), BONE, P.HEAD, 0.0, pv)
+				a.add(MeshAcc.cone(ms.x * 0.13, ms.y * 0.9, 3), MeshAcc.xf(jaw + Vector3((t - 1) * ms.x * 0.4, ms.y * 0.45, ms.z * 0.55)), BONE, P.HEAD, 0.0, pv)
+			if er > 0.0:
+				var ep: Vector3 = c.eye_p
+				a.add(MeshAcc.box(ep.x * 2.8, er * 1.4, er * 3.0), MeshAcc.xf(Vector3(0, ep.y + er * 1.6, ep.z - er * 0.4), Vector3(-18, 0, 0)), BLACK, P.HEAD, 0.0, pv)
 
 
 static func _mauler(a: MeshAcc, c: Dictionary, hi: bool) -> void:

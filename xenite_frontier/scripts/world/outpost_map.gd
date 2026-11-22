@@ -12,6 +12,7 @@ extends Node3D
 
 enum Kind { GROUND = 0, ROCK = 1, STRUCT = 2 }
 enum SType { NONE = 0, WALL = 1, DOOR = 2, TURRET = 3, BAY = 4, LIGHT = 5, BUILDING = 6 }
+const TERRAIN_LAYER := 1 << 10   # render layer only the terrain is on (ground decals)
 
 signal nav_changed
 
@@ -548,11 +549,13 @@ func _build_terrain_mesh() -> void:
 	var mesh := ArrayMesh.new()
 	_fill_terrain_mesh(mesh)
 	_terrain = MeshInstance3D.new()
+	_terrain.layers = 1 | TERRAIN_LAYER
 	_terrain.name = "Terrain"
 	_terrain.mesh = mesh
 	terrain_material = ShaderMaterial.new()
 	terrain_material.shader = preload("res://scripts/render/terrain.gdshader")
 	terrain_material.set_shader_parameter("pad_radius", 0.0)
+	terrain_material.set_shader_parameter("detail", _relief)
 	_terrain.material_override = terrain_material
 	add_child(_terrain)
 
@@ -575,6 +578,14 @@ func _fill_terrain_mesh(mesh: ArrayMesh) -> void:
 			var hd := hgrid[k + hw] if j < hh - 1 else hgrid[k]
 			norms[k] = Vector3(hl - hr, 1.0, hu - hd).normalized()
 			uvs[k] = Vector2(i * 0.5, j * 0.5)
+	# concavity: how far each vertex sits below the 3 m average around it
+	# (creases at cliff feet, crater walls), baked into the vertex colour
+	var blur := _box_blur(hgrid, hw, hh, 6)
+	var cols := PackedColorArray()
+	cols.resize(hw * hh)
+	for k in hw * hh:
+		var cav := clampf(1.0 - maxf(0.0, blur[k] - hgrid[k]) * 0.45, 0.5, 1.0)
+		cols[k] = Color(cav, cav, cav)
 	idxs.resize((hw - 1) * (hh - 1) * 6)
 	var t := 0
 	for j in hh - 1:
@@ -596,8 +607,34 @@ func _fill_terrain_mesh(mesh: ArrayMesh) -> void:
 	arr[Mesh.ARRAY_VERTEX] = verts
 	arr[Mesh.ARRAY_NORMAL] = norms
 	arr[Mesh.ARRAY_TEX_UV] = uvs
+	arr[Mesh.ARRAY_COLOR] = cols
 	arr[Mesh.ARRAY_INDEX] = idxs
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
+
+
+## Separable box blur with running sums (O(n) per pass, any radius).
+static func _box_blur(src: PackedFloat32Array, ww: int, hh_: int, r: int) -> PackedFloat32Array:
+	var tmp := PackedFloat32Array()
+	tmp.resize(src.size())
+	var out := PackedFloat32Array()
+	out.resize(src.size())
+	var inv := 1.0 / float(2 * r + 1)
+	for j in hh_:
+		var row := j * ww
+		var acc := 0.0
+		for i in range(-r, r + 1):
+			acc += src[row + clampi(i, 0, ww - 1)]
+		for i in ww:
+			tmp[row + i] = acc * inv
+			acc += src[row + mini(i + r + 1, ww - 1)] - src[row + maxi(i - r, 0)]
+	for i in ww:
+		var acc := 0.0
+		for j in range(-r, r + 1):
+			acc += tmp[clampi(j, 0, hh_ - 1) * ww + i]
+		for j in hh_:
+			out[j * ww + i] = acc * inv
+			acc += tmp[mini(j + r + 1, hh_ - 1) * ww + i] - tmp[maxi(j - r, 0) * ww + i]
+	return out
 
 
 ## Build-grid overlay strength (brighter while a build tool is selected).
@@ -636,6 +673,108 @@ func _build_scatter(seed_value: int) -> void:
 			crystals.append(Transform3D(Basis.from_euler(Vector3(0, rng.randf() * TAU, 0)).scaled(Vector3.ONE * sc), p))
 	_scatter_mmi(StationModels.boulder_mesh(), boulders, StationModels.rock_material())
 	_scatter_mmi(StationModels.crystal_mesh(), crystals, StationModels.crystal_material())
+	_build_pebbles(rng)
+	_build_debris(rng)
+
+
+## Pebble fields: thousands of small stones, denser at cliff feet and in
+## gravel patches, kept off the base pad. Chunked so distant chunks are culled
+## (and the Low graphics preset can hide them).
+var _pebble_chunks: Array[MultiMeshInstance3D] = []
+var _pebbles_on := true
+var _relief := 1.0
+func _build_pebbles(rng: RandomNumberGenerator) -> void:
+	_pebble_chunks.clear()
+	var noise := FastNoiseLite.new()
+	noise.seed = 77
+	noise.frequency = 0.06
+	const CH := 25
+	var per: Dictionary = {}   # chunk key -> [xforms, colours]
+	var mesh := StationModels.pebble_mesh()
+	var tints := [Color(0.42, 0.26, 0.2), Color(0.55, 0.3, 0.18), Color(0.3, 0.2, 0.17), Color(0.68, 0.45, 0.3), Color(0.24, 0.16, 0.14)]
+	for c in w * h:
+		if kind[c] != Kind.GROUND or deposit[c]:
+			continue
+		var x := c % w
+		var z := c / w
+		if x < 1 or z < 1 or x >= w - 1 or z >= h - 1:
+			continue
+		var p0 := cell_center(c)
+		if has_base() and p0.distance_to(core_center) < 17.0:
+			continue
+		var near_rock := kind[c - 1] == Kind.ROCK or kind[c + 1] == Kind.ROCK or kind[c - w] == Kind.ROCK or kind[c + w] == Kind.ROCK
+		var field := noise.get_noise_2d(p0.x, p0.z)
+		var n := 0
+		if near_rock:
+			n = rng.randi_range(1, 4)
+		elif field > 0.25:
+			n = rng.randi_range(1, 3)
+		elif rng.randf() < 0.18:
+			n = 1
+		for k in n:
+			var p := p0 + Vector3(rng.randf_range(-0.48, 0.48), 0, rng.randf_range(-0.48, 0.48))
+			p.y = height_at(p.x, p.z) - 0.015
+			var sc := rng.randf_range(0.035, 0.14) * (1.5 if near_rock else 1.0)
+			var b := Basis.from_euler(Vector3(rng.randf() * 0.8, rng.randf() * TAU, rng.randf() * 0.8)).scaled(Vector3(sc * rng.randf_range(0.8, 1.5), sc * rng.randf_range(0.4, 0.8), sc))
+			var key := (x / CH) * 1000 + (z / CH)
+			if not per.has(key):
+				per[key] = [[], []]
+			per[key][0].append(Transform3D(b, p))
+			per[key][1].append(tints[rng.randi() % tints.size()])
+	for key: int in per:
+		var xfs: Array = per[key][0]
+		var cols: Array = per[key][1]
+		var mm := MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_3D
+		mm.use_colors = true
+		mm.mesh = mesh
+		mm.instance_count = xfs.size()
+		for i in xfs.size():
+			mm.set_instance_transform(i, xfs[i])
+			mm.set_instance_color(i, cols[i])
+		var mmi := MultiMeshInstance3D.new()
+		mmi.multimesh = mm
+		mmi.material_override = StationModels.rock_material()
+		mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		mmi.visibility_range_end = 90.0
+		mmi.visibility_range_end_margin = 12.0
+		mmi.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
+		mmi.visible = _pebbles_on
+		_dressing.add_child(mmi)
+		_pebble_chunks.append(mmi)
+
+
+## Abandoned mining kit from an earlier survey crew, scattered in the open.
+func _build_debris(rng: RandomNumberGenerator) -> void:
+	var placed := 0
+	var tries := 0
+	while placed < 26 and tries < 4000:
+		tries += 1
+		var c := rng.randi() % (w * h)
+		if kind[c] != Kind.GROUND or deposit[c]:
+			continue
+		var p := cell_center(c)
+		if has_base() and p.distance_to(core_center) < 22.0:
+			continue
+		p.y = height_at(p.x, p.z) - 0.04
+		var mi := MeshInstance3D.new()
+		mi.mesh = StationModels.debris_mesh(placed)
+		mi.material_override = StationModels.station_material()
+		mi.position = p
+		mi.rotation.y = rng.randf() * TAU
+		_dressing.add_child(mi)
+		placed += 1
+
+
+## Graphics quality: terrain relief strength and the pebble fields.
+func set_surface_detail(relief: float, pebbles: bool) -> void:
+	_relief = relief
+	_pebbles_on = pebbles
+	if terrain_material:
+		terrain_material.set_shader_parameter("detail", relief)
+	for m in _pebble_chunks:
+		if is_instance_valid(m):
+			m.visible = pebbles
 
 
 func _scatter_mmi(mesh: Mesh, xfs: Array[Transform3D], mat: Material) -> void:

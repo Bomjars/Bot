@@ -46,6 +46,7 @@ static func rock_material() -> StandardMaterial3D:
 	if _rock_mat == null:
 		_rock_mat = StandardMaterial3D.new()
 		_rock_mat.vertex_color_use_as_albedo = true
+		_rock_mat.vertex_color_is_srgb = true
 		_rock_mat.roughness = 0.95
 	return _rock_mat
 
@@ -68,6 +69,48 @@ static func boulder_mesh() -> ArrayMesh:
 	var a := MeshAcc.new()
 	a.add(MeshAcc.ball(1.0, 7, 4), Transform3D(), Color(0.24, 0.18, 0.17))
 	a.jitter(0, 0.28, 7)
+	return a.commit(true)
+
+
+## Small low-poly stone for the pebble fields (instance colour tints it).
+static func pebble_mesh() -> ArrayMesh:
+	var a := MeshAcc.new()
+	a.add(MeshAcc.ball(1.0, 5, 3), Transform3D(), Color(0.85, 0.8, 0.78))
+	a.jitter(0, 0.3, 11)
+	return a.commit(true)
+
+
+## Abandoned mining kit left by earlier crews: rusted pipe, crushed crate,
+## worn drill bit, survey stake, toppled panel, ore cart.
+static func debris_mesh(kind_id: int) -> ArrayMesh:
+	var a := MeshAcc.new()
+	var rust := Color("6b3a22")
+	var rust_d := Color("4a2a1c")
+	match kind_id % 6:
+		0:  # pipe segment with flanges, half buried
+			a.add(MeshAcc.cyl(0.22, 2.4, -1.0, 8), MeshAcc.xf(Vector3(0, 0.12, 0), Vector3(0, 0, 90)), rust)
+			for sx: float in [-1.15, 1.15]:
+				a.add(MeshAcc.cyl(0.3, 0.08, -1.0, 8), MeshAcc.xf(Vector3(sx, 0.12, 0), Vector3(0, 0, 90)), rust_d)
+		1:  # crushed supply crate
+			a.add(MeshAcc.box(0.9, 0.45, 0.7), MeshAcc.xf(Vector3(0, 0.2, 0), Vector3(8, 20, -12)), Color("8a7a5a"))
+			a.add(MeshAcc.box(0.92, 0.08, 0.72), MeshAcc.xf(Vector3(0, 0.25, 0), Vector3(8, 20, -12)), YEL.darkened(0.45))
+			a.add(MeshAcc.box(0.4, 0.3, 0.35), MeshAcc.xf(Vector3(0.7, 0.13, 0.3), Vector3(0, -15, 0)), Color("6f6a5d"))
+		2:  # worn drill bit on its side
+			a.add(MeshAcc.cyl(0.18, 1.3, -1.0, 8), MeshAcc.xf(Vector3(0, 0.18, 0), Vector3(0, 0, 88)), MIDG.darkened(0.3))
+			a.add(MeshAcc.cone(0.26, 0.6, 8), MeshAcc.xf(Vector3(0.95, 0.2, 0), Vector3(0, 0, -90)), rust)
+		3:  # survey stake with a faded flag
+			a.add(MeshAcc.box(0.05, 1.3, 0.05), MeshAcc.xf(Vector3(0, 0.6, 0), Vector3(6, 0, 4)), Color("9a9284"))
+			a.add(MeshAcc.box(0.32, 0.2, 0.02), MeshAcc.xf(Vector3(0.18, 1.12, 0), Vector3(6, 0, 4)), Color("b86a3a"))
+			a.add(MeshAcc.box(0.25, 0.06, 0.25), MeshAcc.xf(Vector3(0, 0.02, 0)), Color("5a5650"))
+		4:  # toppled solar panel
+			a.add(MeshAcc.box(1.4, 0.05, 0.9), MeshAcc.xf(Vector3(0, 0.25, 0), Vector3(-18, 30, 6)), Color(0.1, 0.13, 0.22))
+			a.add(MeshAcc.box(0.07, 0.8, 0.07), MeshAcc.xf(Vector3(-0.3, 0.12, 0.4), Vector3(0, 0, 80)), GREY.darkened(0.3))
+		5:  # ore cart, one wheel off
+			a.add(MeshAcc.box(1.1, 0.5, 0.7), MeshAcc.xf(Vector3(0, 0.42, 0), Vector3(0, 0, -6)), rust)
+			a.add(MeshAcc.box(1.0, 0.06, 0.6), MeshAcc.xf(Vector3(0, 0.66, 0), Vector3(0, 0, -6)), Color(0.18, 0.62, 0.56, 0.5))
+			for k in 3:
+				a.add(MeshAcc.cyl(0.16, 0.08, -1.0, 8), MeshAcc.xf(Vector3(-0.35 + (k % 2) * 0.7, 0.16, 0.38), Vector3(90, 0, 0)), DARK)
+			a.add(MeshAcc.cyl(0.16, 0.08, -1.0, 8), MeshAcc.xf(Vector3(0.9, 0.04, -0.6), Vector3(0, 0, 0)), DARK)
 	return a.commit(true)
 
 

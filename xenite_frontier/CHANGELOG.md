@@ -1,5 +1,36 @@
 # Changelog
 
+## M5a.5 – Graphics pass: lighting, atmosphere, planet surface, buildings, aliens
+
+### Added
+- **Graphics quality setting: Low / Medium / High / Ultra** (F2 cycles; saved in `user://settings.cfg`). The presets are data in `data/game_config.json` "graphics": anti-aliasing (MSAA / FXAA), sun shadow resolution and softness, ambient occlusion, bounce light, volumetric haze, terrain relief, pebble fields, blowing dust, post-effect and 3D render scale (Low renders at 85% for weak GPUs / Steam Deck). The default is High.
+- **Lighting and atmosphere** (`scripts/render/graphics.gd`):
+  - Volumetric ground haze with drifting density. The low sun throws light shafts, and floodlight beams will show at night (M5b).
+  - Soft sun shadows (4 cascades, PCSS on High+), ambient occlusion tuned for contact shadows, bounce light (SSIL).
+  - Softer, wider bloom on lamps, windows, eyes and acid.
+  - A colour grade (violet-lifted shadows, warm highlights).
+  - A screen post-effect under the UI: vignette, film grain, faint edge fringing.
+  - Wind-blown dust motes and sand streaks skimming the ground around the camera.
+- **Planet surface** (`terrain.gdshader`):
+  - The ground has real relief now: a procedural micro height field bends the normals. You get wind ripples in the sand, pebbles each with their own shade, dried-mud cracks in low basins, and rough ledges on the cliffs. It fades with distance, so it never shimmers.
+  - Broad ochre patches and dust drifts gathering in hollows.
+  - Creases at cliff feet are darkened from a baked concavity term.
+  - Dense **pebble fields** (chunked, culled with distance) and **abandoned mining kit** from an earlier crew: rusted pipes, crushed crates, drill bits, survey stakes, toppled panels and ore carts.
+- **Buildings and walls** (`station.gdshader`):
+  - Weathering: rust-brown dirt creeping up from the ground, regolith dust on roofs, grime streaks down light panels, per-surface wear.
+  - **Damage shows**: scorch marks spread as HP drops, glowing embers near destruction; damaged structures smoke (below 60%) and spark (below 35%).
+  - Every building and turret sits in a soft dark contact patch on the ground.
+- **Turrets**: world-space grime on every part.
+- **Aliens**:
+  - More detail up close: a spine of vertebrae, rib bands on the flanks, knobbed elbows and knees, faceted shoulder plates, a heavy brow, a hinged lower jaw with teeth, more fangs, toe claws. Near-camera models are 1,000–1,600 triangles; Brood Mother 2,260. Far models are unchanged, so the zoomed-out 10k swarm costs the same.
+  - Wet glossy chitin, matte olive bellies, polished claws, mottling and dark veins fixed to the body.
+  - A faint rim in each strain's identity colour so they read against the red ground.
+  - They flinch when hit.
+- Dev: `--quality=low|medium|high|ultra`, `--photo` (hide the UI for screenshots).
+
+### Fixed
+- Boulders and pebbles looked pale lavender (their vertex colours were treated as linear, not sRGB).
+
 ## M5a.4 – Item pictures in the UI
 
 ### Added

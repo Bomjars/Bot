@@ -43,6 +43,7 @@ const DEFAULTS := {
 	"debug_hud":     ["k:%d" % KEY_F1, "jb:%d" % JOY_BUTTON_BACK],
 	"reset_walls":   ["k:%d" % KEY_F10],
 	"toggle_gore":   ["k:%d" % KEY_G],
+	"graphics_quality": ["k:%d" % KEY_F2],
 }
 
 

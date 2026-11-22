@@ -5,11 +5,43 @@ extends RefCounted
 ## rotates to aim, with the barrel along +Z. "Muzzle" marks the shot origin.
 
 
+static var _grime: NoiseTexture2D
+
+
+## Shared grime: soft world-space noise multiplied into every turret part.
+static func grime_texture() -> NoiseTexture2D:
+	if _grime == null:
+		var n := FastNoiseLite.new()
+		n.frequency = 0.03
+		n.fractal_octaves = 4
+		n.seed = 5
+		var ramp := Gradient.new()
+		ramp.set_color(0, Color(0.62, 0.58, 0.55))
+		ramp.set_color(1, Color(1.0, 1.0, 1.0))
+		_grime = NoiseTexture2D.new()
+		_grime.width = 256
+		_grime.height = 256
+		_grime.seamless = true
+		_grime.noise = n
+		_grime.color_ramp = ramp
+	return _grime
+
+
 static func mat(col: Color, glow := 0.0, metal := 0.4) -> StandardMaterial3D:
 	var m := StandardMaterial3D.new()
 	m.albedo_color = col
 	m.metallic = metal
 	m.roughness = 0.5
+	if glow <= 0.0:
+		# worn: grime in world space (no UVs needed)
+		m.detail_enabled = true
+		m.detail_albedo = grime_texture()
+		m.detail_blend_mode = BaseMaterial3D.BLEND_MODE_MUL
+		m.detail_uv_layer = BaseMaterial3D.DETAIL_UV_2
+		m.uv2_triplanar = true
+		m.uv2_world_triplanar = true
+		m.uv2_scale = Vector3(0.5, 0.5, 0.5)
+		m.roughness = 0.62
 	if glow > 0.0:
 		m.emission_enabled = true
 		m.emission = col

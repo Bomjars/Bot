@@ -66,6 +66,7 @@ func _make_mmi(mesh: Mesh) -> MultiMeshInstance3D:
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
 	mm.use_colors = true
+	mm.use_custom_data = true   # x = damage (scorch marks in station.gdshader)
 	mm.mesh = mesh
 	mmi.multimesh = mm
 	mmi.material_override = StationModels.station_material()
@@ -341,6 +342,8 @@ func place(c: int, id: String, emit := true) -> bool:
 	tiers[c] = 1
 	invested[c] = 0.0
 	built_count += 1
+	if id != "wall" and id != "blast_door" and nodes.has(c):
+		_add_contact(nodes[c], footprint(id))
 	_visual_dirty = true
 	built.emit(c, id)
 	if emit:
@@ -500,11 +503,35 @@ func damage_core(amount: float) -> void:
 func tick(dt: float, combat: Combat) -> void:
 	for t: Turret in turrets.values():
 		t.tick(dt, combat)
+	_smoke_t -= dt
+	if _smoke_t <= 0.0 and fx:
+		_smoke_t = 0.15
+		_emit_damage_fx()
 	_visual_timer -= dt
 	if _visual_dirty and _visual_timer <= 0.0:
 		_visual_timer = 0.2
 		_visual_dirty = false
 		_refresh_visuals()
+
+
+## Damaged structures smoke (below 60% HP) and spark (below 35%). A few
+## puffs per tick at most, so a battered wall line stays cheap.
+var _smoke_t := 0.0
+func _emit_damage_fx() -> void:
+	var budget := 10
+	for c: int in ids:
+		if budget <= 0:
+			break
+		var r := map.shp[c] / maxf(1.0, map.smax[c])
+		if r > 0.6 or sites.has(c):
+			continue
+		if randf() > 0.25 + (0.6 - r):
+			continue
+		budget -= 1
+		var top := center_of(c) + Vector3(randf_range(-0.3, 0.3), map.sheight[c] * 0.85, randf_range(-0.3, 0.3))
+		fx.particle(top, Vector3(0.35 + randf() * 0.3, 0.9 + randf() * 0.5, 0.15), Color(0.1, 0.09, 0.085, 0.0), randf_range(0.28, 0.5), randf_range(1.8, 3.0), -0.06)
+		if r < 0.35 and randf() < 0.5:
+			fx.burst(top, Color(1.0, 0.6, 0.15, 1.0), 3, 3.0, 0.035, 0.45, 1.0, 0.8)
 
 
 func _refresh_visuals() -> void:
@@ -524,13 +551,16 @@ func _refresh_visuals() -> void:
 	# barriers instead of blocks
 	var post_xf: Array[Transform3D] = []
 	var post_col: Array[Color] = []
+	var post_dmg := PackedFloat32Array()
 	var panel_xf: Array[Transform3D] = []
 	var panel_col: Array[Color] = []
+	var panel_dmg := PackedFloat32Array()
 	for c in walls:
 		var p := map.cell_ground(c)
 		var col := _tint(c)
 		post_xf.append(Transform3D(Basis(), p))
 		post_col.append(col)
+		post_dmg.append(_damage_of(c))
 		var x := c % map.w
 		var z := c / map.w
 		for o: Vector2i in [Vector2i(1, 0), Vector2i(0, 1)]:
@@ -544,10 +574,12 @@ func _refresh_visuals() -> void:
 			var b := Basis() if o.x == 1 else Basis(Vector3.UP, -PI * 0.5)
 			panel_xf.append(Transform3D(b, Vector3(p.x, minf(p.y, q.y), p.z)))
 			panel_col.append(col if st == OutpostMap.SType.WALL else col.lerp(_tint(n), 0.5))
-	_fill_xf(_post_mmi.multimesh, post_xf, post_col)
-	_fill_xf(_panel_mmi.multimesh, panel_xf, panel_col)
+			panel_dmg.append(maxf(_damage_of(c), _damage_of(n) * 0.5))
+	_fill_xf(_post_mmi.multimesh, post_xf, post_col, post_dmg)
+	_fill_xf(_panel_mmi.multimesh, panel_xf, panel_col, panel_dmg)
 	var door_xf: Array[Transform3D] = []
 	var door_col: Array[Color] = []
+	var door_dmg := PackedFloat32Array()
 	for c in doors:
 		var x := c % map.w
 		var z := c / map.w
@@ -559,19 +591,62 @@ func _refresh_visuals() -> void:
 		var b := Basis() if along_x else Basis(Vector3.UP, PI * 0.5)
 		door_xf.append(Transform3D(b, map.cell_ground(c)))
 		door_col.append(_tint(c))
-	_fill_xf(_door_mmi.multimesh, door_xf, door_col)
+		door_dmg.append(_damage_of(c))
+	_fill_xf(_door_mmi.multimesh, door_xf, door_col, door_dmg)
+	# buildings: scorch marks spread over their models as HP drops
+	for c: int in nodes:
+		if turrets.has(c) or sites.has(c):
+			continue
+		var d := _damage_of(c)
+		var n: Node = nodes[c]
+		if not is_instance_valid(n) or float(n.get_meta("dmg", -1.0)) == d:
+			continue
+		n.set_meta("dmg", d)
+		for mi in n.find_children("*", "GeometryInstance3D", true, false):
+			(mi as GeometryInstance3D).set_instance_shader_parameter("damage", d)
+
+
+## A soft dark patch on the ground under a building or turret (decal that
+## only touches the terrain), so it sits in the regolith instead of on it.
+static var _contact_tex: GradientTexture2D
+func _add_contact(n: Node3D, fp: int) -> void:
+	if _contact_tex == null:
+		_contact_tex = GradientTexture2D.new()
+		_contact_tex.fill = GradientTexture2D.FILL_RADIAL
+		_contact_tex.fill_from = Vector2(0.5, 0.5)
+		_contact_tex.fill_to = Vector2(1.0, 0.5)
+		var g := Gradient.new()
+		g.set_color(0, Color(0.06, 0.035, 0.025, 0.75))
+		g.add_point(0.55, Color(0.08, 0.045, 0.03, 0.45))
+		g.set_color(g.get_point_count() - 1, Color(0.1, 0.05, 0.03, 0.0))
+		_contact_tex.gradient = g
+		_contact_tex.width = 64
+		_contact_tex.height = 64
+	var d := Decal.new()
+	d.texture_albedo = _contact_tex
+	var s := float(fp) + 1.1
+	d.size = Vector3(s, 3.0, s)
+	d.cull_mask = OutpostMap.TERRAIN_LAYER
+	d.upper_fade = 0.3
+	d.lower_fade = 0.3
+	n.add_child(d)
+
+
+func _damage_of(c: int) -> float:
+	return clampf(1.0 - map.shp[c] / maxf(1.0, map.smax[c]), 0.0, 1.0)
 
 
 func _tint(c: int) -> Color:
 	var r := map.shp[c] / maxf(1.0, map.smax[c])
-	var col := Color(1, 1, 1).lerp(Color(0.55, 0.18, 0.1), 1.0 - r)
+	var col := Color(1, 1, 1).lerp(Color(0.75, 0.5, 0.42), 1.0 - r)
 	if map.climb[c]:
 		col = col.lerp(Color(0.6, 0.9, 0.3), 0.3)  # the swarm can climb over here
 	return col
 
 
-func _fill_xf(mm: MultiMesh, xfs: Array[Transform3D], cols: Array[Color]) -> void:
+func _fill_xf(mm: MultiMesh, xfs: Array[Transform3D], cols: Array[Color], dmgs: PackedFloat32Array = PackedFloat32Array()) -> void:
 	mm.instance_count = xfs.size()
 	for i in xfs.size():
 		mm.set_instance_transform(i, xfs[i])
 		mm.set_instance_color(i, cols[i])
+		mm.set_instance_custom_data(i, Color(dmgs[i] if i < dmgs.size() else 0.0, 0, 0, 0))
